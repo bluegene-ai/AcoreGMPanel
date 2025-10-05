@@ -1,0 +1,42 @@
+###############################################
+# Acore GM Panel Root .htaccess
+# 使用场景：DocumentRoot 未指向 public/ 而是项目根目录。
+# 推荐做法仍是把站点根指到 public/，此文件作兼容兜底。
+###############################################
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # 自动推断 base（如果目录层级变化，可手动取消下行注释并改成实际子路径）
+  #RewriteBase /AcoreGMPanel/
+
+  # SOAP 模块走前端控制器，避免被敏感目录规则阻断
+  RewriteRule ^soap(?:/.*)?$ public/index.php [L]
+
+  # 阻止直接访问源码 / 配置 / 日志 / 资源模板等敏感路径
+  RewriteRule ^(app|config|vendor|tests|cli|includes|resources|deprecated|errors|soap)(/|$) - [R=404,L]
+
+  # 直接映射 /assets/* 到 public/assets/*
+  RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+
+  # 真实存在的文件或目录放行（例如 public/assets/... 或 favicon.ico）
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 其余交给前端控制器
+  RewriteRule ^ public/index.php [L]
+</IfModule>
+
+# 禁止访问 composer / git / 环境文件
+<FilesMatch "^(composer\.json|composer\.lock|\.env|\.gitignore|\.htaccess)$">
+  Require all denied
+</FilesMatch>
+
+# 一些基础安全头（如果服务器全局已设，可去掉）
+<IfModule mod_headers.c>
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-XSS-Protection "1; mode=block"
+</IfModule>

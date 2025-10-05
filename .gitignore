@@ -1,0 +1,28 @@
+# Runtime artifacts generated during setup or panel operation
+/config/generated/*
+!/config/generated/.gitkeep
+
+# Cache files
+/storage/cache/*
+!/storage/cache/.gitkeep
+!/storage/cache/ip_geo/
+!/storage/cache/ip_geo/.gitkeep
+
+# Logs
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Composer dependencies
+/vendor/
+
+# Environment & IDE files
+/.env
+/.env.*
+/.idea/
+/.vscode/
+/.DS_Store
+Thumbs.db
+
+# Node / build artifacts
+/node_modules/
+/public/assets/build/
