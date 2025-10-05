@@ -1,6 +1,6 @@
-# Acore GM Panel
+﻿# Acore GM Panel
 
-Acore GM Panel is a modern MVC control panel for [AzerothCore](https://www.azerothcore.org/) realms. It streamlines daily server operations with a consistent UI, unified tooling, and multi-realm aware services that cover the most common GM and administrator workflows.
+A web game management toolkit for AzerothCore realms. Acore GM Panel is a modern MVC control panel for [AzerothCore](https://www.azerothcore.org/) realms. It streamlines daily server operations with a consistent UI, unified tooling, and multi-realm aware services that cover the most common GM and administrator workflows.
 
 ## Highlights
 
@@ -121,4 +121,3 @@ Additional focused guides live in the `docs/` directory and project root:
 ## License
 
 This project follows AzerothCore community usage guidelines. Refer to the repository license file or contact the maintainers for commercial usage inquiries.
-
