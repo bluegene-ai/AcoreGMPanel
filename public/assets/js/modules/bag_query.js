@@ -79,8 +79,7 @@
   const ctx=window.__BAG_QUERY_CTX||{};
   const ctxPrefill=ctx.prefill||null;
   const ctxAutoSearch=!!ctx.autoSearch;
-  const QUALITY_FALLBACK = ['Poor','Common','Uncommon','Rare','Epic','Legendary','Artifact','Heirloom'];
-  const QUALITY_TEXT = QUALITY_FALLBACK.map((label, idx)=> translate(`quality.${idx}`, label));
+  const ctxLabels = ctx.labels || {};
   const CLASS_META_FALLBACK = [
     [1,'warrior','Warrior'],
     [2,'paladin','Paladin'],
@@ -192,7 +191,7 @@
   function activateRow(){ const rows=qsa('#bqCharTable tbody tr'); rows.forEach(tr=>{ const g=parseInt(tr.dataset.guid||'0',10); tr.classList.toggle('bag-query-row--active',g===selectedGuid); }); }
   function resetItemsPlaceholder(){
     const tb=qs('#bqItemTable tbody');
-    if(tb) tb.innerHTML=`<tr><td colspan="7" class="text-center muted">${esc(translate('items.placeholder.none','No character selected'))}</td></tr>`;
+    if(tb) tb.innerHTML=`<tr><td colspan="6" class="text-center muted">${esc(translate('items.placeholder.none','No character selected'))}</td></tr>`;
     updateItemsSubtitle();
   }
   function bindSearch(){
@@ -257,10 +256,19 @@
       const meta=Number.isFinite(classId)? CLASS_META[classId]||null:null;
       const active=guid===selectedGuid ? ' bag-query-row--active' : '';
       const classSlug=meta? ` bag-query-class bag-query-class--${meta.slug}`:'';
-      const classLabel=meta? esc(meta.label):esc(r.class);
       const dataClass=Number.isFinite(classId)? ` data-class="${classId}"`:'';
-      const viewLabel = translate('actions.view','View');
-      return `<tr class="bag-query-row${classSlug}${active}" data-guid="${r.guid}"${dataClass}><td>${r.guid}</td><td class="bag-query-name">${esc(r.name)}</td><td>${r.level}</td><td>${r.race}</td><td>${classLabel}</td><td><button class="btn-sm btn info" data-act="view" data-guid="${r.guid}" data-name="${esc(r.name)}">${esc(viewLabel)}</button></td></tr>`;
+      const accountId=parseInt(r.account_id,10);
+      const rawAccount=typeof r.account_username==='string' && r.account_username.trim()? r.account_username.trim():'';
+      let accountLabel;
+      if(rawAccount){
+        accountLabel = esc(rawAccount);
+      } else if(Number.isFinite(accountId) && accountId>0){
+        accountLabel = esc(`#${accountId}`);
+      } else {
+        accountLabel = '&#8212;';
+      }
+      const viewLabel = translate('actions.view', ctxLabels.view || 'View');
+      return `<tr class="bag-query-row${classSlug}${active}" data-guid="${r.guid}"${dataClass}><td>${r.guid}</td><td class="bag-query-name">${esc(r.name)}</td><td>${r.level}</td><td>${r.race}</td><td>${accountLabel}</td><td><button class="btn-sm btn info" data-act="view" data-guid="${r.guid}" data-name="${esc(r.name)}">${esc(viewLabel)}</button></td></tr>`;
     }).join('');
     tb.querySelectorAll('button[data-act=view]').forEach(b=> b.addEventListener('click',()=> loadItems(b.dataset.guid,b.dataset.name)));
     activateRow();
@@ -289,25 +297,23 @@
     currentItems=json.data||[];
     renderItems(currentItems);
   }
-  function renderItems(rows){ const tb=qs('#bqItemTable tbody'); if(!tb) return; updateItemsSubtitle(); if(!rows||!rows.length){ const msg=selectedGuid? translate('items.empty','No items or bags empty'):translate('items.placeholder.none','No character selected'); tb.innerHTML='<tr><td colspan="7" class="text-center muted">'+esc(msg)+'</td></tr>'; return; }
+  function renderItems(rows){ const tb=qs('#bqItemTable tbody'); if(!tb) return; updateItemsSubtitle(); if(!rows||!rows.length){ const msg=selectedGuid? translate('items.empty','No items or bags empty'):translate('items.placeholder.none','No character selected'); tb.innerHTML='<tr><td colspan="6" class="text-center muted">'+esc(msg)+'</td></tr>'; return; }
     tb.innerHTML=rows.map(r=>{
       const qIdx=qualityIndex(r.quality);
       const qClass=qualityClassName(qIdx);
-  const qualityText=qIdx>=0? `${QUALITY_TEXT[qIdx]} (${qIdx})`:translate('items.quality.unknown','Unknown');
       const rawName=(r.name||'').trim();
       const fallbackName='#'+(r.itemEntry||'');
       const safeName=rawName? esc(rawName):esc(fallbackName);
       const filterName=(rawName||fallbackName).toLowerCase();
       const nameHtml=`<span class="item-quality ${qClass}">${safeName}</span>`;
-      const qualityHtml=`<span class="item-quality ${qClass}">${esc(qualityText)}</span>`;
       const buttonName=rawName? esc(rawName):esc(fallbackName);
-      const deleteLabel = translate('actions.delete','Delete');
-      return `<tr data-name="${esc(filterName)}" data-count="${r.count}" data-inst="${r.item_instance_guid}"><td>${r.item_instance_guid}</td><td>${r.itemEntry}</td><td>${nameHtml}</td><td>${qualityHtml}</td><td>${r.count}</td><td>${r.bag}/${r.slot}</td><td><button class="btn-sm btn danger" data-act="del" data-inst="${r.item_instance_guid}" data-count="${r.count}" data-entry="${r.itemEntry}" data-name="${buttonName}">${esc(deleteLabel)}</button></td></tr>`;
+      const deleteLabel = translate('actions.delete', ctxLabels.delete || 'Delete');
+      return `<tr data-name="${esc(filterName)}" data-count="${r.count}" data-inst="${r.item_instance_guid}"><td>${r.item_instance_guid}</td><td>${r.itemEntry}</td><td>${nameHtml}</td><td>${r.count}</td><td>${r.bag}/${r.slot}</td><td><button class="btn-sm btn danger" data-act="del" data-inst="${r.item_instance_guid}" data-count="${r.count}" data-entry="${r.itemEntry}" data-name="${buttonName}">${esc(deleteLabel)}</button></td></tr>`;
     }).join('');
     tb.querySelectorAll('button[data-act=del]').forEach(b=> b.addEventListener('click',()=> openDelete(b.dataset)));
   }
-  function renderItemsLoading(){ const tb=qs('#bqItemTable tbody'); if(tb){ const msg=selectedGuid? translate('status.loading','Loading...'):translate('items.placeholder.none','No character selected'); tb.innerHTML='<tr><td colspan="7" class="text-center muted">'+esc(msg)+'</td></tr>'; } }
-  function renderItemsError(msg){ const tb=qs('#bqItemTable tbody'); if(tb) tb.innerHTML='<tr><td colspan="7" class="text-center text-danger">'+esc(msg)+'</td></tr>'; updateItemsSubtitle(translate('items.error.load_failed','Failed to load items')); Feedback.error('#bqActionFlash',msg); }
+  function renderItemsLoading(){ const tb=qs('#bqItemTable tbody'); if(tb){ const msg=selectedGuid? translate('status.loading','Loading...'):translate('items.placeholder.none','No character selected'); tb.innerHTML='<tr><td colspan="6" class="text-center muted">'+esc(msg)+'</td></tr>'; } }
+  function renderItemsError(msg){ const tb=qs('#bqItemTable tbody'); if(tb) tb.innerHTML='<tr><td colspan="6" class="text-center text-danger">'+esc(msg)+'</td></tr>'; updateItemsSubtitle(translate('items.error.load_failed','Failed to load items')); Feedback.error('#bqActionFlash',msg); }
 
 
   function bindFilter(){ const ip=qs('#bqItemFilter'); if(!ip) return; ip.setAttribute('placeholder', translate('items.filter.placeholder','Filter items by name')); ip.addEventListener('input',()=>{ const v=ip.value.trim().toLowerCase(); const rows=qsa('#bqItemTable tbody tr'); rows.forEach(tr=>{ if(!v){ tr.style.display=''; return; } const n=tr.getAttribute('data-name')||''; tr.style.display = n.includes(v)?'':'none'; }); }); }
@@ -338,7 +344,7 @@
     qty.addEventListener('input',qty._bagHandler);
     validateQty(qty,ok);
     if(ok._bagHandler){ ok.removeEventListener('click',ok._bagHandler); }
-  ok._bagHandler=(event)=>{ event.preventDefault(); doDelete(event); };
+     ok._bagHandler=(event)=>{ event.preventDefault(); doDelete(event); };
     ok.addEventListener('click',ok._bagHandler);
     Feedback.clear('#bqDelFeedback');
     ensureModalBindings(modal);
@@ -371,7 +377,7 @@
     }
     ok.disabled=true;
     const originalLabel=ok.textContent;
-  ok.textContent=translate('actions.processing','Processing...');
+     ok.textContent=translate('actions.processing', ctxLabels.processing || 'Processing...');
     const res=await post(api.reduce,{character_guid:selectedGuid,item_instance_guid:delCtx.inst,quantity:qty,item_entry:delCtx.entry});
     ok.textContent=originalLabel;
     if(res.success){

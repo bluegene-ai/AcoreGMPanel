@@ -30,12 +30,6 @@ class BagQueryRepository extends MultiServerRepository
     { parent::__construct($serverId); $this->auth=$this->auth(); $this->chars=$this->characters(); $this->world=$this->world(); $this->logFile=$this->logsDir().DIRECTORY_SEPARATOR.'bag_query_actions.log'; }
 
 
-
-
-
-
-
-
     public function searchCharacters(string $type,string $value,int $limit=100): array
     {
         $value=trim($value);
@@ -45,29 +39,26 @@ class BagQueryRepository extends MultiServerRepository
         }
         $limit = max(1,min($limit,200));
         if($type==='username'){
-            $st=$this->auth->prepare('SELECT id FROM account WHERE username=:u');
+            $st=$this->auth->prepare('SELECT id,username FROM account WHERE username=:u');
             $st->execute([':u'=>$value]); $acc=$st->fetch(PDO::FETCH_ASSOC);
             if(!$acc){
                 $this->appendLog('search',['type'=>$type,'value'=>mb_substr($value,0,40),'limit'=>$limit,'result'=>0,'reason'=>'account_not_found']);
                 return [];
             }
-            $stc=$this->chars->prepare('SELECT guid,name,level,race,class FROM characters WHERE account=:aid ORDER BY name ASC LIMIT :lim');
+            $stc=$this->chars->prepare('SELECT guid,name,level,race,class,account FROM characters WHERE account=:aid ORDER BY name ASC LIMIT :lim');
             $stc->bindValue(':aid',(int)$acc['id'],PDO::PARAM_INT); $stc->bindValue(':lim',$limit,PDO::PARAM_INT); $stc->execute();
             $rows=$stc->fetchAll(PDO::FETCH_ASSOC)?:[];
-            $this->appendLog('search',['type'=>$type,'value'=>mb_substr($value,0,40),'limit'=>$limit,'result'=>count($rows),'account_id'=>(int)$acc['id']]);
+            $rows=$this->attachAccountMeta($rows);
+            $this->appendLog('search',['type'=>$type,'value'=>mb_substr($value,0,40),'limit'=>$limit,'result'=>count($rows),'account_id'=>(int)$acc['id'],'account_username'=>$acc['username']??null]);
             return $rows;
         }
-        $stc=$this->chars->prepare('SELECT guid,name,level,race,class FROM characters WHERE name LIKE :n ORDER BY name ASC LIMIT :lim');
+        $stc=$this->chars->prepare('SELECT guid,name,level,race,class,account FROM characters WHERE name LIKE :n ORDER BY name ASC LIMIT :lim');
         $stc->bindValue(':n','%'.$value.'%'); $stc->bindValue(':lim',$limit,PDO::PARAM_INT); $stc->execute();
         $rows=$stc->fetchAll(PDO::FETCH_ASSOC)?:[];
+        $rows=$this->attachAccountMeta($rows);
         $this->appendLog('search',['type'=>$type,'value'=>mb_substr($value,0,40),'limit'=>$limit,'result'=>count($rows)]);
         return $rows;
     }
-
-
-
-
-
 
     public function characterItems(int $guid): array
     {
@@ -80,7 +71,6 @@ class BagQueryRepository extends MultiServerRepository
         $st=$this->chars->prepare($sql); $st->execute([':g'=>$guid]);
         $rows=$st->fetchAll(PDO::FETCH_ASSOC)?:[];
         if(!$rows) return [];
-
 
         $entries=array_values(array_unique(array_map(static fn($row)=> (int)($row['itemEntry']??0), $rows)));
         $map=[];
@@ -108,9 +98,6 @@ class BagQueryRepository extends MultiServerRepository
     return $rows;
     }
 
-
-
-
     public function findCharacter(string $name): ?array
     {
         $name=trim($name); if($name==='') return null;
@@ -125,10 +112,6 @@ class BagQueryRepository extends MultiServerRepository
         }
         return $row?:null;
     }
-
-
-
-
 
     public function listItems(int $guid): array
     {
@@ -145,9 +128,6 @@ class BagQueryRepository extends MultiServerRepository
             ];
         },$rows);
     }
-
-
-
 
     public function reduceItem(int $characterGuid,int $entry,int $amount): int
     {
@@ -171,9 +151,6 @@ class BagQueryRepository extends MultiServerRepository
     $this->appendLog('reduce_entry',[ 'character_guid'=>$characterGuid,'item_entry'=>$entry,'requested'=>$amount,'affected'=>$affected ]);
     return $affected;
     }
-
-
-
 
     public function reduceInstance(int $characterGuid,int $itemInstanceGuid,int $qty,?int $itemEntry=null): array
     {
@@ -229,6 +206,41 @@ class BagQueryRepository extends MultiServerRepository
             'new_count'=>$result['new_count']??null,
             'message'=>$result['message']??null,
         ]);
+    }
+
+    private function attachAccountMeta(array $rows): array
+    {
+        if(!$rows){
+            return [];
+        }
+
+        $ids=[];
+        foreach($rows as $row){
+            $accId=(int)($row['account']??0);
+            if($accId>0){
+                $ids[$accId]=true;
+            }
+        }
+
+        $map=[];
+        if($ids){
+            $acctIds=array_map('intval',array_keys($ids));
+            $placeholders=implode(',',array_fill(0,count($acctIds),'?'));
+            $stmt=$this->auth->prepare("SELECT id,username FROM account WHERE id IN ($placeholders)");
+            $stmt->execute($acctIds);
+            foreach($stmt->fetchAll(PDO::FETCH_ASSOC) as $row){
+                $map[(int)$row['id']]=$row['username']??null;
+            }
+        }
+
+        foreach($rows as &$row){
+            $accId=(int)($row['account']??0);
+            $row['account_id']=$accId;
+            $row['account_username']=$map[$accId]??null;
+        }
+        unset($row);
+
+        return $rows;
     }
 
     private function appendLog(string $event,array $context): void

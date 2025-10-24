@@ -44,7 +44,7 @@
           <th><?= htmlspecialchars(__('app.bag_query.chars.table.name')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.chars.table.level')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.chars.table.race')) ?></th>
-          <th><?= htmlspecialchars(__('app.bag_query.chars.table.class')) ?></th>
+          <th><?= htmlspecialchars(__('app.bag_query.chars.table.account')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.chars.table.actions')) ?></th>
         </tr></thead>
         <tbody><tr><td colspan="6" class="text-center muted"><?= htmlspecialchars(__('app.bag_query.chars.table.empty')) ?></td></tr></tbody>
@@ -69,12 +69,11 @@
           <th><?= htmlspecialchars(__('app.bag_query.items.table.instance_guid')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.items.table.item_id')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.items.table.name')) ?></th>
-          <th><?= htmlspecialchars(__('app.bag_query.items.table.quality')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.items.table.count')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.items.table.slot')) ?></th>
           <th><?= htmlspecialchars(__('app.bag_query.items.table.actions')) ?></th>
         </tr></thead>
-        <tbody><tr><td colspan="7" class="text-center muted"><?= htmlspecialchars(__('app.bag_query.items.table.empty')) ?></td></tr></tbody>
+        <tbody><tr><td colspan="6" class="text-center muted"><?= htmlspecialchars(__('app.bag_query.items.table.empty')) ?></td></tr></tbody>
       </table>
     </div>
   </section>
@@ -116,7 +115,12 @@
 window.__BAG_QUERY_CTX = {
   csrf: window.__CSRF_TOKEN,
   prefill: <?= $prefillJson ?: 'null' ?>,
-  autoSearch: <?= $autoSearch ? 'true':'false' ?>
+  autoSearch: <?= $autoSearch ? 'true':'false' ?>,
+  labels: {
+    view: <?= json_encode(__('app.js.modules.bag_query.actions.view'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+    delete: <?= json_encode(__('app.js.modules.bag_query.actions.delete'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+    processing: <?= json_encode(__('app.js.modules.bag_query.actions.processing'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+  }
 };
 </script>
 <?php include __DIR__.'/../layouts/base_bottom.php'; ?>
