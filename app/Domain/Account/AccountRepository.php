@@ -217,7 +217,7 @@ class AccountRepository extends MultiServerRepository
 
 
         if($this->hasShaHash){
-            $sha1 = sha1($userUpper.':'.$passUpper);
+            $sha1 = strtoupper(sha1($userUpper.':'.$passUpper));
             $sets[]='sha_pass_hash=:h'; $params[':h']=$sha1; $updated=true;
         }
 

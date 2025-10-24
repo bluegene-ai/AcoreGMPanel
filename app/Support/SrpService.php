@@ -7,106 +7,94 @@
  * Functions:
  *   - generate()
  *   - generateBinary32()
- *   - bigHex()
- *   - bigFromBin()
- *   - bigPowMod()
- *   - bigToHex()
- *   - bigToLittleEndian32()
+ *   - generatePair()
+ *   - calculateVerifier()
+ *   - importLittleEndian()
+ *   - exportLittleEndian()
  */
 
 namespace Acme\Panel\Support;
 
 use Acme\Panel\Core\Lang;
 
-
-
-
-
-
-
-
-
-
 class SrpService
 {
-
-
-
-
-
-
     private const N_HEX_256 = '894B645E89E1535BBDAD5B8B290650530801B18EBFBF5E8FAB3C82872A3E9BB7';
     private const G = 7;
 
-    public static function generate(string $username,string $plain): array
+    public static function generate(string $username, string $plain): array
     {
-        if(!function_exists('gmp_init')){
+        if (!function_exists('gmp_init')) {
             throw new \RuntimeException(Lang::get('app.support.srp.errors.gmp_missing'));
         }
 
 
-        $userUpper = strtoupper($username);
-        $passUpper = strtoupper($plain);
-        $salt = random_bytes(32);
+        [$salt, $verifier] = self::generatePair($username, $plain);
 
-        $inner = sha1($userUpper.':'.$passUpper,true);
-        $xH = sha1($salt.$inner,true);
-        $x = self::bigFromBin($xH);
-        $N = self::bigHex(self::N_HEX_256);
-        $v = self::bigPowMod(self::G,$x,$N);
-
-        $verLE = self::bigToLittleEndian32($v);
         return [
-            'salt_hex' => bin2hex($salt),
+            'salt_hex' => strtoupper(bin2hex($salt)),
+            'verifier_hex' => strtoupper(bin2hex($verifier)),
+        ];
+    }
 
-            'verifier_hex' => strtoupper(bin2hex($verLE)),
+    public static function generateBinary32(string $username, string $plain): array
+    {
+        if (!function_exists('gmp_init')) {
+            throw new \RuntimeException(Lang::get('app.support.srp.errors.gmp_missing_binary'));
+        }
+
+        [$salt, $verifier] = self::generatePair($username, $plain);
+
+        return [
+            'salt_bin' => $salt,
+            'verifier_bin' => $verifier,
         ];
     }
 
 
-
-
-
-
-
-
-
-
-
-    public static function generateBinary32(string $username,string $plain): array
+    private static function generatePair(string $username, string $plain): array
     {
-        if(!function_exists('gmp_init')){
-            throw new \RuntimeException(Lang::get('app.support.srp.errors.gmp_missing_binary'));
-        }
-        $userUpper = strtoupper($username);
-        $passUpper = strtoupper($plain);
         $salt = random_bytes(32);
-        $inner = sha1($userUpper.':'.$passUpper,true);
-        $xH = sha1($salt.$inner,true);
-        $x = self::bigFromBin($xH);
-        $N = self::bigHex(self::N_HEX_256);
-        $v = self::bigPowMod(self::G,$x,$N);
-        $verLE = self::bigToLittleEndian32($v);
-        return [ 'salt_bin'=>$salt, 'verifier_bin'=>$verLE ];
+        $verifier = self::calculateVerifier($username, $plain, $salt);
+        return [$salt, $verifier];
     }
 
-
-    private static function bigHex(string $hex){ return gmp_init($hex,16); }
-    private static function bigFromBin(string $bin){ return gmp_import($bin,1,GMP_MSW_FIRST|GMP_BIG_ENDIAN); }
-    private static function bigPowMod(int $g,$exp,$mod){ return gmp_powm(gmp_init($g,10), $exp, $mod); }
-    private static function bigToHex($n){ return gmp_strval($n,16); }
-    private static function bigToLittleEndian32($n): string
+    private static function calculateVerifier(string $username, string $plain, string $salt): string
     {
+        $userUpper = strtoupper($username);
+        $passUpper = strtoupper($plain);
 
-        $hex = self::bigToHex($n);
-        if(strlen($hex)%2===1) $hex='0'.$hex;
-        $bin = hex2bin($hex);
+        $h1 = sha1($userUpper . ':' . $passUpper, true);
+        $h2 = sha1($salt . $h1, true);
 
-        if(strlen($bin) < 32) $bin = str_repeat("\x00", 32 - strlen($bin)).$bin;
-        elseif(strlen($bin) > 32) $bin = substr($bin, -32);
+        $exp = self::importLittleEndian($h2);
+        $N = gmp_init(self::N_HEX_256, 16);
+        $g = gmp_init((string) self::G, 10);
 
+        $v = gmp_powm($g, $exp, $N);
 
-        return strrev($bin);
+        return self::exportLittleEndian($v, 32);
+    }
+
+    private static function importLittleEndian(string $bytes): \GMP
+    {
+        return gmp_import($bytes, 1, GMP_LSW_FIRST);
+    }
+
+    private static function exportLittleEndian(\GMP $value, int $length): string
+    {
+        $bin = gmp_export($value, 1, GMP_LSW_FIRST);
+        if ($bin === false) {
+            $bin = '';
+        }
+        $len = strlen($bin);
+        if ($len < $length) {
+            return str_pad($bin, $length, "\0", STR_PAD_RIGHT);
+        }
+        if ($len > $length) {
+            return substr($bin, 0, $length);
+        }
+        return $bin;
     }
 }
 
