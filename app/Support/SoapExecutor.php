@@ -23,42 +23,20 @@ use SoapClient;
 use SoapFault;
 use Throwable;
 
-
-
-
-
-
-
-
-
-
 class SoapExecutor
 {
     public const DEFAULT_CONNECT_TIMEOUT = 3;
     public const DEFAULT_TOTAL_TIMEOUT   = 8;
-
-
     private array $whitelistPrefixes = [];
     private bool $whitelistEnforced = false;
-
-
-
-
 
     public function __construct(array $whitelistPrefixes = [], bool $enforce = false)
     { foreach($whitelistPrefixes as $p){ $p = strtolower(trim($p)); if($p!=='') $this->whitelistPrefixes[$p]=true; }
       $this->whitelistEnforced = $enforce; }
 
-
-
-
-
     public function execute(string $command, array $opts = []): array
     {
         $command = trim($command);
-
-
-
 
         $serverId = $opts['server_id'] ?? null;
         $retries = max(0, (int)($opts['retries'] ?? 1));
@@ -69,8 +47,6 @@ class SoapExecutor
 
         if($command===''){
             return $this->result(false,$command,$serverId,$start,'input.empty',Lang::get('app.support.soap_executor.errors.empty_command')); }
-
-
         if($this->whitelistEnforced){
             $first = strtolower(strtok($command,' '));
             if(!$first || !isset($this->whitelistPrefixes[$first])){
@@ -78,13 +54,15 @@ class SoapExecutor
             }
         }
 
-
-
     $serverSoap = null;
     if($serverId!==null){ $serverSoap = ServerContext::server($serverId)['soap'] ?? null; }
     if(!$serverSoap){ $serverSoap = ServerContext::soap(); }
-    $cfg = $serverSoap ?: Config::get('soap');
-    $host=$cfg['host']??'127.0.0.1'; $port=(int)($cfg['port']??7878); $user=$cfg['username']??''; $pass=$cfg['password']??''; $uri=$cfg['uri']??'urn:AC';
+    $cfg = $this->resolveSoapConfig($serverSoap, $serverId);
+    $host = $cfg['host'];
+    $port = $cfg['port'];
+    $user = $cfg['username'];
+    $pass = $cfg['password'];
+    $uri  = $cfg['uri'];
 
         $attempt=0; $lastError=null; $faultMsg=null; $output='';
         while($attempt <= $retries){
@@ -150,6 +128,74 @@ class SoapExecutor
     $res = $this->result(false,$command,$serverId,$start,$lastError?:'internal.error',Lang::get('app.support.soap_executor.errors.unknown'));
         if($doAudit){ $this->audit($res); }
         return $res;
+    }
+
+    private function resolveSoapConfig(?array $serverSoap, ?int $serverId): array
+    {
+        if (is_array($serverSoap) && $serverSoap) {
+            return $this->normalizeSoapConfig($serverSoap);
+        }
+
+        $global = Config::get('soap');
+        $base = $this->normalizeSoapConfig(is_array($global) ? $global : []);
+
+        if ($serverId === null || !is_array($global)) {
+            return $base;
+        }
+
+        $realms = $global['realms'] ?? null;
+        if (!is_array($realms) || !$realms) {
+            return $base;
+        }
+
+        $realmCfg = $realms[$serverId] ?? null;
+        if (!is_array($realmCfg)) {
+            foreach ($realms as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                if (isset($entry['server_index']) && (int) $entry['server_index'] === $serverId) {
+                    $realmCfg = $entry;
+                    break;
+                }
+                if (isset($entry['realm_id']) && (int) $entry['realm_id'] === $serverId) {
+                    $realmCfg = $entry;
+                    break;
+                }
+            }
+        }
+
+        if (is_array($realmCfg)) {
+            $normalized = $this->normalizeSoapConfig($realmCfg);
+            if (array_key_exists('host', $realmCfg) && $realmCfg['host'] !== '') {
+                $base['host'] = $normalized['host'];
+            }
+            if (array_key_exists('port', $realmCfg) && (int) $realmCfg['port'] > 0) {
+                $base['port'] = $normalized['port'];
+            }
+            if (array_key_exists('username', $realmCfg)) {
+                $base['username'] = $normalized['username'];
+            }
+            if (array_key_exists('password', $realmCfg)) {
+                $base['password'] = $normalized['password'];
+            }
+            if (array_key_exists('uri', $realmCfg) && $realmCfg['uri'] !== '') {
+                $base['uri'] = $normalized['uri'];
+            }
+        }
+
+        return $base;
+    }
+
+    private function normalizeSoapConfig(array $cfg): array
+    {
+        return [
+            'host' => array_key_exists('host', $cfg) && $cfg['host'] !== '' ? (string) $cfg['host'] : '127.0.0.1',
+            'port' => array_key_exists('port', $cfg) && (int) $cfg['port'] > 0 ? (int) $cfg['port'] : 7878,
+            'username' => array_key_exists('username', $cfg) ? (string) $cfg['username'] : '',
+            'password' => array_key_exists('password', $cfg) ? (string) $cfg['password'] : '',
+            'uri' => array_key_exists('uri', $cfg) && $cfg['uri'] !== '' ? (string) $cfg['uri'] : 'urn:AC',
+        ];
     }
 
     private function classifyException(Throwable $e): string

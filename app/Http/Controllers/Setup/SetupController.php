@@ -286,8 +286,11 @@ class SetupController
             }
         }
 
-        if (isset($state['soap'])) {
-            $atomicWrite('soap.php', "<?php\nreturn " . var_export($state['soap'], true) . ";\n");
+        $shouldWriteSoap = isset($state['soap'])
+            || ($mode !== 'single' && $this->hasRealmSoapConfigs($state['realms'] ?? []));
+        if ($shouldWriteSoap) {
+            $soapConfig = $this->buildSoapConfig($state, $mode);
+            $atomicWrite('soap.php', "<?php\nreturn " . var_export($soapConfig, true) . ";\n");
             if (empty($errors)) {
                 $record('soap.php');
             }
@@ -696,6 +699,64 @@ class SetupController
             'password' => $cfg['password'] ?? '',
             'charset' => $cfg['charset'] ?? 'utf8mb4',
         ];
+    }
+
+    private function buildSoapConfig(array $state, string $mode): array
+    {
+        $global = $this->normalizeSoapConfig($state['soap'] ?? []);
+        $config = $global;
+
+        if ($mode !== 'single') {
+            $realms = [];
+            foreach (($state['realms'] ?? []) as $idx => $realm) {
+                $soap = $realm['soap'] ?? null;
+                if (!is_array($soap) || $soap === []) {
+                    continue;
+                }
+
+                $entry = $this->normalizeSoapConfig($soap);
+                $entry['realm_id'] = $realm['realm_id'] ?? ($idx + 1);
+                $entry['server_index'] = $idx;
+                if (!empty($realm['name'])) {
+                    $entry['name'] = $realm['name'];
+                }
+                $realms[$idx] = $entry;
+            }
+
+            if ($realms) {
+                $config['realms'] = $realms;
+            }
+        }
+
+        return $config;
+    }
+
+    private function normalizeSoapConfig(array $cfg): array
+    {
+        $hasHost = array_key_exists('host', $cfg);
+        $hasPort = array_key_exists('port', $cfg);
+        $hasUser = array_key_exists('username', $cfg);
+        $hasPass = array_key_exists('password', $cfg);
+        $hasUri = array_key_exists('uri', $cfg);
+
+        return [
+            'host' => $hasHost ? trim((string) $cfg['host']) : '127.0.0.1',
+            'port' => $hasPort ? (int) $cfg['port'] : 7878,
+            'username' => $hasUser ? trim((string) $cfg['username']) : '',
+            'password' => $hasPass ? (string) $cfg['password'] : '',
+            'uri' => $hasUri ? trim((string) $cfg['uri']) : 'urn:AC',
+        ];
+    }
+
+    private function hasRealmSoapConfigs(array $realms): bool
+    {
+        foreach ($realms as $realm) {
+            if (!empty($realm['soap']) && is_array($realm['soap'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function configBaseDir(): string
