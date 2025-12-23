@@ -34,6 +34,7 @@
     </span>
   </div>
 </form>
+<div id="char-feedback" class="panel-flash panel-flash--inline" style="display:none"></div>
 <?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any'; ?>
 <?php if($hasCriteria): ?>
   <?php
@@ -65,12 +66,65 @@
       return $cur !== '' && str_starts_with($cur, $column . '_');
     };
   ?>
+  <?php $friendlyTime=function(int $seconds): string {
+    if($seconds < 0) {
+      return __('app.account.ban.permanent');
+    }
+    if($seconds <= 0) {
+      return __('app.account.ban.soon');
+    }
+    $d = intdiv($seconds, 86400);
+    $seconds %= 86400;
+    $h = intdiv($seconds, 3600);
+    $seconds %= 3600;
+    $m = intdiv($seconds, 60);
+    $parts = [];
+    $locale = \Acme\Panel\Core\Lang::locale();
+    $isEnglish = stripos($locale, 'en') === 0;
+    if ($d > 0) {
+      $label = __('app.account.ban.duration.day', ['value' => $d]);
+      if ($isEnglish && $d !== 1) {
+        $label .= 's';
+      }
+      $parts[] = $label;
+    }
+    if ($h > 0) {
+      $label = __('app.account.ban.duration.hour', ['value' => $h]);
+      if ($isEnglish && $h !== 1) {
+        $label .= 's';
+      }
+      $parts[] = $label;
+    }
+    if ($m > 0 && $d === 0) {
+      $label = __('app.account.ban.duration.minute', ['value' => $m]);
+      if ($isEnglish && $m !== 1) {
+        $label .= 's';
+      }
+      $parts[] = $label;
+    }
+    if (!$parts) {
+      return __('app.account.ban.under_minute');
+    }
+    return implode(__('app.account.ban.separator'), array_slice($parts, 0, 2));
+  }; ?>
   <p style="margin-top:10px;font-size:13px;color:#8aa4b8;">
     <?= htmlspecialchars(__('app.character.index.feedback.found', ['total' => $pager->total, 'page' => $pager->page, 'pages' => $pager->pages])) ?>
   </p>
+  <div class="flex between center" style="gap:10px;flex-wrap:wrap;margin:8px 0;">
+    <div class="flex center" style="gap:10px;flex-wrap:wrap;">
+      <label class="small" style="display:inline-flex;align-items:center;gap:6px;">
+        <input type="checkbox" class="js-char-select-all">
+        <span><?= htmlspecialchars(__('app.account.bulk.select_all')) ?></span>
+      </label>
+      <button class="btn-sm btn danger js-char-bulk" data-bulk="delete" type="button"><?= htmlspecialchars(__('app.account.bulk.delete')) ?></button>
+      <button class="btn-sm btn danger js-char-bulk" data-bulk="ban" type="button"><?= htmlspecialchars(__('app.account.bulk.ban')) ?></button>
+      <button class="btn-sm btn success js-char-bulk" data-bulk="unban" type="button"><?= htmlspecialchars(__('app.account.bulk.unban')) ?></button>
+    </div>
+  </div>
   <table class="table">
     <thead>
       <tr>
+        <th style="width:34px;"><input type="checkbox" class="js-char-select-all" aria-label="select all"></th>
         <th><a class="table-sort<?= $isActive('guid')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('guid'))) ?>"><?= htmlspecialchars(__('app.character.index.table.guid')) ?></a></th>
         <th><?= htmlspecialchars(__('app.character.index.table.name')) ?></th>
         <th><?= htmlspecialchars(__('app.character.index.table.account')) ?></th>
@@ -87,6 +141,7 @@
     <tbody>
     <?php foreach($pager->items as $row): ?>
       <tr>
+        <td><input type="checkbox" class="js-char-select" value="<?= (int)$row['guid'] ?>" aria-label="select"></td>
         <td><?= (int)$row['guid'] ?></td>
         <td><?= htmlspecialchars($row['name']) ?></td>
         <?php $accName = (string)($row['account_username'] ?? ''); $accFallback = '#'.($row['account'] ?? ''); ?>
@@ -108,17 +163,33 @@
         <td><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::zoneLabel($rowZoneId)) ?></td>
         <td>
           <?php if(!empty($row['ban'])): $b=$row['ban']; ?>
-            <span class="badge" style="background:#7a1b1b" title="<?= htmlspecialchars($b['banreason'] ?? '') ?>"><?= htmlspecialchars(__('app.character.index.status.banned')) ?></span>
+            <?php
+              $banReason = (string)($b['banreason'] ?? '-');
+              $banStart = !empty($b['bandate']) ? date('Y-m-d H:i', (int)$b['bandate']) : '-';
+              $banEnd = (!empty($b['permanent']) || (int)($b['unbandate'] ?? 0) <= time()) ? __('app.account.ban.no_end') : date('Y-m-d H:i', (int)$b['unbandate']);
+              $tooltip = __('app.account.ban.tooltip', [
+                'reason' => $banReason !== '' ? $banReason : '-',
+                'start' => $banStart,
+                'end' => $banEnd,
+              ]);
+              $duration = $friendlyTime((int)($b['remaining_seconds'] ?? -1));
+            ?>
+            <span class="badge" style="background:#7a1b1b" title="<?= htmlspecialchars($tooltip) ?>">
+              <?= htmlspecialchars(__('app.account.ban.badge', ['duration' => $duration])) ?>
+            </span>
           <?php else: ?>
             <?= (int)$row['online'] ? '<span class="badge" style="background:#16a34a">'.htmlspecialchars(__('app.character.index.status.online')).'</span>' : '<span class="badge">'.htmlspecialchars(__('app.character.index.status.offline')).'</span>' ?>
           <?php endif; ?>
         </td>
         <td><?= htmlspecialchars(format_datetime($row['logout_time'] ?? null)) ?></td>
         <?php $viewUrl = \Acme\Panel\Core\Url::to('/character/view') . '?guid=' . (int)$row['guid']; ?>
-        <td><a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a></td>
+        <td style="white-space:nowrap">
+          <a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a>
+          <button class="btn-sm btn danger js-char-delete" type="button" data-guid="<?= (int)$row['guid'] ?>" data-name="<?= htmlspecialchars($row['name']) ?>"><?= htmlspecialchars(__('app.character.actions.delete')) ?></button>
+        </td>
       </tr>
     <?php endforeach; ?>
-    <?php if(!$pager->items): ?><tr><td colspan="11" style="text-align:center;">&<?= 'nbsp;' ?><?= htmlspecialchars(__('app.character.index.feedback.empty')) ?></td></tr><?php endif; ?>
+    <?php if(!$pager->items): ?><tr><td colspan="12" style="text-align:center;">&<?= 'nbsp;' ?><?= htmlspecialchars(__('app.character.index.feedback.empty')) ?></td></tr><?php endif; ?>
     </tbody>
   </table>
   <?php

@@ -83,11 +83,12 @@ class AccountRepository extends MultiServerRepository
 
         $onlineFilter = $filters['online'] ?? 'any';
         $banFilter = $filters['ban'] ?? 'any';
+        $excludeUsername = trim((string)($filters['exclude_username'] ?? ''));
 
         $hasOnlineFilter = in_array($onlineFilter, ['online','offline'], true);
         $hasBanFilter = in_array($banFilter, ['banned','unbanned'], true);
 
-        $hasCriteria = $loadAll || ($value !== '') || $hasOnlineFilter || $hasBanFilter;
+        $hasCriteria = $loadAll || ($value !== '') || $hasOnlineFilter || $hasBanFilter || ($excludeUsername !== '');
         if(!$hasCriteria){ return new Paginator([],0,$page,$perPage); }
 
         $wheres = [];
@@ -103,36 +104,56 @@ class AccountRepository extends MultiServerRepository
             }
         }
 
-        $onlineColumn = $this->hasColumn('online') ? $this->columnName('online') : null;
+        if($excludeUsername !== ''){
+            $wheres[] = 'a.username NOT LIKE :exu';
+            $param[':exu'] = '%'.$excludeUsername.'%';
+        }
+
+        // Online filter must reflect characters DB online state (not auth.account.online).
         if($hasOnlineFilter){
-            if($onlineColumn){
-                $col = '`'.str_replace('`','``',$onlineColumn).'`';
+            try {
+                $charsPdo = $this->characters();
+                $onlineIds = $charsPdo->query('SELECT DISTINCT account FROM characters WHERE online=1')->fetchAll(PDO::FETCH_COLUMN,0);
+                $onlineIds = array_values(array_unique(array_map('intval',$onlineIds)));
+
                 if($onlineFilter === 'online'){
-                    $wheres[] = "a.$col = 1";
-                } elseif($onlineFilter === 'offline'){
-                    $wheres[] = "a.$col = 0";
-                }
-            } else {
-                try {
-                    $charsPdo = $this->characters();
-                    $onlineIds = $charsPdo->query('SELECT DISTINCT account FROM characters WHERE online=1')->fetchAll(PDO::FETCH_COLUMN,0);
-                    $onlineIds = array_values(array_unique(array_map('intval',$onlineIds)));
-                    if($onlineFilter === 'online'){
-                        if(!$onlineIds){ return new Paginator([],0,$page,$perPage); }
-                        $ph = [];
-                        foreach($onlineIds as $idx=>$id){ $key=':on'.$idx; $ph[]=$key; $param[$key]=$id; }
-                        $wheres[] = 'a.id IN ('.implode(',',$ph).')';
-                    } elseif($onlineFilter === 'offline' && $onlineIds){
-                        $ph = [];
-                        foreach($onlineIds as $idx=>$id){ $key=':off'.$idx; $ph[]=$key; $param[$key]=$id; }
-                        $wheres[] = 'a.id NOT IN ('.implode(',',$ph).')';
+                    if(!$onlineIds){
+                        return new Paginator([],0,$page,$perPage);
                     }
-                } catch(\Throwable $e){ }
+                    $chunks = array_chunk($onlineIds, 800);
+                    $ors = [];
+                    foreach($chunks as $chunkIdx => $chunk){
+                        $ph = [];
+                        foreach($chunk as $i => $id){
+                            $key = ':on'.$chunkIdx.'_'.$i;
+                            $ph[] = $key;
+                            $param[$key] = $id;
+                        }
+                        $ors[] = 'a.id IN ('.implode(',',$ph).')';
+                    }
+                    $wheres[] = '('.implode(' OR ', $ors).')';
+                } elseif($onlineFilter === 'offline'){
+                    if($onlineIds){
+                        $chunks = array_chunk($onlineIds, 800);
+                        foreach($chunks as $chunkIdx => $chunk){
+                            $ph = [];
+                            foreach($chunk as $i => $id){
+                                $key = ':off'.$chunkIdx.'_'.$i;
+                                $ph[] = $key;
+                                $param[$key] = $id;
+                            }
+                            $wheres[] = 'a.id NOT IN ('.implode(',',$ph).')';
+                        }
+                    }
+                }
+            } catch(\Throwable $e){
+                // If we cannot query characters DB, ignore online filter.
             }
         }
 
         if($hasBanFilter){
-            $banSql = 'EXISTS (SELECT 1 FROM account_banned b WHERE b.id=a.id AND b.active=1 AND (b.unbandate=0 OR b.unbandate>UNIX_TIMESTAMP()))';
+            // AzerothCore: `active=1` indicates an active ban; `unbandate` may be <= now for permanent bans.
+            $banSql = 'EXISTS (SELECT 1 FROM account_banned b WHERE b.id=a.id AND b.active=1)';
             if($banFilter === 'banned'){
                 $wheres[] = $banSql;
             } elseif($banFilter === 'unbanned'){
@@ -147,6 +168,9 @@ class AccountRepository extends MultiServerRepository
         $cnt->execute(); $total=(int)$cnt->fetchColumn();
         $offset=($page-1)*$perPage;
 
+        // Online state is computed from characters DB; do not depend on auth.account.online here.
+        $onlineColumn = null;
+
         $orderMap = [
             '' => 'a.id DESC',
             'id_desc' => 'a.id DESC',
@@ -154,14 +178,9 @@ class AccountRepository extends MultiServerRepository
             'last_login_desc' => 'a.last_login DESC, a.id DESC',
             'last_login_asc' => 'a.last_login ASC, a.id ASC',
         ];
-        if($onlineColumn){
-            $col = '`'.str_replace('`','``',$onlineColumn).'`';
-            $orderMap['online_desc'] = "a.$col DESC, a.id DESC";
-            $orderMap['online_asc'] = "a.$col ASC, a.id ASC";
-        }
         $orderBy = $orderMap[$sort] ?? $orderMap[''];
 
-        $selectOnline = $onlineColumn ? ', a.`'.str_replace('`','``',$onlineColumn).'` AS account_online' : '';
+        $selectOnline = '';
         $sql="SELECT a.id,a.username,aa.gmlevel,a.last_login,a.last_ip{$selectOnline}
               FROM account a
               LEFT JOIN account_access aa ON aa.id=a.id
@@ -203,8 +222,9 @@ class AccountRepository extends MultiServerRepository
             $banRows = $stBan->fetchAll(PDO::FETCH_ASSOC);
             $banMap=[]; $now=time();
             foreach($banRows as $b){
-                $permanent = ((int)$b['unbandate'])===0;
-                $remaining = $permanent? -1 : max(0, ((int)$b['unbandate']) - $now);
+                $unbandate = (int)$b['unbandate'];
+                $permanent = ($unbandate === 0) || ($unbandate <= $now);
+                $remaining = $permanent ? -1 : max(0, $unbandate - $now);
                 $banMap[$b['id']] = [
                     'bandate'=>(int)$b['bandate'],
                     'unbandate'=>(int)$b['unbandate'],
@@ -218,6 +238,297 @@ class AccountRepository extends MultiServerRepository
     } catch(\Throwable $e){  }
 
         return new Paginator($rows,$total,$page,$perPage);
+    }
+
+    public function findById(int $id): ?array
+    {
+        $st = $this->authPdo->prepare('SELECT a.id,a.username FROM account a WHERE a.id=:id LIMIT 1');
+        $st->execute([':id'=>$id]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ?: null;
+    }
+
+    public function listCharactersFull(int $accountId): array
+    {
+        $pdo = $this->characters();
+        $st = $pdo->prepare('SELECT guid,name,online FROM characters WHERE account=:a ORDER BY guid DESC');
+        $st->execute([':a'=>$accountId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function deleteAccountCascade(int $accountId): array
+    {
+        $accountId = (int)$accountId;
+        if($accountId <= 0){
+            return ['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')];
+        }
+
+        // Block deleting online accounts when the `online` column exists.
+        try {
+            if(!$this->schemaChecked){
+                $this->inspectAccountSchema();
+            }
+            $onlineColumn = $this->hasColumn('online') ? $this->columnName('online') : null;
+            if($onlineColumn){
+                $col = '`'.str_replace('`','``',$onlineColumn).'`';
+                $st = $this->authPdo->prepare("SELECT a.$col AS online FROM account a WHERE a.id=:id LIMIT 1");
+                $st->execute([':id'=>$accountId]);
+                $isOnline = (int)($st->fetchColumn() ?: 0);
+                if($isOnline === 1){
+                    return ['success'=>false,'message'=>Lang::get('app.account.delete.blocked_online', ['name'=>''])];
+                }
+            }
+        } catch(\Throwable $e){
+            // ignore
+        }
+
+        $account = $this->findById($accountId);
+        if(!$account){
+            return ['success'=>false,'message'=>Lang::get('app.common.errors.not_found')];
+        }
+
+        // Prevent deleting accounts with online characters.
+        $chars = [];
+        try {
+            $chars = $this->listCharactersFull($accountId);
+        } catch(\Throwable $e){
+            return ['success'=>false,'message'=>Lang::get('app.common.errors.query_failed',['message'=>$e->getMessage()])];
+        }
+
+        foreach($chars as $c){
+            if(!empty($c['online'])){
+                return ['success'=>false,'message'=>Lang::get('app.account.delete.blocked_online', ['name'=>$c['name'] ?? ''])];
+            }
+        }
+
+        // Delete characters first (characters DB), then delete account (auth DB).
+        $charactersDeleted = 0;
+        if($chars){
+            $charRepo = new \Acme\Panel\Domain\Character\CharacterRepository($this->serverId);
+            foreach($chars as $c){
+                $guid = (int)($c['guid'] ?? 0);
+                if($guid <= 0){
+                    continue;
+                }
+                try {
+                    $del = $charRepo->deleteCharacterDetailed($guid);
+                    $ok = (bool)($del['success'] ?? false);
+                } catch(\Throwable $e){
+                    return ['success'=>false,'message'=>Lang::get('app.account.delete.characters_failed',['message'=>$e->getMessage()]),'characters_deleted'=>$charactersDeleted];
+                }
+                if(!$ok){
+                    $reason = (string)($del['message'] ?? 'delete failed');
+                    return ['success'=>false,'message'=>Lang::get('app.account.delete.characters_failed',['message'=>$reason]),'characters_deleted'=>$charactersDeleted];
+                }
+                $charactersDeleted++;
+            }
+        }
+
+        $this->authPdo->beginTransaction();
+        try {
+            $this->authPdo->prepare('DELETE FROM account_access WHERE id=:id')->execute([':id'=>$accountId]);
+            $this->authPdo->prepare('DELETE FROM account_banned WHERE id=:id')->execute([':id'=>$accountId]);
+
+            // Optional tables (ignore if missing), column names differ across cores.
+            $this->deleteOptionalTable('realmcharacters', $accountId, ['acctid','id']);
+            $this->deleteOptionalTable('account_muted', $accountId, ['guid','id']);
+            $this->deleteOptionalTable('account_punishment', $accountId, ['id','guid','account']);
+            $this->deleteOptionalTable('account_whitelisted', $accountId, ['id','guid','account']);
+
+            // If FK constraints exist, delete dependent rows first.
+            $this->deleteAuthFkChildren('account', 'id', $accountId);
+
+            $del = $this->authPdo->prepare('DELETE FROM account WHERE id=:id');
+            $del->execute([':id'=>$accountId]);
+            if($del->rowCount() <= 0){
+                $this->authPdo->rollBack();
+                return ['success'=>false,'message'=>Lang::get('app.common.errors.not_found'),'characters_deleted'=>$charactersDeleted];
+            }
+            $this->authPdo->commit();
+        } catch(\Throwable $e){
+            $this->authPdo->rollBack();
+            return ['success'=>false,'message'=>Lang::get('app.account.delete.account_failed',['message'=>$e->getMessage()]),'characters_deleted'=>$charactersDeleted];
+        }
+
+        return ['success'=>true,'message'=>Lang::get('app.account.delete.success'), 'username'=>$account['username'] ?? null, 'characters_deleted'=>$charactersDeleted];
+    }
+
+    private function deleteOptionalTable(string $table, int $accountId, array $candidateColumns): void
+    {
+        foreach($candidateColumns as $col){
+            try {
+                $this->authPdo->prepare("DELETE FROM {$table} WHERE {$col}=:id")->execute([':id'=>$accountId]);
+                return;
+            } catch(\PDOException $e){
+                $code = (string)$e->getCode();
+                if($code === '42S02'){
+                    return; // table missing
+                }
+                if($code === '42S22'){
+                    continue; // column missing, try next
+                }
+                throw $e;
+            }
+        }
+    }
+
+    private function deleteAuthFkChildren(string $referencedTable, string $referencedColumn, int $value): void
+    {
+        try {
+            $st = $this->authPdo->prepare(
+                'SELECT TABLE_NAME, COLUMN_NAME'
+                .' FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE'
+                .' WHERE TABLE_SCHEMA = DATABASE()'
+                .' AND REFERENCED_TABLE_NAME = :rt'
+                .' AND REFERENCED_COLUMN_NAME = :rc'
+            );
+            $st->execute([':rt' => $referencedTable, ':rc' => $referencedColumn]);
+            $refs = $st->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        } catch(\Throwable $e){
+            return;
+        }
+
+        foreach($refs as $ref){
+            $table = (string)($ref['TABLE_NAME'] ?? '');
+            $col = (string)($ref['COLUMN_NAME'] ?? '');
+            if($table==='' || $col==='') continue;
+            if(strcasecmp($table, $referencedTable) === 0) continue;
+
+            $tableSafe = str_replace('`','``',$table);
+            $colSafe = str_replace('`','``',$col);
+            try {
+                $this->authPdo->prepare("DELETE FROM `{$tableSafe}` WHERE `{$colSafe}`=:v")->execute([':v'=>$value]);
+            } catch(\Throwable $e){
+                // ignore
+            }
+        }
+    }
+
+    public function updateEmail(int $accountId, string $email): array
+    {
+        $accountId = (int)$accountId;
+        $email = trim($email);
+        if($accountId <= 0){
+            return ['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')];
+        }
+        if($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)){
+            return ['success'=>false,'message'=>Lang::get('app.account.email.invalid')];
+        }
+
+        if(!$this->schemaChecked){
+            $this->inspectAccountSchema();
+        }
+
+        if(!$this->hasColumn('email')){
+            return ['success'=>false,'message'=>Lang::get('app.account.email.not_supported')];
+        }
+
+        // Block updating online accounts when possible.
+        if($this->hasColumn('online')){
+            $onlineCol = '`'.str_replace('`','``',$this->columnName('online')).'`';
+            $st = $this->authPdo->prepare("SELECT a.$onlineCol AS online, a.email AS email".( $this->hasColumn('reg_mail') ? ', a.reg_mail AS reg_mail' : '')." FROM account a WHERE a.id=:id LIMIT 1");
+            $st->execute([':id'=>$accountId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC);
+            if(!$row){
+                return ['success'=>false,'message'=>Lang::get('app.common.errors.not_found')];
+            }
+            if((int)($row['online'] ?? 0) === 1){
+                return ['success'=>false,'message'=>Lang::get('app.account.email.blocked_online')];
+            }
+            $curEmail = (string)($row['email'] ?? '');
+            $curReg = (string)($row['reg_mail'] ?? '');
+        } else {
+            $st = $this->authPdo->prepare('SELECT email'.($this->hasColumn('reg_mail') ? ',reg_mail' : '').' FROM account WHERE id=:id LIMIT 1');
+            $st->execute([':id'=>$accountId]);
+            $row = $st->fetch(PDO::FETCH_ASSOC);
+            if(!$row){
+                return ['success'=>false,'message'=>Lang::get('app.common.errors.not_found')];
+            }
+            $curEmail = (string)($row['email'] ?? '');
+            $curReg = (string)($row['reg_mail'] ?? '');
+        }
+
+        $this->authPdo->beginTransaction();
+        try {
+            $this->authPdo->prepare('UPDATE account SET email=:e WHERE id=:id')->execute([':e'=>$email,':id'=>$accountId]);
+            // Keep `reg_mail` in sync only when it was empty or same as previous email.
+            if($this->hasColumn('reg_mail') && ($curReg === '' || $curReg === $curEmail)){
+                $this->authPdo->prepare('UPDATE account SET reg_mail=:e WHERE id=:id')->execute([':e'=>$email,':id'=>$accountId]);
+            }
+            $this->authPdo->commit();
+        } catch(\Throwable $e){
+            $this->authPdo->rollBack();
+            return ['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])];
+        }
+
+        return ['success'=>true,'message'=>Lang::get('app.account.email.success')];
+    }
+
+    public function updateUsername(int $accountId, string $newUsername, string $newPassword): array
+    {
+        $accountId = (int)$accountId;
+        $newUsername = trim($newUsername);
+        $newPassword = (string)$newPassword;
+
+        if($accountId <= 0){
+            return ['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')];
+        }
+
+        // AzerothCore wiki: usernames are limited to 20 chars.
+        if($newUsername === '' || strlen($newUsername) > 20){
+            return ['success'=>false,'message'=>Lang::get('app.account.rename.invalid_username')];
+        }
+        if(strlen($newPassword) < 8){
+            return ['success'=>false,'message'=>Lang::get('app.account.rename.invalid_password')];
+        }
+
+        if(!$this->schemaChecked){
+            $this->inspectAccountSchema();
+        }
+
+        // Block online rename when possible.
+        if($this->hasColumn('online')){
+            $onlineCol = '`'.str_replace('`','``',$this->columnName('online')).'`';
+            $st = $this->authPdo->prepare("SELECT a.username, a.$onlineCol AS online FROM account a WHERE a.id=:id LIMIT 1");
+        } else {
+            $st = $this->authPdo->prepare('SELECT username, 0 AS online FROM account WHERE id=:id LIMIT 1');
+        }
+        $st->execute([':id'=>$accountId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if(!$row){
+            return ['success'=>false,'message'=>Lang::get('app.common.errors.not_found')];
+        }
+        if((int)($row['online'] ?? 0) === 1){
+            return ['success'=>false,'message'=>Lang::get('app.account.rename.blocked_online')];
+        }
+        $oldUsername = (string)($row['username'] ?? '');
+
+        // Unique check
+        $chk = $this->authPdo->prepare('SELECT id FROM account WHERE username=:u LIMIT 1');
+        $chk->execute([':u'=>$newUsername]);
+        $existing = (int)($chk->fetchColumn() ?: 0);
+        if($existing > 0 && $existing !== $accountId){
+            return ['success'=>false,'message'=>Lang::get('app.account.rename.taken')];
+        }
+
+        $this->authPdo->beginTransaction();
+        try {
+            $upd = $this->authPdo->prepare('UPDATE account SET username=:u WHERE id=:id');
+            $upd->execute([':u'=>$newUsername,':id'=>$accountId]);
+
+            // Username affects SRP verifier, so always reset password together.
+            $ok = $this->changePassword($accountId, $newUsername, $newPassword);
+            if(!$ok){
+                $this->authPdo->rollBack();
+                return ['success'=>false,'message'=>Lang::get('app.account.rename.password_reset_failed')];
+            }
+            $this->authPdo->commit();
+        } catch(\Throwable $e){
+            $this->authPdo->rollBack();
+            return ['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])];
+        }
+
+        return ['success'=>true,'message'=>Lang::get('app.account.rename.success', ['old'=>$oldUsername,'new'=>$newUsername])];
     }
 
     public function findByUsername(string $u): ?array
@@ -568,9 +879,10 @@ class AccountRepository extends MultiServerRepository
         $st=$this->authPdo->prepare('SELECT bandate,unbandate,banreason,active FROM account_banned WHERE id=:id AND active=1 ORDER BY bandate DESC LIMIT 1');
         $st->execute([':id'=>$accountId]);
         $row=$st->fetch(PDO::FETCH_ASSOC); if(!$row) return null;
-        $permanent = ((int)$row['unbandate']) === 0;
         $now=time();
-        $remaining = $permanent? -1 : max(0, ((int)$row['unbandate']) - $now);
+        $unbandate = (int)$row['unbandate'];
+        $permanent = ($unbandate === 0) || ($unbandate <= $now);
+        $remaining = $permanent ? -1 : max(0, $unbandate - $now);
         return [
             'bandate'=>(int)$row['bandate'],
             'unbandate'=>(int)$row['unbandate'],

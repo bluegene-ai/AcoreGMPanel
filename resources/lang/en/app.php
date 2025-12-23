@@ -241,6 +241,8 @@ return [
             'ban_any' => 'All accounts',
             'ban_only' => 'Banned only',
             'ban_unbanned' => 'Not banned',
+            'exclude_username' => 'Exclude text',
+            'exclude_username_placeholder' => 'e.g. test',
         ],
         'feedback' => [
             'found' => ':total records found · Page :page of :pages',
@@ -268,8 +270,11 @@ return [
             'ban' => 'Ban',
             'unban' => 'Unban',
             'password' => 'Reset password',
+            'email' => 'Email',
+            'rename' => 'Rename',
             'same_ip' => 'Accounts on IP',
             'kick' => 'Kick',
+            'delete' => 'Delete',
         ],
         'ban' => [
             'badge' => 'Banned (:duration)',
@@ -334,6 +339,42 @@ return [
             'success' => 'Password updated successfully (previous sessions invalidated)',
             'failure' => 'Failed to change password: :message',
             'failure_generic' => 'Unknown error',
+        ],
+        'email' => [
+            'title' => 'Update email - :name',
+            'labels' => [
+                'email' => 'Email',
+            ],
+            'placeholders' => [
+                'email' => 'example@domain.com',
+            ],
+            'actions' => [
+                'cancel' => 'Cancel',
+                'submit' => 'Save',
+            ],
+            'invalid' => 'Invalid email address',
+            'not_supported' => 'Email column is not available in this schema',
+            'blocked_online' => 'Cannot update email while account is online',
+            'success' => 'Email updated',
+        ],
+        'rename' => [
+            'title' => 'Rename account - :name',
+            'labels' => [
+                'username' => 'New username',
+                'password' => 'New password',
+                'password_confirm' => 'Confirm password',
+            ],
+            'actions' => [
+                'cancel' => 'Cancel',
+                'submit' => 'Save',
+            ],
+            'invalid_username' => 'Invalid username (1-20 chars)',
+            'invalid_password' => 'Password must be at least 8 characters',
+            'password_mismatch' => 'Passwords do not match',
+            'password_reset_failed' => 'Password reset failed (cannot generate verifier)',
+            'blocked_online' => 'Cannot rename while account is online',
+            'taken' => 'Username is already taken',
+            'success' => 'Username updated (:old → :new)',
         ],
         'create' => [
             'title' => 'Create account',
@@ -1189,6 +1230,8 @@ return [
             'metadata' => [
                 'notes' => [
                     'Field and parameter semantics follow the AzerothCore Wiki.',
+            'exclude_username' => 'Username not contains',
+            'exclude_username_placeholder' => 'e.g. test',
                     'Generated SQL can be applied to the smart_scripts table.',
                 ],
             ],
@@ -1835,7 +1878,22 @@ return [
                 'body' => 'Shirt',
                 'chest' => 'Chest',
                 'waist' => 'Waist',
+            'delete' => 'Delete',
                 'legs' => 'Legs',
+        'bulk' => [
+            'select_all' => 'Select all',
+            'delete' => 'Bulk delete',
+            'ban' => 'Bulk ban',
+            'unban' => 'Bulk unban',
+            'no_selection' => 'Please select at least one item',
+        ],
+        'delete' => [
+            'confirm' => 'Delete this account? This will also delete all characters under the account. This cannot be undone.',
+            'success' => 'Deleted',
+            'blocked_online' => 'Online character detected (:name). Please kick first.',
+            'characters_failed' => 'Failed to delete characters: :message',
+            'account_failed' => 'Failed to delete account: :message',
+        ],
                 'feet' => 'Feet',
                 'wrist' => 'Wrist',
                 'hands' => 'Hands',

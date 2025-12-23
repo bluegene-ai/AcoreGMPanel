@@ -59,11 +59,16 @@ return static function (Router $router): void {
             $router->post('/smart-ai/api/preview', [SmartAiWizardController::class, 'apiPreview']);
             $router->post('/account/api/ban', [AccountController::class, 'apiBan']);
             $router->post('/account/api/unban', [AccountController::class, 'apiUnban']);
+            $router->post('/account/api/delete', [AccountController::class, 'apiDelete']);
+            $router->post('/account/api/bulk', [AccountController::class, 'apiBulk']);
+            $router->post('/account/api/update-email', [AccountController::class, 'apiUpdateEmail']);
+            $router->post('/account/api/update-username', [AccountController::class, 'apiUpdateUsername']);
             $router->post('/account/api/change-password', [AccountController::class, 'apiChangePassword']);
             $router->post('/account/api/kick', [AccountController::class, 'apiKick']);
 
             $router->post('/character/api/ban', [CharacterController::class, 'apiBan']);
             $router->post('/character/api/unban', [CharacterController::class, 'apiUnban']);
+            $router->post('/character/api/bulk', [CharacterController::class, 'apiBulk']);
             $router->post('/character/api/set-level', [CharacterController::class, 'apiSetLevel']);
             $router->post('/character/api/set-gold', [CharacterController::class, 'apiSetGold']);
             $router->post('/character/api/kick', [CharacterController::class, 'apiKick']);

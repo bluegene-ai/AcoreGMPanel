@@ -421,10 +421,93 @@ class CharacterController extends Controller
         if(!empty($summary['online'])){
             return $this->json(['success'=>false,'message'=>Lang::get('app.character.actions.blocked_online')],422);
         }
-        $ok = $this->repo()->deleteCharacter($guid);
-        $this->logCharacterAction('delete',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
+        $res = $this->repo()->deleteCharacterDetailed($guid);
+        $ok = (bool)($res['success'] ?? false);
+        $this->logCharacterAction('delete',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip(),'error'=>$res['message'] ?? null]);
         if($ok){ Audit::log('character','delete',"guid=$guid"); }
-        return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
+        $msg = $ok
+            ? Lang::get('app.character.actions.success')
+            : (($res['message'] ?? '') !== '' ? ('删除失败：'.$res['message']) : Lang::get('app.character.actions.failed'));
+        return $this->json(['success'=>$ok,'message'=>$msg]);
+    }
+
+    public function apiBulk(Request $request): Response
+    {
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->maybeSwitchServer($request);
+
+        $action = strtolower(trim((string)$request->input('action','')));
+        $allowed = ['delete','ban','unban'];
+        if(!in_array($action,$allowed,true)){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        }
+
+        $raw = $request->input('guids',[]);
+        $guids = [];
+        if(is_array($raw)){
+            foreach($raw as $v){ $iv=(int)$v; if($iv>0) $guids[]=$iv; }
+        } else {
+            $parts = preg_split('/\s*,\s*/', (string)$raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach($parts as $p){ $iv=(int)$p; if($iv>0) $guids[]=$iv; }
+        }
+        $guids = array_values(array_unique($guids));
+        if(!$guids){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        }
+        if(count($guids) > 200){
+            $guids = array_slice($guids, 0, 200);
+        }
+
+        $hours = (int)$request->input('hours',0);
+        $reason = trim((string)$request->input('reason',''));
+        if($action === 'ban' && $reason === ''){
+            $reason = Lang::get('app.character.actions.default_reason');
+        }
+
+        $okCount = 0;
+        $fail = [];
+
+        foreach($guids as $guid){
+            try {
+                if($action === 'ban'){
+                    $ok = $this->repo()->ban($guid,$reason,$hours);
+                    $this->logCharacterAction('bulk_ban',$ok?'success':'db_fail',['guid'=>$guid,'hours'=>$hours,'reason'=>$reason,'ip'=>$request->ip()]);
+                    if($ok){ Audit::log('character','ban',"guid=$guid hours=$hours reason=$reason"); }
+                } elseif($action === 'unban'){
+                    $cnt = $this->repo()->unban($guid);
+                    $ok = true;
+                    $this->logCharacterAction('bulk_unban',$cnt>0?'success':'noop',['guid'=>$guid,'updated'=>$cnt,'ip'=>$request->ip()]);
+                    if($cnt>0){ Audit::log('character','unban',"guid=$guid updated=$cnt"); }
+                } else {
+                    $summary = $this->repo()->findSummary($guid);
+                    if(!$summary){
+                        $ok = false;
+                    } elseif(!empty($summary['online'])){
+                        $ok = false;
+                    } else {
+                        $del = $this->repo()->deleteCharacterDetailed($guid);
+                        $ok = (bool)($del['success'] ?? false);
+                    }
+                    $this->logCharacterAction('bulk_delete',$ok?'success':'failed',['guid'=>$guid,'ip'=>$request->ip()]);
+                    if($ok){ Audit::log('character','delete',"guid=$guid"); }
+                }
+            } catch(\Throwable $e){
+                $ok = false;
+                $this->logCharacterAction('bulk_'.$action,'error',['guid'=>$guid,'error'=>$e->getMessage(),'ip'=>$request->ip()]);
+            }
+
+            if($ok){ $okCount++; } else { $fail[] = $guid; }
+        }
+
+        $success = $okCount > 0 && count($fail) === 0;
+        return $this->json([
+            'success' => $success,
+            'action' => $action,
+            'requested' => count($guids),
+            'ok' => $okCount,
+            'failed' => count($fail),
+            'failed_guids' => array_slice($fail, 0, 50),
+        ]);
     }
 
     private function logCharacterAction(string $action,string $stage,array $context=[]): void

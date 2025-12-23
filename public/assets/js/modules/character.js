@@ -1,13 +1,22 @@
 (function(){
   const feedback = document.getElementById('char-feedback');
 
+  const searchParams = new URLSearchParams(location.search);
+  const currentServer = searchParams.get('server') || '';
+
+  function withServer(path){
+    if(!currentServer) return path;
+    if(String(path).includes('server=')) return path;
+    return path + (String(path).includes('?') ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
+  }
+
   // nfuwow name resolving (character/show)
   const nfCache = { spell: new Map(), skill: new Map(), achievement: new Map(), quest: new Map(), faction: new Map(), achievementcriteria: new Map() };
   const inflight = new Map();
 
   function buildUrl(path){
     const base = (window.APP_BASE || '').replace(/\/$/, '');
-    return (base ? base : '') + path;
+    return (base ? base : '') + withServer(path);
   }
 
   function chunk(arr, size){
@@ -251,5 +260,102 @@
 
     input.addEventListener('input', applyFilter);
     applyFilter();
+  });
+
+  // Character list bulk actions (character/index)
+  function formPost(endpoint, payload){
+    const url = buildUrl(endpoint);
+    const data = new FormData();
+    Object.entries(payload || {}).forEach(([k,v]) => {
+      if(Array.isArray(v)){
+        v.forEach(item => data.append(k + '[]', String(item)));
+      } else if(v !== undefined && v !== null){
+        data.append(k, String(v));
+      }
+    });
+    if(!data.get('_csrf') && window.__CSRF_TOKEN){
+      data.set('_csrf', window.__CSRF_TOKEN);
+    }
+    return fetch(url, {
+      method: 'POST',
+      body: data,
+      headers: { 'X-CSRF-TOKEN': data.get('_csrf') || '' }
+    }).then(r => r.json().catch(() => ({ success:false, message:'Invalid response' })));
+  }
+
+  function selectedGuids(){
+    return Array.from(document.querySelectorAll('input.js-char-select:checked'))
+      .map(el => parseInt(el.value, 10))
+      .filter(v => Number.isFinite(v) && v > 0);
+  }
+
+  document.addEventListener('change', (event) => {
+    const target = event.target;
+    if(!(target instanceof HTMLInputElement)) return;
+    if(target.classList.contains('js-char-select-all')){
+      const checked = target.checked;
+      document.querySelectorAll('input.js-char-select-all').forEach(el => { el.checked = checked; });
+      document.querySelectorAll('input.js-char-select').forEach(el => { el.checked = checked; });
+      return;
+    }
+    if(target.classList.contains('js-char-select')){
+      const all = Array.from(document.querySelectorAll('input.js-char-select'));
+      const checked = all.filter(el => el.checked);
+      const allChecked = all.length > 0 && checked.length === all.length;
+      document.querySelectorAll('input.js-char-select-all').forEach(el => { el.checked = allChecked; });
+    }
+  });
+
+  document.addEventListener('click', async (event) => {
+    const delBtn = event.target.closest('button.js-char-delete');
+    if(delBtn){
+      const guid = parseInt(delBtn.getAttribute('data-guid') || '0', 10) || 0;
+      const name = delBtn.getAttribute('data-name') || '';
+      if(!guid) return;
+      if(!confirm(`确认删除角色 ${name ? name : guid}？此操作不可恢复。`)) return;
+      const res = await formPost('/character/api/delete', { guid });
+      flash(res.message || (res.success ? 'OK' : 'Failed'), !!res.success);
+      if(res.success){
+        setTimeout(() => location.reload(), 600);
+      }
+      return;
+    }
+
+    const bulkBtn = event.target.closest('button.js-char-bulk');
+    if(!bulkBtn) return;
+    const action = bulkBtn.getAttribute('data-bulk') || '';
+    if(!action) return;
+
+    const guids = selectedGuids();
+    if(!guids.length){
+      flash('请先选择至少一项', false);
+      return;
+    }
+
+    let hours = 0;
+    let reason = '';
+    if(action === 'delete'){
+      if(!confirm('确认批量删除所选角色？此操作不可恢复。')) return;
+    }
+    if(action === 'ban'){
+      hours = parseInt(prompt('封禁时长（小时，0 = 永久）：', '0') || '0', 10);
+      if(!Number.isFinite(hours) || hours < 0){
+        flash('封禁时长无效', false);
+        return;
+      }
+      reason = prompt('封禁理由：', '后台封禁') || '';
+    }
+    if(action === 'unban'){
+      if(!confirm('确认批量解封所选角色？')) return;
+    }
+
+    const res = await formPost('/character/api/bulk', { action, guids, hours, reason });
+    if(res && res.success){
+      flash(`OK: ${res.ok}/${res.requested}`, true);
+      setTimeout(() => location.reload(), 600);
+      return;
+    }
+    const failed = res && typeof res.failed === 'number' ? res.failed : null;
+    flash(failed ? `Failed: ${failed}` : ((res && res.message) ? res.message : 'Failed'), false);
   });
 })();

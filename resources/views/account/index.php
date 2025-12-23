@@ -6,6 +6,7 @@
 
  $module='account'; include __DIR__.'/../layouts/base_top.php'; ?>
 <?php $filter_online = $filter_online ?? 'any'; $filter_ban = $filter_ban ?? 'any'; $load_all = !empty($load_all); $sort = $sort ?? ''; ?>
+<?php $exclude_username = $exclude_username ?? ''; ?>
 <h1 class="page-title"><?= htmlspecialchars(__('app.account.page_title')) ?></h1>
 <form class="account-search" method="get" action="">
   <div class="account-search__row">
@@ -35,10 +36,14 @@
         <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_unbanned')) ?></option>
       </select>
     </label>
+    <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
+      <span style="white-space:nowrap;"><?= htmlspecialchars(__('app.account.filters.exclude_username')) ?>:</span>
+      <input type="text" name="exclude_username" value="<?= htmlspecialchars($exclude_username) ?>" placeholder="<?= htmlspecialchars(__('app.account.filters.exclude_username_placeholder')) ?>" style="min-width:180px;">
+    </label>
   </div>
   <div id="account-feedback" class="panel-flash panel-flash--inline"></div>
 </form>
-<?php $hasCriteria = $load_all || ($search_value!=='') || ($filter_online!=='any') || ($filter_ban!=='any'); ?>
+<?php $hasCriteria = $load_all || ($search_value!=='') || ($filter_online!=='any') || ($filter_ban!=='any') || (trim((string)$exclude_username) !== ''); ?>
 <?php if($hasCriteria): ?>
 <?php
   $sortUrl = static function(?string $value): string {
@@ -110,8 +115,20 @@
   <p style="margin-top:10px;font-size:13px;color:#8aa4b8;">
     <?= htmlspecialchars(__('app.account.feedback.found', ['total' => $pager->total, 'page' => $pager->page, 'pages' => $pager->pages])) ?>
   </p>
+  <div class="flex between center" style="gap:10px;flex-wrap:wrap;margin:8px 0;">
+    <div class="flex center" style="gap:10px;flex-wrap:wrap;">
+      <label class="small" style="display:inline-flex;align-items:center;gap:6px;">
+        <input type="checkbox" class="js-account-select-all">
+        <span><?= htmlspecialchars(__('app.account.bulk.select_all')) ?></span>
+      </label>
+      <button class="btn-sm btn danger js-account-bulk" data-bulk="delete" type="button"><?= htmlspecialchars(__('app.account.bulk.delete')) ?></button>
+      <button class="btn-sm btn danger js-account-bulk" data-bulk="ban" type="button"><?= htmlspecialchars(__('app.account.bulk.ban')) ?></button>
+      <button class="btn-sm btn success js-account-bulk" data-bulk="unban" type="button"><?= htmlspecialchars(__('app.account.bulk.unban')) ?></button>
+    </div>
+  </div>
   <table class="table">
   <thead><tr>
+    <th style="width:34px;"><input type="checkbox" class="js-account-select-all" aria-label="select all"></th>
     <th><a class="table-sort<?= $isActive('id')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('id'))) ?>"><?= htmlspecialchars(__('app.account.table.id')) ?></a></th>
     <th><?= htmlspecialchars(__('app.account.table.username')) ?></th>
     <th><?= htmlspecialchars(__('app.account.table.gm')) ?></th>
@@ -138,6 +155,7 @@
         }
       ?>
       <tr data-id="<?= (int)$row['id'] ?>" data-username="<?= htmlspecialchars($row['username']) ?>" data-gm="<?= isset($row['gmlevel'])?(int)$row['gmlevel']:'0' ?>" data-last-ip="<?= htmlspecialchars($lastIp) ?>">
+        <td><input type="checkbox" class="js-account-select" value="<?= (int)$row['id'] ?>" aria-label="select"></td>
         <td><?= (int)$row['id'] ?></td>
         <td><?= htmlspecialchars($row['username']) ?></td>
         <td><?= isset($row['gmlevel'])?(int)$row['gmlevel']:'-' ?></td>
@@ -172,12 +190,15 @@
           <button class="btn-sm btn danger action" data-action="ban"><?= htmlspecialchars(__('app.account.actions.ban')) ?></button>
           <button class="btn-sm btn success action" data-action="unban"><?= htmlspecialchars(__('app.account.actions.unban')) ?></button>
           <button class="btn-sm btn info outline action" data-action="pass"><?= htmlspecialchars(__('app.account.actions.password')) ?></button>
+          <button class="btn-sm btn neutral action" data-action="email"><?= htmlspecialchars(__('app.account.actions.email')) ?></button>
+          <button class="btn-sm btn neutral outline action" data-action="rename"><?= htmlspecialchars(__('app.account.actions.rename')) ?></button>
           <button class="btn-sm btn neutral action" data-action="ip-accounts" <?= $isPrivateIp?'disabled title="'.htmlspecialchars(__('app.account.feedback.private_ip_disabled')).'"':''; ?>><?= htmlspecialchars(__('app.account.actions.same_ip')) ?></button>
           <button class="btn-sm btn outline danger action" data-action="kick"><?= htmlspecialchars(__('app.account.actions.kick')) ?></button>
+          <button class="btn-sm btn danger action" data-action="delete"><?= htmlspecialchars(__('app.account.actions.delete')) ?></button>
         </td>
       </tr>
     <?php endforeach; ?>
-  <?php if(!$pager->items): ?><tr><td colspan="8" style="text-align:center;"><?= htmlspecialchars(__('app.account.feedback.empty')) ?></td></tr><?php endif; ?>
+  <?php if(!$pager->items): ?><tr><td colspan="9" style="text-align:center;"><?= htmlspecialchars(__('app.account.feedback.empty')) ?></td></tr><?php endif; ?>
     </tbody>
   </table>
   <?php

@@ -158,8 +158,11 @@
 		const markup = `<div class="modal-backdrop"><div class="modal-panel"><header><h3>${esc(title)}</h3><button class="modal-close" aria-label="close">&times;</button></header><div class="modal-body"></div><div class="modal-footer modal-footer-right"></div></div></div>`;
 		const wrapper = el(markup);
 		wrapper.querySelector('.modal-body').innerHTML = contentHtml;
+		// Only close via the explicit close button; do not close on backdrop clicks.
+		// This prevents accidental closes while typing (e.g. IME / stray clicks).
 		wrapper.addEventListener('click', event => {
-			if(event.target === wrapper || event.target.classList.contains('modal-close')){
+			const target = event.target;
+			if(target && target.classList && target.classList.contains('modal-close')){
 				closeModal();
 			}
 		});
@@ -298,7 +301,10 @@
 		const value = params.get('search_value') || '';
 		const online = params.get('online') || 'any';
 		const ban = params.get('ban') || 'any';
-		const hasCriteria = value || online !== 'any' || ban !== 'any';
+		const loadAll = params.get('load_all') === '1';
+		const excludeUsername = params.get('exclude_username') || '';
+		const sort = params.get('sort') || '';
+		const hasCriteria = loadAll || value || online !== 'any' || ban !== 'any' || excludeUsername;
 		if(!hasCriteria){
 			return;
 		}
@@ -311,6 +317,9 @@
 			});
 			query.set('online', online || 'any');
 			query.set('ban', ban || 'any');
+			if(loadAll) query.set('load_all', '1');
+			if(excludeUsername) query.set('exclude_username', excludeUsername);
+			if(sort) query.set('sort', sort);
 			const listUrl = `/account/api/list?${query.toString()}`;
 			const res = await request(listUrl);
 			if(!res || !res.success){
@@ -326,8 +335,11 @@
 				ban: translate('actions.ban', 'Ban'),
 				unban: translate('actions.unban', 'Unban'),
 				password: translate('actions.password', 'Reset password'),
+				email: translate('actions.email', 'Email'),
+				rename: translate('actions.rename', 'Rename'),
 				sameIp: translate('actions.same_ip', 'Accounts on IP'),
-				kick: translate('actions.kick', 'Kick')
+				kick: translate('actions.kick', 'Kick'),
+				delete: translate('actions.delete', 'Delete')
 			};
 			const rows = (res.items || []).map(row => {
 				const lastIp = row.last_ip || '';
@@ -353,8 +365,11 @@
 					{ action: 'ban', className: 'btn-sm btn danger action', label: actionLabels.ban },
 					{ action: 'unban', className: 'btn-sm btn success action', label: actionLabels.unban },
 					{ action: 'pass', className: 'btn-sm btn info outline action', label: actionLabels.password },
+					{ action: 'email', className: 'btn-sm btn neutral action', label: actionLabels.email },
+					{ action: 'rename', className: 'btn-sm btn neutral outline action', label: actionLabels.rename },
 					{ action: 'ip-accounts', className: 'btn-sm btn neutral action', label: actionLabels.sameIp, disabled: privateIp, title: privateIp ? privateIpTitle : '' },
-					{ action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick }
+					{ action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick },
+					{ action: 'delete', className: 'btn-sm btn danger action', label: actionLabels.delete }
 				];
 				const buttonsHtml = actionButtons.map(btn => {
 					const attrs = [
@@ -372,6 +387,7 @@
 				const lastLogin = row.last_login || '-';
 				const lastIpCell = lastIp || '-';
 				return `<tr data-id="${esc(idValue)}" data-username="${esc(usernameValue)}" data-gm="${esc(gmData)}" data-last-ip="${esc(lastIp)}">`
+					+ `<td><input type="checkbox" class="js-account-select" value="${esc(idValue)}" aria-label="select"></td>`
 					+ `<td>${esc(idValue)}</td>`
 					+ `<td>${esc(usernameValue)}</td>`
 					+ `<td>${esc(gmValue)}</td>`
@@ -383,11 +399,62 @@
 					+ `</tr>`;
 			}).join('');
 			const emptyText = translate('feedback.empty', 'No results');
-			tbody.innerHTML = rows || `<tr><td colspan="8" style="text-align:center;">${esc(emptyText)}</td></tr>`;
+			tbody.innerHTML = rows || `<tr><td colspan="9" style="text-align:center;">${esc(emptyText)}</td></tr>`;
 			fillIpLocations(tbody);
 		}catch(err){
 			console.error('[account] failed to reload account table', err);
 		}
+	}
+
+	function selectedAccountIds(){
+		return Array.from(document.querySelectorAll('input.js-account-select:checked'))
+			.map(el => parseInt(el.value, 10))
+			.filter(v => Number.isFinite(v) && v > 0);
+	}
+
+	async function doDeleteAccount(id, username){
+		const confirmMsg = translate('delete.confirm', 'Delete this account?');
+		if(!confirm(confirmMsg)) return;
+		const res = await request('/account/api/delete', { method: 'POST', body: { id } });
+		if(res && res.success){
+			flash(translate('delete.success', 'Deleted'), 'success');
+			reloadAccountTable();
+			return;
+		}
+		flash((res && res.message) ? res.message : translate('errors.request_failed', 'Request failed'), 'error');
+	}
+
+	async function doBulk(action){
+		const ids = selectedAccountIds();
+		if(!ids.length){
+			flash(translate('bulk.no_selection', 'Please select at least one item'), 'error');
+			return;
+		}
+		if(action === 'delete'){
+			const confirmMsg = translate('delete.confirm', 'Delete selected accounts?');
+			if(!confirm(confirmMsg)) return;
+		}
+		let hours = 0;
+		let reason = '';
+		if(action === 'ban'){
+			hours = parseInt(prompt(translate('ban.prompt_hours', 'Ban hours (0=permanent):'), '0') || '0', 10);
+			if(!Number.isFinite(hours) || hours < 0){
+				flash(translate('ban.error_hours', 'Invalid hours'), 'error');
+				return;
+			}
+			reason = prompt(translate('ban.prompt_reason', 'Reason:'), translate('ban.default_reason', 'Panel ban')) || '';
+		}
+		if(action === 'unban'){
+			if(!confirm(translate('ban.confirm_unban', 'Unban selected accounts?'))) return;
+		}
+		const res = await request('/account/api/bulk', { method: 'POST', body: { action, ids, hours, reason } });
+		if(res && res.success){
+			flash(`OK: ${res.ok}/${res.requested}`, 'success');
+			reloadAccountTable();
+			return;
+		}
+		const failed = res && typeof res.failed === 'number' ? res.failed : null;
+		flash(failed ? `Failed: ${failed}` : ((res && res.message) ? res.message : 'Failed'), 'error');
 	}
 
 	async function doCharacters(id, username){
@@ -657,6 +724,167 @@
 		}
 	}
 
+	async function doUpdateEmail(id, username){
+		const title = translate('email.title', 'Update email - :name', { name: username });
+		const label = translate('email.labels.email', 'Email');
+		const placeholder = translate('email.placeholders.email', 'example@domain.com');
+		const formHtml = `
+			<form class="form account-email-form">
+				<div class="form-field">
+					<label>${esc(label)}</label>
+					<input type="email" name="email" placeholder="${esc(placeholder)}" maxlength="255" required>
+				</div>
+				<div class="form-error" style="display:none;color:#c53030;margin-top:8px;"></div>
+			</form>
+		`;
+		const modal = showModal(title, formHtml);
+		const footer = modal.querySelector('.modal-footer');
+		if(footer){ footer.innerHTML = ''; }
+		const cancelText = translate('email.actions.cancel', 'Cancel');
+		const submitText = translate('email.actions.submit', 'Save');
+		const cancelBtn = el(`<button type="button" class="btn outline">${esc(cancelText)}</button>`);
+		const submitBtn = el(`<button type="button" class="btn">${esc(submitText)}</button>`);
+		cancelBtn.addEventListener('click', () => closeModal());
+		footer.appendChild(cancelBtn);
+		footer.appendChild(submitBtn);
+		const form = modal.querySelector('form');
+		const errorBox = modal.querySelector('.form-error');
+		setTimeout(() => {
+			const input = form ? form.querySelector('input[name="email"]') : null;
+			if(input) input.focus();
+		}, 50);
+		const showError = message => {
+			if(!errorBox) return;
+			if(message){
+				errorBox.textContent = message;
+				errorBox.style.display = 'block';
+			}else{
+				errorBox.textContent = '';
+				errorBox.style.display = 'none';
+			}
+		};
+		const submit = async () => {
+			if(submitBtn.disabled) return;
+			const data = new FormData(form);
+			const email = (data.get('email') || '').toString().trim();
+			if(!email || !email.includes('@')){
+				showError(translate('email.invalid', 'Invalid email'));
+				return;
+			}
+			showError('');
+			submitBtn.disabled = true;
+			cancelBtn.disabled = true;
+			try{
+				const res = await request('/account/api/update-email', { method: 'POST', body: { id, email } });
+				if(!res || !res.success){
+					showError(res && res.message ? res.message : translate('email.errors.failed', 'Failed to update email'));
+					submitBtn.disabled = false;
+					cancelBtn.disabled = false;
+					return;
+				}
+				flash(translate('email.success', 'Email updated'), 'success');
+				closeModal();
+				reloadAccountTable();
+			}catch(err){
+				showError(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }));
+				submitBtn.disabled = false;
+				cancelBtn.disabled = false;
+			}
+		};
+		submitBtn.addEventListener('click', submit);
+		form.addEventListener('submit', event => { event.preventDefault(); submit(); });
+	}
+
+	async function doRenameAccount(id, username){
+		const title = translate('rename.title', 'Rename account - :name', { name: username });
+		const userLabel = translate('rename.labels.username', 'New username');
+		const passLabel = translate('rename.labels.password', 'New password');
+		const passConfirmLabel = translate('rename.labels.password_confirm', 'Confirm password');
+		const formHtml = `
+			<form class="form account-rename-form">
+				<div class="form-field">
+					<label>${esc(userLabel)}</label>
+					<input type="text" name="username" maxlength="20" required>
+				</div>
+				<div class="form-field">
+					<label>${esc(passLabel)}</label>
+					<input type="password" name="password" minlength="8" required>
+				</div>
+				<div class="form-field">
+					<label>${esc(passConfirmLabel)}</label>
+					<input type="password" name="password_confirm" minlength="8" required>
+				</div>
+				<div class="form-error" style="display:none;color:#c53030;margin-top:8px;"></div>
+			</form>
+		`;
+		const modal = showModal(title, formHtml);
+		const footer = modal.querySelector('.modal-footer');
+		if(footer){ footer.innerHTML = ''; }
+		const cancelText = translate('rename.actions.cancel', 'Cancel');
+		const submitText = translate('rename.actions.submit', 'Save');
+		const cancelBtn = el(`<button type="button" class="btn outline">${esc(cancelText)}</button>`);
+		const submitBtn = el(`<button type="button" class="btn">${esc(submitText)}</button>`);
+		cancelBtn.addEventListener('click', () => closeModal());
+		footer.appendChild(cancelBtn);
+		footer.appendChild(submitBtn);
+		const form = modal.querySelector('form');
+		const errorBox = modal.querySelector('.form-error');
+		setTimeout(() => {
+			const input = form ? form.querySelector('input[name="username"]') : null;
+			if(input) input.focus();
+		}, 50);
+		const showError = message => {
+			if(!errorBox) return;
+			if(message){
+				errorBox.textContent = message;
+				errorBox.style.display = 'block';
+			}else{
+				errorBox.textContent = '';
+				errorBox.style.display = 'none';
+			}
+		};
+		const submit = async () => {
+			if(submitBtn.disabled) return;
+			const data = new FormData(form);
+			const newUsername = (data.get('username') || '').toString().trim();
+			const password = (data.get('password') || '').toString();
+			const confirmPassword = (data.get('password_confirm') || '').toString();
+			if(!newUsername || newUsername.length > 20){
+				showError(translate('rename.invalid_username', 'Invalid username'));
+				return;
+			}
+			if(password.length < 8){
+				showError(translate('rename.invalid_password', 'Password must be at least 8 characters'));
+				return;
+			}
+			if(password !== confirmPassword){
+				showError(translate('rename.password_mismatch', 'Passwords do not match'));
+				return;
+			}
+			showError('');
+			submitBtn.disabled = true;
+			cancelBtn.disabled = true;
+			try{
+				const res = await request('/account/api/update-username', { method: 'POST', body: { id, username: newUsername, password } });
+				if(!res || !res.success){
+					showError(res && res.message ? res.message : translate('rename.errors.failed', 'Failed to rename account'));
+					submitBtn.disabled = false;
+					cancelBtn.disabled = false;
+					return;
+				}
+				flash(translate('rename.success', 'Username updated (sessions invalidated)'), 'success');
+				closeModal();
+				reloadAccountTable();
+			}catch(err){
+				showError(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }));
+				submitBtn.disabled = false;
+				cancelBtn.disabled = false;
+			}
+		};
+		submitBtn.addEventListener('click', submit);
+		form.addEventListener('submit', event => { event.preventDefault(); submit(); });
+	}
+
 	function doCreateAccount(){
 		const title = translate('create.title', 'Create account');
 		const usernameLabel = translate('create.labels.username', 'Username');
@@ -892,11 +1120,45 @@
 			case 'pass':
 				doChangePass(id, username);
 				break;
+			case 'email':
+				doUpdateEmail(id, username);
+				break;
+			case 'rename':
+				doRenameAccount(id, username);
+				break;
 			case 'ip-accounts':
 				doSameIpAccounts(id, username, lastIp);
 				break;
+			case 'delete':
+				doDeleteAccount(id, username);
+				break;
 			default:
 				break;
+		}
+	});
+
+	document.addEventListener('click', event => {
+		const btn = event.target.closest('button.js-account-bulk');
+		if(!btn || btn.disabled) return;
+		const action = btn.getAttribute('data-bulk') || '';
+		if(!action) return;
+		doBulk(action);
+	});
+
+	document.addEventListener('change', event => {
+		const target = event.target;
+		if(!(target instanceof HTMLInputElement)) return;
+		if(target.classList.contains('js-account-select-all')){
+			const checked = target.checked;
+			document.querySelectorAll('input.js-account-select-all').forEach(el => { el.checked = checked; });
+			document.querySelectorAll('input.js-account-select').forEach(el => { el.checked = checked; });
+			return;
+		}
+		if(target.classList.contains('js-account-select')){
+			const all = Array.from(document.querySelectorAll('input.js-account-select'));
+			const checked = all.filter(el => el.checked);
+			const allChecked = all.length > 0 && checked.length === all.length;
+			document.querySelectorAll('input.js-account-select-all').forEach(el => { el.checked = allChecked; });
 		}
 	});
 

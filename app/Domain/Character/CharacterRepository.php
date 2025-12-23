@@ -359,9 +359,10 @@ class CharacterRepository extends MultiServerRepository
         if(!$row){
             return null;
         }
-        $permanent = ((int)$row['unbandate']) === 0;
         $now = time();
-        $remaining = $permanent ? -1 : max(0, ((int)$row['unbandate']) - $now);
+        $unbandate = (int)$row['unbandate'];
+        $permanent = ($unbandate === 0) || ($unbandate <= $now);
+        $remaining = $permanent ? -1 : max(0, $unbandate - $now);
         return [
             'bandate'=>(int)$row['bandate'],
             'unbandate'=>(int)$row['unbandate'],
@@ -454,24 +455,231 @@ class CharacterRepository extends MultiServerRepository
         return $st->execute([':g'=>$guid]);
     }
 
+    private function deleteFkChildren(
+        \PDO $pdo,
+        string $referencedTable,
+        string $referencedColumn,
+        int $value
+    ): void {
+        try {
+            $st = $pdo->prepare(
+                'SELECT TABLE_NAME, COLUMN_NAME'
+                .' FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE'
+                .' WHERE TABLE_SCHEMA = DATABASE()'
+                .' AND REFERENCED_TABLE_NAME = :rt'
+                .' AND REFERENCED_COLUMN_NAME = :rc'
+            );
+            $st->execute([':rt' => $referencedTable, ':rc' => $referencedColumn]);
+            $refs = $st->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        } catch(\Throwable $e){
+            return;
+        }
+
+        foreach($refs as $ref){
+            $table = (string)($ref['TABLE_NAME'] ?? '');
+            $col = (string)($ref['COLUMN_NAME'] ?? '');
+            if($table==='' || $col==='') continue;
+            if(strcasecmp($table, $referencedTable) === 0) continue;
+
+            $tableSafe = str_replace('`','``',$table);
+            $colSafe = str_replace('`','``',$col);
+            try {
+                $pdo->prepare("DELETE FROM `{$tableSafe}` WHERE `{$colSafe}`=:v")->execute([':v'=>$value]);
+            } catch(\Throwable $e){
+                // ignore
+            }
+        }
+    }
+
     public function deleteCharacter(int $guid): bool
     {
+        return (bool)($this->deleteCharacterDetailed($guid)['success'] ?? false);
+    }
+
+    public function deleteCharacterDetailed(int $guid): array
+    {
+        $guid = (int)$guid;
+        if($guid <= 0){
+            return ['success'=>false,'message'=>'invalid guid'];
+        }
+
         $pdo = $this->characters();
+
+        // Ensure target exists to avoid reporting success on no-op.
+        try {
+            $st = $pdo->prepare('SELECT 1 FROM characters WHERE guid=:g LIMIT 1');
+            $st->execute([':g'=>$guid]);
+            if(!(bool)$st->fetchColumn()){
+                return ['success'=>false,'message'=>'not found'];
+            }
+        } catch(\Throwable $e){
+            return ['success'=>false,'message'=>$e->getMessage()];
+        }
+
+        $step = 'begin';
         $pdo->beginTransaction();
         try {
-            $tables = [
-                'character_inventory','character_aura','character_spell','character_skills','character_queststatus','character_queststatus_daily','character_queststatus_weekly','character_reputation','character_talent','character_cooldown','character_homebind','character_banned',
+            // If FK constraints exist, delete dependent rows first.
+            $step = 'delete_fk_children';
+            $this->deleteFkChildren($pdo, 'characters', 'guid', $guid);
+
+            // Delete related character data first (AzerothCore characters DB tables).
+            $tablesByGuid = [
+                'arena_team_member',
+                'character_account_data',
+                'character_achievement',
+                'character_achievement_progress',
+                'character_action',
+                'character_aura',
+                'character_aura_effect',
+                'character_battleground_data',
+                'character_battleground_random',
+                'character_banned',
+                'character_cooldown',
+                'character_declinedname',
+                'character_equipmentsets',
+                'character_gifts',
+                'character_glyphs',
+                'character_homebind',
+                'character_instance',
+                'character_inventory',
+                'character_pet',
+                'character_pet_declinedname',
+                'character_queststatus',
+                'character_queststatus_daily',
+                'character_queststatus_rewarded',
+                'character_queststatus_seasonal',
+                'character_queststatus_weekly',
+                'character_reputation',
+                'character_skills',
+                'character_social',
+                'character_spell',
+                'character_spell_cooldown',
+                'character_stats',
+                'character_talent',
+                'corpse',
+                'guild_member',
             ];
-            foreach($tables as $t){
-                $sql = "DELETE FROM $t WHERE guid=:g";
-                $pdo->prepare($sql)->execute([':g'=>$guid]);
+
+            foreach($tablesByGuid as $t){
+                try {
+                    $step = 'delete_table:' . $t;
+                    $pdo->prepare("DELETE FROM {$t} WHERE guid=:g")->execute([':g'=>$guid]);
+                } catch(\PDOException $e){
+                    $code = (string)$e->getCode();
+                    if($code !== '42S02' && $code !== '42S22'){
+                        throw $e;
+                    }
+                }
             }
-            $pdo->prepare('DELETE FROM characters WHERE guid=:g')->execute([':g'=>$guid]);
+
+            // Mail (receiver/sender)
+            try {
+                $mailIds = [];
+                // NOTE: do not reuse the same named placeholder twice (can trigger HY093)
+                $step = 'mail_select_ids';
+                $st = $pdo->prepare('SELECT id FROM mail WHERE receiver=:g1 OR sender=:g2');
+                $st->execute([':g1'=>$guid, ':g2'=>$guid]);
+                $mailIds = array_values(array_unique(array_map('intval', $st->fetchAll(\PDO::FETCH_COLUMN, 0) ?: [])));
+                if($mailIds){
+                    $in = implode(',', array_fill(0, count($mailIds), '?'));
+                    try {
+                        $step = 'mail_items_delete_in';
+                        $pdo->prepare("DELETE FROM mail_items WHERE mail_id IN ($in)")->execute($mailIds);
+                    } catch(\PDOException $e){
+                        $code = (string)$e->getCode();
+                        if($code !== '42S02' && $code !== '42S22'){
+                            throw $e;
+                        }
+                    }
+                    $step = 'mail_delete_in';
+                    $pdo->prepare("DELETE FROM mail WHERE id IN ($in)")->execute($mailIds);
+                } else {
+                    $step = 'mail_delete_by_sender_receiver';
+                    $pdo->prepare('DELETE FROM mail WHERE receiver=:g1 OR sender=:g2')->execute([':g1'=>$guid, ':g2'=>$guid]);
+                }
+            } catch(\PDOException $e){
+                $code = (string)$e->getCode();
+                if($code !== '42S02' && $code !== '42S22'){
+                    throw $e;
+                }
+            }
+
+            // Auctionhouse (owner column names differ)
+            try {
+                $step = 'auctionhouse_delete';
+                $this->deleteByAnyColumn($pdo, 'auctionhouse', ['itemowner','owner'], $guid);
+            } catch(\PDOException $e){
+                $code = (string)$e->getCode();
+                if($code !== '42S02' && $code !== '42S22'){
+                    throw $e;
+                }
+            }
+
+            // Item instances owned by character (if supported by schema)
+            try {
+                if($this->tableHasColumn($pdo, 'item_instance', 'owner_guid')){
+                    $step = 'item_instance_delete_owner_guid';
+                    $pdo->prepare('DELETE FROM item_instance WHERE owner_guid=:g')->execute([':g'=>$guid]);
+                } elseif($this->tableHasColumn($pdo, 'item_instance', 'owner')){
+                    $step = 'item_instance_delete_owner';
+                    $pdo->prepare('DELETE FROM item_instance WHERE owner=:g')->execute([':g'=>$guid]);
+                }
+            } catch(\PDOException $e){
+                $code = (string)$e->getCode();
+                if($code !== '42S02' && $code !== '42S22'){
+                    throw $e;
+                }
+            }
+
+            // Finally delete the character row.
+            $step = 'characters_delete';
+            $st = $pdo->prepare('DELETE FROM characters WHERE guid=:g');
+            $st->execute([':g'=>$guid]);
+            if($st->rowCount() <= 0){
+                throw new \RuntimeException('Character not deleted');
+            }
+
             $pdo->commit();
-            return true;
+            return ['success'=>true];
         } catch(\Throwable $e){
             $pdo->rollBack();
+            $msg = $e->getMessage();
+            if($e instanceof \PDOException){
+                $code = (string)$e->getCode();
+                $msg = $code !== '' ? ($code.': '.$msg) : $msg;
+            }
+            return ['success'=>false,'message'=>$step.': '.$msg];
+        }
+    }
+
+    private function tableHasColumn(\PDO $pdo, string $table, string $column): bool
+    {
+        try {
+            $st = $pdo->prepare('SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c LIMIT 1');
+            $st->execute([':t'=>$table,':c'=>$column]);
+            return (bool)$st->fetchColumn();
+        } catch(\Throwable $e){
             return false;
+        }
+    }
+
+    private function deleteByAnyColumn(\PDO $pdo, string $table, array $columns, int $guid): void
+    {
+        foreach($columns as $col){
+            try {
+                $pdo->prepare("DELETE FROM {$table} WHERE {$col}=:g")->execute([':g'=>$guid]);
+                return;
+            } catch(\PDOException $e){
+                $code = (string)$e->getCode();
+                if($code === '42S02'){
+                    return; // table missing
+                }
+                if($code === '42S22'){
+                    continue; // try next column
+                }
+                throw $e;
+            }
         }
     }
 
@@ -522,7 +730,14 @@ class CharacterRepository extends MultiServerRepository
         $bans = $st->fetchAll(PDO::FETCH_ASSOC);
         if(!$bans){ return; }
         $banMap = [];
-        foreach($bans as $b){ $banMap[(int)$b['guid']] = $b; }
+        $now = time();
+        foreach($bans as $b){
+            $unbandate = (int)($b['unbandate'] ?? 0);
+            $permanent = ($unbandate === 0) || ($unbandate <= $now);
+            $b['permanent'] = $permanent;
+            $b['remaining_seconds'] = $permanent ? -1 : max(0, $unbandate - $now);
+            $banMap[(int)$b['guid']] = $b;
+        }
         foreach($rows as &$r){
             $g=(int)$r['guid'];
             if(isset($banMap[$g])){

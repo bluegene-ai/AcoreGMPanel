@@ -72,6 +72,7 @@ class AccountController extends Controller
         $value = $request->input('search_value','');
         $online = $request->input('online','any');
         $ban = $request->input('ban','any');
+        $excludeUsername = trim((string)$request->input('exclude_username',''));
         $sort = (string)$request->input('sort','');
         $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
         if(!in_array($sort,$allowedSort,true)){
@@ -81,10 +82,11 @@ class AccountController extends Controller
         $filters = [
             'online' => in_array($online,['online','offline'],true)?$online:'any',
             'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
+            'exclude_username' => $excludeUsername,
         ];
         $page = (int)$request->input('page',1); $per=20;
         $pager = $this->repo()->search($type,$value,$page,$per,$filters,$loadAll,$sort);
-    return $this->view('account.index',[ 'title'=>Lang::get('app.account.page_title'),'pager'=>$pager,'search_type'=>$type,'search_value'=>$value,'filter_online'=>$filters['online'],'filter_ban'=>$filters['ban'], 'load_all'=>$loadAll, 'sort'=>$sort ]);
+    return $this->view('account.index',[ 'title'=>Lang::get('app.account.page_title'),'pager'=>$pager,'search_type'=>$type,'search_value'=>$value,'filter_online'=>$filters['online'],'filter_ban'=>$filters['ban'], 'exclude_username'=>$excludeUsername, 'load_all'=>$loadAll, 'sort'=>$sort ]);
     }
 
     public function login(Request $request): Response
@@ -116,6 +118,7 @@ class AccountController extends Controller
         $this->maybeSwitchServer($request);
         $online = $request->input('online','any');
         $ban = $request->input('ban','any');
+        $excludeUsername = trim((string)$request->input('exclude_username',''));
         $sort = (string)$request->input('sort','');
         $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
         if(!in_array($sort,$allowedSort,true)){
@@ -125,9 +128,165 @@ class AccountController extends Controller
         $filters = [
             'online' => in_array($online,['online','offline'],true)?$online:'any',
             'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
+            'exclude_username' => $excludeUsername,
         ];
         $pager=$this->repo()->search($request->input('search_type','username'),$request->input('search_value',''),(int)$request->input('page',1),20,$filters,$loadAll,$sort);
         return $this->json(['success'=>true,'page'=>$pager->page,'pages'=>$pager->pages,'total'=>$pager->total,'items'=>$pager->items]);
+    }
+
+    public function apiDelete(Request $request): Response
+    {
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->maybeSwitchServer($request);
+
+        $id = (int)$request->input('id',0);
+        $context = ['id'=>$id,'ip'=>$request->ip()];
+        if($id<=0){
+            $this->logAccountAction('delete','validate_fail',$context+['reason'=>'missing_id']);
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        }
+
+        try {
+            $result = $this->repo()->deleteAccountCascade($id);
+        } catch(\Throwable $e){
+            $this->logAccountAction('delete','error',$context+['error'=>$e->getMessage()]);
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])],500);
+        }
+
+        $this->logAccountAction('delete',$result['success']?'success':'failed',$context+$result);
+        if($result['success']){
+            Audit::log('account','delete',"id=$id chars_deleted=".((int)($result['characters_deleted']??0)));
+        }
+
+        return $this->json(['success'=>(bool)$result['success'],'message'=>$result['message'] ?? null] + $result);
+    }
+
+    public function apiBulk(Request $request): Response
+    {
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->maybeSwitchServer($request);
+
+        $action = strtolower(trim((string)$request->input('action','')));
+        $allowed = ['delete','ban','unban'];
+        if(!in_array($action,$allowed,true)){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        }
+
+        $raw = $request->input('ids',[]);
+        $ids = [];
+        if(is_array($raw)){
+            foreach($raw as $v){ $iv = (int)$v; if($iv>0) $ids[]=$iv; }
+        } else {
+            $parts = preg_split('/\s*,\s*/', (string)$raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach($parts as $p){ $iv=(int)$p; if($iv>0) $ids[]=$iv; }
+        }
+        $ids = array_values(array_unique($ids));
+        if(!$ids){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        }
+        if(count($ids) > 200){
+            $ids = array_slice($ids, 0, 200);
+        }
+
+        $hours = (int)$request->input('hours',0);
+        $reason = trim((string)$request->input('reason',''));
+        if($action==='ban' && $reason===''){
+            $reason = Lang::get('app.account.api.defaults.no_reason');
+        }
+
+        $okCount = 0;
+        $fail = [];
+
+        foreach($ids as $id){
+            $context = ['id'=>$id,'action'=>$action,'ip'=>$request->ip()];
+            try {
+                if($action==='ban'){
+                    $ok = $this->repo()->ban($id,$reason,$hours);
+                    $this->logAccountAction('bulk_ban',$ok?'success':'db_fail',$context+['hours'=>$hours,'reason'=>$reason]);
+                    if($ok){ Audit::log('account','ban',"id=$id hours=$hours reason=$reason"); }
+                } elseif($action==='unban'){
+                    $cnt = $this->repo()->unban($id);
+                    $ok = true;
+                    $this->logAccountAction('bulk_unban',$cnt>0?'success':'noop',$context+['updated'=>$cnt]);
+                    if($cnt>0){ Audit::log('account','unban',"id=$id updated=$cnt"); }
+                } else { // delete
+                    $res = $this->repo()->deleteAccountCascade($id);
+                    $ok = (bool)($res['success'] ?? false);
+                    $this->logAccountAction('bulk_delete',$ok?'success':'failed',$context+$res);
+                    if($ok){ Audit::log('account','delete',"id=$id chars_deleted=".((int)($res['characters_deleted']??0))); }
+                }
+            } catch(\Throwable $e){
+                $ok = false;
+                $this->logAccountAction('bulk_'.$action,'error',$context+['error'=>$e->getMessage()]);
+            }
+
+            if($ok){
+                $okCount++;
+            } else {
+                $fail[] = $id;
+            }
+        }
+
+        $success = $okCount > 0 && count($fail) === 0;
+        return $this->json([
+            'success' => $success,
+            'action' => $action,
+            'requested' => count($ids),
+            'ok' => $okCount,
+            'failed' => count($fail),
+            'failed_ids' => array_slice($fail, 0, 50),
+        ]);
+    }
+
+    public function apiUpdateEmail(Request $request): Response
+    {
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->maybeSwitchServer($request);
+
+        $id = (int)$request->input('id',0);
+        $email = trim((string)$request->input('email',''));
+        if($id<=0){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        }
+
+        try {
+            $res = $this->repo()->updateEmail($id, $email);
+        } catch(\Throwable $e){
+            $this->logAccountAction('email','error',['id'=>$id,'email'=>$email,'error'=>$e->getMessage(),'ip'=>$request->ip()]);
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])],500);
+        }
+
+        $this->logAccountAction('email',($res['success']??false)?'success':'failed',['id'=>$id,'email'=>$email,'ip'=>$request->ip()]+$res);
+        if(!empty($res['success'])){
+            Audit::log('account','update_email',"id=$id email=$email");
+        }
+        return $this->json($res);
+    }
+
+    public function apiUpdateUsername(Request $request): Response
+    {
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->maybeSwitchServer($request);
+
+        $id = (int)$request->input('id',0);
+        $newUsername = trim((string)$request->input('username',''));
+        $password = (string)$request->input('password','');
+        if($id<=0){
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        }
+
+        try {
+            $res = $this->repo()->updateUsername($id, $newUsername, $password);
+        } catch(\Throwable $e){
+            $this->logAccountAction('rename','error',['id'=>$id,'username'=>$newUsername,'error'=>$e->getMessage(),'ip'=>$request->ip()]);
+            return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])],500);
+        }
+
+        $this->logAccountAction('rename',($res['success']??false)?'success':'failed',['id'=>$id,'username'=>$newUsername,'ip'=>$request->ip()]+$res);
+        if(!empty($res['success'])){
+            Audit::log('account','rename',"id=$id username=$newUsername");
+        }
+        return $this->json($res);
     }
 
     public function apiCreate(Request $request): Response
