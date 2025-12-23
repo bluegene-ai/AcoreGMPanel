@@ -5,8 +5,10 @@
 # Cache files
 /storage/cache/*
 !/storage/cache/.gitkeep
-!/storage/cache/ip_geo/
-!/storage/cache/ip_geo/.gitkeep
+
+# IP geolocation database (not committed)
+/storage/ip_geo/*.mmdb
+!/storage/ip_geo/.gitkeep
 
 # Logs
 /storage/logs/*
@@ -14,6 +16,9 @@
 
 # Composer dependencies
 /vendor/
+
+# Local composer phar (use scripts/install-deps.ps1 to download as needed)
+/composer.phar
 
 # Environment & IDE files
 /.env

@@ -120,18 +120,114 @@
   function bindMassSend(){ const f=qs('#massSendForm'); if(!f) return; const actionSel=qs('#mmAction',f); const targetSel=qs('#mmTargetType',f); const goldInput=qs('#goldAmount',f); const preview=qs('#goldPreview',f);
     actionSel.addEventListener('change',()=> updateCond()); targetSel.addEventListener('change',()=> updateCond());
   if(goldInput){ goldInput.addEventListener('input',()=>{ const v=parseInt(goldInput.value||'0',10); preview.textContent=v? formatGold(v):translate('send.gold_preview_placeholder','—'); }); }
+
+    // Items editor: visual rows -> hidden items string ("id:qty id:qty")
+    let syncItemsToHidden = null;
+    (function initItemsEditor(){
+      const editor = qs('#mmItemsEditor', f);
+      if(!editor) return;
+      const body = qs('#mmItemsBody', editor);
+      const hidden = qs('#mmItems', editor);
+      const addBtn = qs('#mmItemsAdd', editor);
+      if(!body || !hidden || !addBtn) return;
+
+      const removeLabel = editor.dataset.removeLabel || 'Remove';
+
+      const createRow = () => {
+        const row = document.createElement('div');
+        row.className = 'massmail-items__grid massmail-items__row';
+
+        const id = document.createElement('input');
+        id.type = 'number';
+        id.min = '1';
+        id.placeholder = 'ID';
+        id.setAttribute('data-role', 'item-id');
+
+        const qty = document.createElement('input');
+        qty.type = 'number';
+        qty.min = '1';
+        qty.value = '1';
+        qty.setAttribute('data-role', 'item-qty');
+
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn btn-sm outline';
+        rm.textContent = removeLabel;
+        rm.setAttribute('data-role', 'item-remove');
+
+        row.appendChild(id);
+        row.appendChild(qty);
+        row.appendChild(rm);
+        body.appendChild(row);
+      };
+
+      const buildItemsString = () => {
+        const rows = qsa('.massmail-items__row', editor);
+        const pairs = [];
+        rows.forEach(r => {
+          const idEl = r.querySelector('[data-role="item-id"]');
+          const qtyEl = r.querySelector('[data-role="item-qty"]');
+          const id = parseInt(idEl?.value || '0', 10) || 0;
+          const qty = parseInt(qtyEl?.value || '0', 10) || 0;
+          if(id > 0 && qty > 0){
+            pairs.push(id + ':' + qty);
+          }
+        });
+        return pairs.join(' ');
+      };
+
+      const sync = () => {
+        hidden.value = buildItemsString();
+      };
+      syncItemsToHidden = sync;
+
+      body.addEventListener('click', (e) => {
+        const t = e.target;
+        if(!(t instanceof HTMLElement)) return;
+        if(t.getAttribute('data-role') !== 'item-remove') return;
+        const row = t.closest('.massmail-items__row');
+        if(row){
+          row.remove();
+          if(!qsa('.massmail-items__row', editor).length){
+            createRow();
+          }
+          sync();
+        }
+      });
+
+      body.addEventListener('input', (e) => {
+        const t = e.target;
+        if(!(t instanceof HTMLElement)) return;
+        const role = t.getAttribute('data-role');
+        if(role === 'item-id' || role === 'item-qty'){
+          sync();
+        }
+      });
+
+      addBtn.addEventListener('click', () => {
+        createRow();
+        sync();
+      });
+
+      if(!qsa('.massmail-items__row', editor).length){
+        createRow();
+      }
+      sync();
+    })();
+
     function updateCond(){
       const action=actionSel.value;
       qsa('.massmail-cond',f).forEach(box=>{
         const forAct=box.getAttribute('data-for');
-        const shouldShow = forAct===action;
+        const allowed = (forAct||'').split('|').map(s=>s.trim()).filter(Boolean);
+        const shouldShow = allowed.includes(action);
         box.classList.toggle('active',shouldShow);
       });
       const customBox=qs('.massmail-custom',f);
       if(customBox){ customBox.classList.toggle('active',targetSel.value==='custom'); }
     }
     updateCond();
-    f.addEventListener('submit', async e=>{ e.preventDefault(); const data={}; new FormData(f).forEach((v,k)=> data[k]=v);
+    f.addEventListener('submit', async e=>{ e.preventDefault(); const data={}; if(typeof syncItemsToHidden==='function') syncItemsToHidden(); new FormData(f).forEach((v,k)=> data[k]=v);
 
       if(await needConfirm(data,f)){
         pendingSendData=data; openConfirm(buildSummary(data,f)); return; }
@@ -153,28 +249,62 @@
   async function needConfirm(data,form){
     const action=data.action;
     const amt=parseInt(data.amount||'0',10);
-    const qty=parseInt(data.quantity||'0',10);
-    const itemId=parseInt(data.itemId||'0',10);
     const tcount=countTargets(data,form);
-    const riskyAction=action==='send_item';
-    const highGold=action==='send_gold' && amt>=100000;
-    const largeItem=itemId>0 && qty>50;
+    const riskyAction=(action==='send_item' || action==='send_item_gold');
+    const highGold=(action==='send_gold' || action==='send_item_gold') && amt>=100000;
+    const largeItem=maxItemCount(data,form)>50;
     const largeBatch=tcount>0 && tcount>=300;
     const onlineTargets=tcount===-1;
     return riskyAction || highGold || largeItem || largeBatch || onlineTargets;
   }
+
+  function parseItems(raw){
+    const text = String(raw || '').trim();
+    if(!text) return [];
+    // Supports:
+    // - lines: 123:2
+    // - space/comma separated: 123:2 456:1
+    const tokens = text.split(/\s+|,|;|\r?\n/).map(s=>s.trim()).filter(Boolean);
+    const out=[];
+    tokens.forEach(tok=>{
+      const m = tok.match(/^([0-9]+)\s*:\s*([0-9]+)$/);
+      if(!m) return;
+      const id = parseInt(m[1],10) || 0;
+      const count = parseInt(m[2],10) || 0;
+      if(id>0 && count>0) out.push({id,count});
+    });
+    return out;
+  }
+
+  function maxItemCount(data,form){
+    const raw = (data.items !== undefined)
+      ? data.items
+      : (form.querySelector('[name="items"]')?.value || '');
+    const items=parseItems(raw);
+    let max=0;
+    items.forEach(it=>{ if(it.count>max) max=it.count; });
+    return max;
+  }
+
+  function summarizeItems(data,form){
+    const raw = (data.items !== undefined)
+      ? data.items
+      : (form.querySelector('[name="items"]')?.value || '');
+    const items=parseItems(raw);
+    if(!items.length) return '';
+    return items.map(it=>`${it.id}×${it.count}`).join(', ');
+  }
+
   function buildSummary(data,form){
     const tcount=countTargets(data,form);
     const heading=translate('confirm.heading','You are about to execute <strong>:action</strong>',{ action: esc(data.action||'') });
     const lines=[];
     lines.push(translate('confirm.subject','Subject: :value',{ value: esc(data.subject||'') }));
-    if(data.action==='send_item'){
-      lines.push(translate('confirm.item','Item ID: :id × :count',{
-        id: esc(data.itemId||''),
-        count: esc(data.quantity||'')
-      }));
+    if(data.action==='send_item' || data.action==='send_item_gold'){
+      const sum = summarizeItems(data,form);
+      lines.push(translate('confirm.items','Items: :items',{ items: esc(sum || '') }));
     }
-    if(data.action==='send_gold'){
+    if(data.action==='send_gold' || data.action==='send_item_gold'){
       const g=parseInt(data.amount||'0',10);
       lines.push(translate('confirm.gold','Gold (copper): :amount',{ amount:g }));
     }
@@ -229,15 +359,19 @@
     const nameSeparator=translate('logs.item_name_separator',' - ');
     const qtyPrefix=translate('logs.item_quantity_prefix',' ×');
     const errorPrefix=translate('logs.error_prefix','Error: ');
+    const itemsLabel=translate('logs.items_label','Items: :value');
     tb.innerHTML=rows.map(r=>{
       const ok=parseInt(r.success,10)===1;
       let details=`<div class="strong">${esc(r.subject||'')}</div>`;
-      if(r.item_id){
+      if(r.items){
+        details+=`<div class="small muted">${esc(itemsLabel.replace(':value', String(r.items)))}</div>`;
+      } else if(r.item_id){
         const itemLabel=translate('logs.item_label','Item: #:id',{ id:r.item_id });
         const namePart=r.item_name ? `${nameSeparator}${esc(r.item_name)}` : '';
         const qtyPart=r.quantity ? `${qtyPrefix}${r.quantity}` : '';
         details+=`<div class="small muted">${esc(itemLabel)}${namePart}${qtyPart}</div>`;
-      } else if(r.amount){
+      }
+      if(r.amount){
         const amount=parseInt(r.amount,10);
         const goldLabel=translate('logs.gold_label','Gold: :value',{ value: formatGold(Number.isNaN(amount)?0:amount) });
         details+=`<div class="small muted">${esc(goldLabel)}</div>`;

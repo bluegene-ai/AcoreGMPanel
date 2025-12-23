@@ -15,7 +15,7 @@
       <div class="massmail-form-grid">
         <div class="massmail-field full-span">
           <label for="massAnnounceMessage"><?= __('app.mass_mail.index.sections.announce.message_label') ?></label>
-          <textarea id="massAnnounceMessage" name="message" rows="4" placeholder="<?= htmlspecialchars(__('app.mass_mail.index.sections.announce.message_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></textarea>
+          <textarea id="massAnnounceMessage" name="message" rows="3" placeholder="<?= htmlspecialchars(__('app.mass_mail.index.sections.announce.message_placeholder'), ENT_QUOTES, 'UTF-8') ?>" required></textarea>
         </div>
       </div>
       <div class="massmail-actions">
@@ -43,7 +43,7 @@
         </div>
         <div class="massmail-field full-span">
           <label for="boostSummary"><?= __('app.mass_mail.index.sections.boost.summary_label') ?></label>
-          <textarea id="boostSummary" class="massmail-summary" rows="4" readonly><?= htmlspecialchars(__('app.mass_mail.index.sections.boost.summary_prefill'), ENT_QUOTES, 'UTF-8') ?></textarea>
+          <textarea id="boostSummary" class="massmail-summary" rows="3" readonly><?= htmlspecialchars(__('app.mass_mail.index.sections.boost.summary_prefill'), ENT_QUOTES, 'UTF-8') ?></textarea>
         </div>
       </div>
       <div class="massmail-actions">
@@ -63,6 +63,7 @@
             <option value="send_mail"><?= __('app.mass_mail.index.sections.send.action_options.send_mail') ?></option>
             <option value="send_item"><?= __('app.mass_mail.index.sections.send.action_options.send_item') ?></option>
             <option value="send_gold"><?= __('app.mass_mail.index.sections.send.action_options.send_gold') ?></option>
+            <option value="send_item_gold"><?= __('app.mass_mail.index.sections.send.action_options.send_item_gold') ?></option>
           </select>
         </div>
         <div class="massmail-field">
@@ -78,24 +79,34 @@
         </div>
         <div class="massmail-field full-span">
           <label for="mmBody"><?= __('app.mass_mail.index.sections.send.body_label') ?></label>
-          <textarea name="body" id="mmBody" rows="6"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.body_default'), ENT_QUOTES, 'UTF-8') ?></textarea>
+          <textarea name="body" id="mmBody" rows="4"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.body_default'), ENT_QUOTES, 'UTF-8') ?></textarea>
         </div>
-        <div class="massmail-field massmail-cond" data-for="send_item">
-          <label for="mmItemId"><?= __('app.mass_mail.index.sections.send.item_id_label') ?></label>
-          <input type="number" name="itemId" id="mmItemId" min="1">
+        <div class="massmail-field full-span massmail-cond" data-for="send_item|send_item_gold">
+          <label for="mmItems"><?= __('app.mass_mail.index.sections.send.items_label') ?></label>
+
+          <div id="mmItemsEditor" class="massmail-items" data-remove-label="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.remove_item'), ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="items" id="mmItems" value="">
+            <div class="massmail-items__grid massmail-items__head">
+              <div><?= __('app.mass_mail.index.sections.send.item_id_label') ?></div>
+              <div><?= __('app.mass_mail.index.sections.send.quantity_label') ?></div>
+              <div></div>
+            </div>
+            <div id="mmItemsBody"></div>
+            <div class="massmail-items__actions">
+              <button type="button" class="btn btn-sm outline" id="mmItemsAdd"><?= __('app.mass_mail.index.sections.send.add_item') ?></button>
+            </div>
+          </div>
+
+          <div class="massmail-hint muted small"><?= __('app.mass_mail.index.sections.send.items_hint') ?></div>
         </div>
-        <div class="massmail-field massmail-cond" data-for="send_item">
-          <label for="mmQuantity"><?= __('app.mass_mail.index.sections.send.quantity_label') ?></label>
-          <input type="number" name="quantity" id="mmQuantity" value="1" min="1">
-        </div>
-        <div class="massmail-field massmail-cond" data-for="send_gold">
+        <div class="massmail-field massmail-cond" data-for="send_gold|send_item_gold">
           <label for="goldAmount"><?= __('app.mass_mail.index.sections.send.gold_label') ?></label>
           <input type="number" name="amount" id="goldAmount" min="1">
           <div class="massmail-gold-preview" id="goldPreview"><?= __('app.mass_mail.index.sections.send.gold_preview_placeholder') ?></div>
         </div>
         <div class="massmail-field massmail-custom full-span massmail-cond" data-for="custom">
           <label for="mmCustomList"><?= __('app.mass_mail.index.sections.send.custom_list_label') ?></label>
-          <textarea name="custom_char_list" id="mmCustomList" rows="4"></textarea>
+          <textarea name="custom_char_list" id="mmCustomList" rows="3"></textarea>
         </div>
       </div>
       <div class="massmail-actions massmail-actions--primary">
@@ -139,9 +150,12 @@
             <td><?= htmlspecialchars($lg['action']) ?></td>
             <td>
               <div class="strong"><?= htmlspecialchars($lg['subject']) ?></div>
-              <?php if(!empty($lg['item_id'])): ?>
+              <?php if(!empty($lg['items'])): ?>
+                <div class="small muted"><?= __('app.mass_mail.index.sections.logs.table.items_label', ['value' => htmlspecialchars($lg['items'])]) ?></div>
+              <?php elseif(!empty($lg['item_id'])): ?>
                 <div class="small muted"><?= __('app.mass_mail.index.sections.logs.table.item_prefix', ['id' => (int)$lg['item_id']]) ?><?= $lg['item_name']? __('app.mass_mail.index.sections.logs.table.item_name_separator').htmlspecialchars($lg['item_name']):'' ?><?php if(!empty($lg['quantity'])): ?> <?= __('app.mass_mail.index.sections.logs.table.item_quantity_prefix') ?><?= (int)$lg['quantity'] ?><?php endif; ?></div>
-              <?php elseif(!empty($lg['amount'])):
+              <?php endif; ?>
+              <?php if(!empty($lg['amount'])):
                 $c=(int)$lg['amount'];
                 $g=intdiv($c,10000);
                 $rem=$c%10000;

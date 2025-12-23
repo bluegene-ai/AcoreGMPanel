@@ -296,12 +296,22 @@
 		const params = new URLSearchParams(location.search);
 		const type = params.get('search_type') || 'username';
 		const value = params.get('search_value') || '';
-		if(!value){
+		const online = params.get('online') || 'any';
+		const ban = params.get('ban') || 'any';
+		const hasCriteria = value || online !== 'any' || ban !== 'any';
+		if(!hasCriteria){
 			return;
 		}
 		try{
 			const page = params.get('page') || '1';
-			const listUrl = `/account/api/list?search_type=${encodeURIComponent(type)}&search_value=${encodeURIComponent(value)}&page=${page}`;
+			const query = new URLSearchParams({
+				search_type: type,
+				search_value: value,
+				page
+			});
+			query.set('online', online || 'any');
+			query.set('ban', ban || 'any');
+			const listUrl = `/account/api/list?${query.toString()}`;
 			const res = await request(listUrl);
 			if(!res || !res.success){
 				console.warn('[account] failed to refresh account list');
@@ -403,6 +413,11 @@
 			const offlineLabel = translate('status.offline', 'Offline');
 			const rows = (res.items || []).map(character => {
 				const online = !!character.online;
+				const guid = character.guid;
+				const rawCharacterUrl = urlWithServer(`/character?guid=${encodeURIComponent(guid)}`);
+				const toCharacter = (window.Panel && typeof window.Panel.url === 'function')
+					? window.Panel.url(rawCharacterUrl)
+					: rawCharacterUrl;
 				const statusTag = online
 					? `<span class="tag status-online-alt">${esc(onlineLabel)}</span>`
 					: `<span class="tag status-offline">${esc(offlineLabel)}</span>`;
@@ -417,7 +432,7 @@
 				const kickButton = `<button ${buttonAttrs.join(' ')}>${esc(kickLabel)}</button>`;
 				return `<tr data-guid="${esc(character.guid)}" data-name="${esc(character.name)}" data-online="${online ? 1 : 0}">`
 					+ `<td>${esc(character.guid)}</td>`
-					+ `<td><span data-class-id="${esc(character.class)}">${esc(character.name)}</span></td>`
+					+ `<td><a href="${esc(toCharacter)}"><span data-class-id="${esc(character.class)}">${esc(character.name)}</span></a></td>`
 					+ `<td>${esc(character.level)}</td>`
 					+ `<td>${statusTag} ${kickButton}</td>`
 					+ `</tr>`;

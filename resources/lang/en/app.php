@@ -17,6 +17,7 @@ return [
     'nav' => [
         'home' => 'Home',
         'account' => 'Accounts',
+        'character' => 'Characters',
         'item' => 'Items',
         'creature' => 'Creatures',
         'quest' => 'Quests',
@@ -89,6 +90,16 @@ return [
                 'private' => 'Private IP',
                 'unknown' => 'Unknown location',
             ],
+                'flags_labels' => [
+                    'visible' => 'Visible',
+                    'at_war' => 'At war',
+                    'hidden' => 'Hidden',
+                    'inactive' => 'Inactive',
+                    'peace_forced' => 'Peace forced',
+                    'unknown_20' => 'Unknown (0x20)',
+                    'unknown_40' => 'Unknown (0x40)',
+                    'rival' => 'Rival',
+                ],
             'errors' => [
                 'empty' => 'IP address cannot be empty',
                 'invalid' => 'Invalid IP format',
@@ -98,7 +109,19 @@ return [
             'invalid_id' => 'Invalid ID',
             'no_valid_id' => 'No valid IDs provided',
                 'failed' => 'Lookup failed',
+                'status_map' => [
+                    0 => 'None',
+                    1 => 'Complete',
+                    2 => 'Failed',
+                    3 => 'Incomplete',
+                    4 => 'Failed',
+                    5 => 'Rewarded',
+                ],
                 'failed_reason' => 'Lookup failed: :message',
+                'mmdb_unavailable' => 'Local IP database unavailable (configure mmdb and install dependencies)',
+                'mmdb_reader_missing' => 'Missing MaxMind reader (install the PHP maxminddb extension, or use Composer to install maxmind-db/reader)',
+                'mmdb_file_missing' => 'Local IP database file not found (download GeoLite2-City.mmdb and place it under storage/ip_geo/)',
+                'mmdb_open_failed' => 'Failed to open local IP database (check file permissions and PHP maxminddb extension)',
             ],
         ],
             'not_found' => 'Not found',
@@ -140,6 +163,20 @@ return [
             11 => 'Druid',
             12 => 'Demon Hunter',
         ],
+        'races' => [
+            1 => 'Human',
+            2 => 'Orc',
+            3 => 'Dwarf',
+            4 => 'Night Elf',
+                'items_invalid' => 'Invalid items list format. Use itemId:qty (one per line)',
+            5 => 'Undead',
+            6 => 'Tauren',
+            7 => 'Gnome',
+            8 => 'Troll',
+            10 => 'Blood Elf',
+            11 => 'Draenei',
+        ],
+                    'send_item_gold' => 'Send items + gold',
         'qualities' => [
             0 => 'Poor',
             1 => 'Common',
@@ -152,6 +189,7 @@ return [
         ],
         'fallbacks' => [
             'class' => 'Unknown #:id',
+            'race' => 'Unknown #:id',
             'quality' => 'Quality #:id',
         ],
     ],
@@ -191,7 +229,18 @@ return [
             'type_id' => 'By ID',
             'placeholder' => 'Search…',
             'submit' => 'Search',
+            'load_all' => 'Load all accounts',
             'create' => 'Create account',
+        ],
+                'filters' => [
+            'online' => 'Online status',
+            'online_any' => 'All accounts',
+            'online_only' => 'Online only',
+            'online_offline' => 'Offline only',
+            'ban' => 'Ban status',
+            'ban_any' => 'All accounts',
+            'ban_only' => 'Banned only',
+            'ban_unbanned' => 'Not banned',
         ],
         'feedback' => [
             'found' => ':total records found · Page :page of :pages',
@@ -367,6 +416,231 @@ return [
             ],
         ],
     ],
+
+    'character' => [
+        'index' => [
+            'title' => 'Character Management',
+            'search' => [
+                'name_placeholder' => 'Name contains',
+                'guid_placeholder' => 'GUID',
+                'account_placeholder' => 'Account username',
+                'level_min' => 'Min level',
+                'level_max' => 'Max level',
+                'submit' => 'Search',
+                'load_all' => 'Load all characters',
+            ],
+            'filters' => [
+                'online_any' => 'All accounts',
+                'online_only' => 'Online only',
+                'online_offline' => 'Offline only',
+            ],
+            'sort' => [
+                'guid_desc' => 'GUID (newest first)',
+                'logout_desc' => 'Last logout (newest first)',
+                'level_desc' => 'Level (highest first)',
+                'online_desc' => 'Online first',
+            ],
+            'feedback' => [
+                'found' => ':total records · Page :page of :pages',
+                'empty' => 'No results',
+                'enter_search' => 'Enter search criteria',
+            ],
+            'table' => [
+                'guid' => 'GUID',
+                'name' => 'Name',
+                'account' => 'Account',
+                'level' => 'Level',
+                'class' => 'Class',
+                'race' => 'Race',
+                'map' => 'Map',
+                'zone' => 'Zone',
+                'online' => 'Online',
+                'last_logout' => 'Last logout',
+                'actions' => 'Actions',
+                'view' => 'View',
+            ],
+            'status' => [
+                'online' => 'Online',
+                'offline' => 'Offline',
+                'banned' => 'Banned',
+            ],
+        ],
+        'show' => [
+            'title' => 'Character: :name (GUID :guid)',
+            'title_not_found' => 'Character not found (GUID :guid)',
+            'title_default' => 'Character details',
+            'back' => 'Back to list',
+            'not_found' => 'Character not found',
+            'summary' => [
+                'title' => 'Summary',
+                'guid' => 'GUID',
+                'name' => 'Name',
+                'account' => 'Account',
+                'level' => 'Level',
+                'class' => 'Class',
+                'race' => 'Race',
+                'online' => 'Online',
+                'map' => 'Map / Zone',
+                'position' => 'Position',
+                'money' => 'Money',
+                'copper' => 'copper',
+                'mail' => 'Mail (inbox)',
+                'logout' => 'Last logout',
+                'homebind' => 'Homebind',
+                'homebind_none' => 'Not set',
+                'gmlevel' => 'GM level',
+                'ban' => 'Ban status',
+            ],
+            'status' => [
+                'online' => 'Online',
+                'offline' => 'Offline',
+            ],
+            'ban' => [
+                'active' => 'Banned: :reason (ends: :end)',
+                'permanent' => 'Permanent',
+                'none' => 'Not banned',
+            ],
+            'inventory' => [
+                'title' => 'Inventory (equip/bags/bank)',
+                'bag' => 'Bag',
+                'slot' => 'Slot',
+                'item_guid' => 'Item GUID',
+                'entry' => 'Item entry',
+                'count' => 'Count',
+                'random' => 'Random prop',
+                'durability' => 'Durability',
+                'text' => 'Text',
+                'empty' => 'No inventory data',
+            ],
+            'skills' => [
+                'title' => 'Skills',
+                'skill' => 'Skill',
+                'value' => 'Value',
+                'max' => 'Max',
+                'empty' => 'No skills recorded',
+            ],
+            'spells' => [
+                'title' => 'Spells',
+                'spell' => 'Spell',
+                'active' => 'Active',
+                'disabled' => 'Disabled',
+                'empty' => 'No spells recorded',
+            ],
+            'reputations' => [
+                'title' => 'Reputations',
+                'faction' => 'Faction',
+                'standing' => 'Standing',
+                'flags' => 'Flags',
+                'empty' => 'No reputation rows',
+            ],
+            'quests' => [
+                'title' => 'Quests',
+                'regular' => 'Active / progress',
+                'daily' => 'Daily',
+                'weekly' => 'Weekly',
+                'quest' => 'Quest',
+                'status' => 'Status',
+                'timer' => 'Timer',
+                'mob_counts' => 'Mob counts',
+                'item_counts' => 'Item counts',
+                'empty' => 'No quest progress',
+                'empty_daily' => 'No daily quest records',
+                'empty_weekly' => 'No weekly quest records',
+            ],
+            'auras' => [
+                'title' => 'Auras',
+                'caster' => 'Caster GUID',
+                'item' => 'Item GUID',
+                'spell' => 'Spell',
+                'mask' => 'Effect mask',
+                'amounts' => 'Amounts',
+                'charges' => 'Charges',
+                'duration' => 'Max duration',
+                'remaining' => 'Remaining',
+                'empty' => 'No auras',
+            ],
+            'cooldowns' => [
+                'title' => 'Cooldowns',
+                'spell' => 'Spell',
+                'item' => 'Item',
+                'time' => 'Timestamp',
+                'category' => 'Category',
+                'empty' => 'No cooldown records',
+            ],
+            'achievements' => [
+                'title' => 'Achievements',
+                'unlocks' => 'Unlocked',
+                'progress' => 'Progress',
+                'achievement' => 'Achievement',
+                'criteria' => 'Criteria',
+                'counter' => 'Counter',
+                'date' => 'Date',
+                'empty_unlocks' => 'No unlocked achievements',
+                'empty_progress' => 'No progress rows',
+            ],
+            'bool' => [
+                'yes' => 'Yes',
+                'no' => 'No',
+            ],
+        ],
+        'actions' => [
+            'title' => 'Actions',
+            'group_stats' => 'Stats',
+            'group_moderation' => 'Moderation',
+            'group_movement' => 'Movement',
+            'group_tools' => 'Tools',
+
+            'default_reason' => 'Panel ban',
+            'set_level' => 'Set level',
+            'set_gold' => 'Set gold',
+            'level_label' => 'Level',
+            'gold_label' => 'Money (copper)',
+            'set' => 'Set',
+
+            'ban_label' => 'Ban character',
+            'ban' => 'Ban',
+            'unban' => 'Unban',
+            'ban_hours' => 'Hours',
+            'reason_placeholder' => 'Reason',
+            'teleport' => 'Teleport',
+            'teleport_label' => 'Teleport',
+            'teleport_preset_placeholder' => 'Quick locations',
+            'teleport_presets' => [
+                'stormwind' => 'Stormwind',
+                'ironforge' => 'Ironforge',
+                'darnassus' => 'Darnassus',
+                'exodar' => 'The Exodar',
+                'orgrimmar' => 'Orgrimmar',
+                'undercity' => 'Undercity',
+                'thunder_bluff' => 'Thunder Bluff',
+                'silvermoon' => 'Silvermoon',
+                'dalaran' => 'Dalaran',
+                'shattrath' => 'Shattrath',
+            ],
+            'teleport_map' => 'Map',
+            'teleport_zone' => 'Zone',
+            'teleport_x' => 'X',
+            'teleport_y' => 'Y',
+            'teleport_z' => 'Z',
+            'unstuck' => 'Unstuck',
+            'reset_talents' => 'Reset talents',
+            'reset_spells' => 'Reset spells',
+            'reset_cooldowns' => 'Reset cooldowns',
+            'rename_flag' => 'Flag rename',
+            'delete' => 'Delete',
+            'confirm_delete' => 'Are you sure you want to delete this character?',
+            'success' => 'Operation succeeded',
+            'failed' => 'Operation failed',
+            'blocked_online' => 'Character is online; please kick first.',
+        ],
+
+        'controls' => [
+            'expand_all' => 'Expand all',
+            'collapse_all' => 'Collapse all',
+            'filter_placeholder' => 'Filter rows...',
+            'filter_no_results' => 'No rows match the filter',
+        ],
+    ],
     'alerts' => [
         'not_installed_redirect' => 'Installation not finished; redirecting to the setup wizard...',
         'bootstrap' => [
@@ -412,6 +686,14 @@ return [
                 'curl_failed' => 'Failed to contact the SOAP endpoint.',
                 'curl_error_unknown' => 'Unknown cURL error.',
                 'http_error' => 'SOAP request returned HTTP status :code.',
+            ],
+        ],
+        'modules' => [
+            'soap' => [
+                'feedback' => [
+                    'execute_success' => 'Executed successfully',
+                    'execute_failed' => 'Execution failed',
+                ],
             ],
         ],
         'wizard' => [
@@ -903,6 +1185,69 @@ return [
             'next' => 'Next',
             'step_indicator' => 'Step :current of :total',
         ],
+        'catalog' => [
+            'metadata' => [
+                'notes' => [
+                    'Field and parameter semantics follow the AzerothCore Wiki.',
+                    'Generated SQL can be applied to the smart_scripts table.',
+                ],
+            ],
+            'source_types' => [
+                '0' => [
+                    'label' => 'Creature',
+                ],
+                '1' => [
+                    'label' => 'GameObject',
+                ],
+                '2' => [
+                    'label' => 'AreaTrigger',
+                ],
+                '3' => [
+                    'label' => 'Event',
+                ],
+                '9' => [
+                    'label' => 'Timed ActionList',
+                ],
+            ],
+            'base' => [
+                'entryorguid' => [
+                    'label' => 'Entry / GUID',
+                    'hint' => 'Provide the entry or guid based on the selected source type.',
+                ],
+                'source_type' => [
+                    'label' => 'Source Type',
+                    'hint' => 'Script source (Creature/GameObject/Timed ActionList/etc.).',
+                ],
+                'id' => [
+                    'label' => 'ID',
+                    'hint' => 'Script index within the same entry/source_type.',
+                ],
+                'link' => [
+                    'label' => 'Link',
+                    'hint' => 'Link to a previous script ID (0 = no link).',
+                ],
+                'event_phase_mask' => [
+                    'label' => 'Phase Mask',
+                    'hint' => 'Event phase mask (bitmask).',
+                ],
+                'event_chance' => [
+                    'label' => 'Chance',
+                    'hint' => 'Trigger chance (0-100).',
+                ],
+                'event_flags' => [
+                    'label' => 'Event Flags',
+                    'hint' => 'Event flags (bitmask).',
+                ],
+                'comment' => [
+                    'label' => 'Comment',
+                    'hint' => 'Optional comment.',
+                ],
+                'include_delete' => [
+                    'label' => 'Include DELETE',
+                    'hint' => 'Include a statement to delete previous scripts when generating SQL.',
+                ],
+            ],
+        ],
         'builder' => [
             'messages' => [
                 'validation_failed' => 'Parameter validation failed',
@@ -1188,8 +1533,9 @@ return [
                     'action_placeholder' => '-- Select --',
                     'action_options' => [
                         'send_mail' => 'Mail (text only)',
-                        'send_item' => 'Items (via mail)',
+                        'send_item' => 'Items (multiple)',
                         'send_gold' => 'Gold (via mail)',
+                        'send_item_gold' => 'Items + Gold',
                     ],
                     'target_label' => 'Target type',
                     'target_options' => [
@@ -1200,8 +1546,13 @@ return [
                     'subject_default' => 'PureLand',
                     'body_label' => 'Body',
                     'body_default' => 'Message from the staff. Enjoy your time in Azeroth!',
+                    'items_label' => 'Items list',
                     'item_id_label' => 'Item ID',
                     'quantity_label' => 'Quantity',
+                    'add_item' => 'Add item',
+                    'remove_item' => 'Remove',
+                    'items_placeholder' => "",
+                    'items_hint' => 'Add multiple rows; each row has an item ID and a quantity.',
                     'gold_label' => 'Gold (copper units)',
                     'gold_preview_placeholder' => '—',
                     'custom_list_label' => 'Custom character list (one per line)',
@@ -1228,6 +1579,7 @@ return [
                             'recipients' => 'Recipients',
                         ],
                         'item_prefix' => 'Item #:id',
+                        'items_label' => 'Items: :value',
                         'item_name_separator' => ' - ',
                         'item_quantity_prefix' => ' ×',
                         'gold_units' => [
@@ -1269,7 +1621,7 @@ return [
         'confirm' => [
             'heading' => 'About to execute <strong>:action</strong>',
             'subject' => 'Subject: :value',
-            'item' => 'Item ID: :id × :count',
+            'items' => 'Items: :items',
             'gold' => 'Gold (copper): :amount',
             'target_type' => 'Target type: :value',
             'custom_count' => 'Custom characters: :count',
@@ -1279,6 +1631,7 @@ return [
         'logs' => [
             'empty' => 'No log entries',
             'item_label' => 'Item #:id',
+            'items_label' => 'Items: :value',
             'item_name_separator' => ' - ',
             'item_quantity_prefix' => ' ×',
             'gold_label' => 'Gold: :value',
@@ -3387,6 +3740,116 @@ return [
                     'auto_off' => 'Disable auto refresh',
                 ],
             ],
+            'soap' => [
+                'meta' => [
+                    'updated_at' => 'Catalog updated: :date',
+                    'source_link' => 'GM Commands',
+                    'source_label' => 'Source: :link',
+                    'separator' => ' · ',
+                ],
+                'categories' => [
+                    'all' => [
+                        'label' => 'All commands',
+                        'summary' => 'Show all curated commands',
+                    ],
+                ],
+                'list' => [
+                    'empty' => 'No matching commands found',
+                ],
+                'risk' => [
+                    'badge' => [
+                        'low' => 'Low risk',
+                        'medium' => 'Medium risk',
+                        'high' => 'High risk',
+                        'unknown' => 'Unknown risk',
+                    ],
+                    'short' => [
+                        'low' => 'L',
+                        'medium' => 'M',
+                        'high' => 'H',
+                        'unknown' => '?',
+                    ],
+                ],
+                'fields' => [
+                    'empty' => 'This command has no extra parameters.',
+                ],
+                'errors' => [
+                    'missing_required' => 'Missing required fields.',
+                    'unknown_response' => 'Unknown response',
+                ],
+                'form' => [
+                    'error_joiner' => ', ',
+                ],
+                'feedback' => [
+                    'execute_success' => 'Executed successfully',
+                    'execute_failed' => 'Execution failed',
+                ],
+                'output' => [
+                    'unknown_time' => 'Unknown duration',
+                    'meta' => 'Status: :code · Time: :time',
+                    'empty' => '(no output)',
+                ],
+                'copy' => [
+                    'empty' => 'Nothing to copy',
+                    'success' => 'Copied to clipboard',
+                    'failure' => 'Copy failed',
+                ],
+            ],
+            'smartai' => [
+                'segments' => [
+                    'move_up_title' => 'Move up',
+                    'move_down_title' => 'Move down',
+                    'delete_segment_title' => 'Delete segment',
+                    'default_label' => 'Segment :number',
+                    'empty_prompt' => 'Please add a segment.',
+                ],
+                'search' => [
+                    'placeholder' => 'Search keywords or ID',
+                ],
+                'list' => [
+                    'empty' => 'No matches found',
+                ],
+                'selector' => [
+                    'select_type' => 'Select a type.',
+                    'no_params' => 'This type has no extra parameters.',
+                ],
+                'validation' => [
+                    'entry_required' => 'Please enter a valid entry.',
+                    'entry_invalid' => 'A valid entry is required.',
+                    'segment_required' => 'Please add at least one segment.',
+                    'event_required_next' => 'Select an event type before continuing.',
+                    'event_required' => 'Please select an event type.',
+                    'event_required_all' => 'Please select an event type for every segment.',
+                    'action_required_next' => 'Select an action type before continuing.',
+                    'action_required' => 'Please select an action type.',
+                    'action_required_all' => 'Please select an action type for every segment.',
+                    'target_required_next' => 'Select a target type before continuing.',
+                    'target_required' => 'Please select a target type.',
+                    'target_required_all' => 'Please select a target type for every segment.',
+                ],
+                'api' => [
+                    'no_response' => 'No response from server',
+                ],
+                'preview' => [
+                    'placeholder' => '-- No SQL generated --',
+                    'error_placeholder' => '-- Generation failed, check form errors --',
+                ],
+                'summary' => [
+                    'segments' => 'Segments: :count',
+                    'event' => 'Event: :name',
+                    'action' => 'Action: :name',
+                    'target' => 'Target: :name',
+                ],
+                'feedback' => [
+                    'generate_success' => 'SQL generated successfully',
+                    'generate_failed' => 'Generation failed',
+                    'copy_success' => 'Copied to clipboard',
+                    'copy_failed' => 'Copy failed, please copy manually',
+                ],
+                'errors' => [
+                    'request_failed' => 'Request failed',
+                ],
+            ],
             'bag_query' => [
                 'quality' => [
                     '0' => 'Poor',
@@ -3522,6 +3985,107 @@ return [
                     '5' => 'Legendary',
                     '6' => 'Artifact',
                     '7' => 'Heirloom',
+                ],
+            ],
+            'mail' => [
+                'actions' => [
+                    'view' => 'View',
+                    'delete' => 'Delete',
+                    'mark_read' => 'Mark read',
+                ],
+                'confirm' => [
+                    'delete_one' => 'Delete this mail?',
+                    'delete_selected' => 'Delete selected mails?',
+                ],
+                'detail' => [
+                    'attachments_none' => 'No',
+                    'attachments_yes' => 'Yes',
+                    'expire' => [
+                        'expired' => 'Expired',
+                        'today' => 'Expires today',
+                    ],
+                    'no_body' => '(no content)',
+                    'no_subject' => '(no subject)',
+                    'status' => [
+                        'read' => 'Read',
+                        'unread' => 'Unread',
+                    ],
+                ],
+                'logs' => [
+                    'empty' => 'No logs',
+                    'failed' => 'Failed to load logs',
+                    'loading' => 'Loading…',
+                    'meta' => ':file | Lines: :count',
+                    'meta_with_server' => ':file | Lines: :count | Server: :server',
+                ],
+                'stats' => [
+                    'summary' => 'Unread estimate: :unread | Expiring in 7 days: :expiring',
+                ],
+                'table' => [
+                    'loading' => 'Loading…',
+                    'empty' => 'No mails',
+                ],
+            ],
+            'mass_mail' => [
+                'errors' => [
+                    'network' => 'Network error',
+                    'parse_failed' => 'Failed to parse response',
+                    'request_failed_retry' => 'Request failed, please try again later',
+                ],
+                'feedback' => [
+                    'done' => 'Done',
+                ],
+                'status' => [
+                    'sending' => 'Sending…',
+                ],
+                'announce' => [
+                    'validation' => [
+                        'empty' => 'Please enter an announcement message',
+                    ],
+                ],
+                'send' => [
+                    'gold_preview_placeholder' => '—',
+                ],
+                'confirm' => [
+                    'heading' => 'You are about to execute <strong>:action</strong>',
+                    'subject' => 'Subject: :value',
+                    'items' => 'Items: :items',
+                    'gold' => 'Gold (copper): :amount',
+                    'target_type' => 'Target type: :value',
+                    'custom_count' => 'Custom characters: :count',
+                    'online' => 'Online characters: real-time count (fetched on send)',
+                    'footer' => 'Batch sending (size = 200) is enabled. Please double-check before continuing.',
+                ],
+                'gold' => [
+                    'units' => [
+                        'gold' => 'Gold',
+                        'silver' => 'Silver',
+                        'copper' => 'Copper',
+                    ],
+                ],
+                'logs' => [
+                    'empty' => 'No logs yet',
+                    'error_prefix' => 'Error: ',
+                    'items_label' => 'Items: :value',
+                    'item_label' => 'Item: #:id',
+                    'gold_label' => 'Gold: :value',
+                    'item_name_separator' => ' - ',
+                    'item_quantity_prefix' => ' ×',
+                ],
+                'boost' => [
+                    'summary' => [
+                        'gold' => '500 gold (:copper copper)',
+                        'bag' => 'Netherweave Bag ×:count (#21841)',
+                        'mount' => 'Sea Turtle ×:count (#23720)',
+                        'set' => 'Class-specific Tier 2 set (auto-detected)',
+                    ],
+                    'validation' => [
+                        'name' => 'Please enter a character name',
+                        'level' => 'Please choose a target level',
+                    ],
+                    'status' => [
+                        'executing' => 'Executing…',
+                    ],
                 ],
             ],
             'creature' => [
@@ -3713,6 +4277,18 @@ return [
                     'delete_failed' => 'Failed to delete item',
                 ],
             ],
+			'account' => [
+				'errors' => [
+					'request_failed_message' => 'Request failed. Please try again.',
+					'request_failed' => 'Request failed',
+				],
+				'ip_lookup' => [
+					'private' => 'Private IP',
+					'failed' => 'Lookup failed',
+					'unknown' => 'Unknown location',
+					'loading' => 'Looking up…',
+				],
+			],
             'quest' => [
                 'api' => [
                     'not_ready' => 'Panel API is not ready',

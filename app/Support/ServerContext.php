@@ -106,10 +106,8 @@ class ServerContext
         if(!self::debugEnabled()) return;
 
         if(empty($_SERVER['DOCUMENT_ROOT'])) return;
-        $logDir = dirname(__DIR__,2).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
-        if(!is_dir($logDir)) @mkdir($logDir,0777,true);
-        $line = sprintf('[%s] switch_server id=%d cookie=%s path=%s sess=%s\n',date('Y-m-d H:i:s'),$id,$cookieOk?'ok':'fail',$cookiePath,session_id());
-        @file_put_contents($logDir.DIRECTORY_SEPARATOR.'server_switch_debug.log',$line,FILE_APPEND);
+        $line = sprintf('[%s] switch_server id=%d cookie=%s path=%s sess=%s',date('Y-m-d H:i:s'),$id,$cookieOk?'ok':'fail',$cookiePath,session_id());
+        LogPath::appendLine('server_switch_debug.log', $line, true, 0777);
     }
     public static function server(?int $id=null): ?array { $id=$id??self::currentId(); $all=self::list(); return $all[$id]??null; }
     public static function soap(): ?array { $s=self::server(); return $s['soap']??null; }

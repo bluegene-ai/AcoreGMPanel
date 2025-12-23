@@ -10,6 +10,7 @@ use Acme\Panel\Core\Router;
 use Acme\Panel\Http\Controllers\AccountController;
 use Acme\Panel\Http\Controllers\AuditController;
 use Acme\Panel\Http\Controllers\BagQuery\BagQueryController;
+use Acme\Panel\Http\Controllers\Character\CharacterController;
 use Acme\Panel\Http\Controllers\Creature\CreatureController;
 use Acme\Panel\Http\Controllers\HomeController;
 use Acme\Panel\Http\Controllers\Item\ItemController;
@@ -45,6 +46,12 @@ return static function (Router $router): void {
         $router->get('/account/api/characters', [AccountController::class, 'apiCharacters']);
         $router->get('/account/api/characters-status', [AccountController::class, 'apiCharactersStatus']);
 
+        $router->get('/character', [CharacterController::class, 'index']);
+        $router->get('/character/view', [CharacterController::class, 'show']);
+        $router->get('/character/api/list', [CharacterController::class, 'apiList']);
+        $router->get('/character/api/show', [CharacterController::class, 'apiShow']);
+        $router->get('/character/api/names', [CharacterController::class, 'apiNames']);
+
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/account/api/create', [AccountController::class, 'apiCreate']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
@@ -54,6 +61,19 @@ return static function (Router $router): void {
             $router->post('/account/api/unban', [AccountController::class, 'apiUnban']);
             $router->post('/account/api/change-password', [AccountController::class, 'apiChangePassword']);
             $router->post('/account/api/kick', [AccountController::class, 'apiKick']);
+
+            $router->post('/character/api/ban', [CharacterController::class, 'apiBan']);
+            $router->post('/character/api/unban', [CharacterController::class, 'apiUnban']);
+            $router->post('/character/api/set-level', [CharacterController::class, 'apiSetLevel']);
+            $router->post('/character/api/set-gold', [CharacterController::class, 'apiSetGold']);
+            $router->post('/character/api/kick', [CharacterController::class, 'apiKick']);
+            $router->post('/character/api/teleport', [CharacterController::class, 'apiTeleport']);
+            $router->post('/character/api/unstuck', [CharacterController::class, 'apiUnstuck']);
+            $router->post('/character/api/reset-talents', [CharacterController::class, 'apiResetTalents']);
+            $router->post('/character/api/reset-spells', [CharacterController::class, 'apiResetSpells']);
+            $router->post('/character/api/reset-cooldowns', [CharacterController::class, 'apiResetCooldowns']);
+            $router->post('/character/api/rename-flag', [CharacterController::class, 'apiRenameFlag']);
+            $router->post('/character/api/delete', [CharacterController::class, 'apiDelete']);
         });
 
         $router->get('/bag', [BagQueryController::class, 'index']);

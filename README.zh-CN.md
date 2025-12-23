@@ -37,6 +37,7 @@ Acore GM Panel 是针对 [AzerothCore](https://www.azerothcore.org/) 服务器�
    - `storage/`
    - `storage/logs/`
    - `storage/cache/`
+   - `storage/ip_geo/`
    - `config/generated/`
 
 4. **配置 Web 服务器**
@@ -84,7 +85,7 @@ AcoreGMPanel/
 │   └── views/            # 视图模板与组件
 ├── routes/               # 路由定义（`web.php`）
 ├── storage/
-│   ├── cache/            # 缓存数据（IP 定位、群发名称等）
+│   ├── cache/            # 缓存数据（群发名称等）
 │   └── logs/             # 模块运行日志
 ├── docs/                 # 设计文档与模块说明
 └── vendor/               # Composer 依赖（可选）
@@ -119,3 +120,22 @@ AcoreGMPanel/
 ## 许可信息
 
 本项目遵循 AzerothCore 社区的使用规范。商业化使用或更多授权问题，请联系维护者确认。
+
+
+## IP 归属地（本地库）
+
+面板使用本地 MaxMind `.mmdb` 数据库解析 IP 归属地。
+
+1. 运行时依赖（二选一）：
+   - 推荐：随发布包/部署包携带 `vendor/`（服务器无需安装 Composer）。
+   - 可选：在服务器安装 PHP 扩展 `maxminddb`（取决于你的 PHP 版本/平台是否有可用构建）。
+2. 下载 MaxMind 数据库（推荐 GeoLite2 City），并放到：
+   - `storage/ip_geo/GeoLite2-City.mmdb`
+3. （可选）在 `config/generated/ip_location.php` 覆盖路径与语言：
+   - `mmdb_path`（绝对路径）
+   - `locale`（例如 `zh-CN`、`en`）
+
+本地生成 `vendor/`（PowerShell）：
+- `powershell -ExecutionPolicy Bypass -File .\scripts\install-deps.ps1`
+
+注意：`.mmdb` 文件不建议提交到仓库，请手动放置在 `storage/ip_geo/`。

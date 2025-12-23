@@ -17,6 +17,7 @@ return [
     'nav' => [
         'home' => '首页',
         'account' => '账号',
+        'character' => '角色',
         'item' => '物品',
         'creature' => '生物',
         'quest' => '任务',
@@ -109,6 +110,10 @@ return [
                 'response_invalid' => '返回格式异常',
                 'failed' => '查询失败',
                 'failed_reason' => '查询失败：:message',
+                'mmdb_unavailable' => '本地 IP 库不可用（请配置 mmdb 并安装依赖）',
+                'mmdb_reader_missing' => '缺少 MaxMind 读取能力（建议安装 PHP 扩展 maxminddb，或使用 composer 安装 maxmind-db/reader）',
+                'mmdb_file_missing' => '本地 IP 库文件不存在（请下载 GeoLite2-City.mmdb 并放到 storage/ip_geo/）',
+                'mmdb_open_failed' => '无法打开本地 IP 库文件（请检查文件权限与 PHP maxminddb 扩展）',
             ],
         ],
         'server_list' => [
@@ -149,6 +154,18 @@ return [
             11 => '德鲁伊',
             12 => '恶魔猎手',
         ],
+        'races' => [
+            1 => '人类',
+            2 => '兽人',
+            3 => '矮人',
+            4 => '暗夜精灵',
+            5 => '亡灵',
+            6 => '牛头人',
+            7 => '侏儒',
+            8 => '巨魔',
+            10 => '血精灵',
+            11 => '德莱尼',
+        ],
         'qualities' => [
             0 => '粗糙',
             1 => '普通',
@@ -161,6 +178,7 @@ return [
         ],
         'fallbacks' => [
             'class' => '未知#:id',
+            'race' => '未知#:id',
             'quality' => '品质#:id',
         ],
     ],
@@ -231,6 +249,14 @@ return [
             'errors' => [
                 'unauthorized' => '未授权',
                 'invalid_arguments' => '参数无效',
+            ],
+        ],
+        'modules' => [
+            'soap' => [
+                'feedback' => [
+                    'execute_success' => '执行成功',
+                    'execute_failed' => '执行失败',
+                ],
             ],
         ],
             'soap' => [
@@ -767,6 +793,69 @@ return [
             'next' => '下一步',
             'step_indicator' => '第 :current 步 / :total',
         ],
+        'catalog' => [
+            'metadata' => [
+                'notes' => [
+                    '字段与参数含义以 AzerothCore Wiki 为准。',
+                    '生成的 SQL 可直接写入 smart_scripts 表。',
+                ],
+            ],
+            'source_types' => [
+                '0' => [
+                    'label' => '生物 (Creature)',
+                ],
+                '1' => [
+                    'label' => '游戏对象 (GameObject)',
+                ],
+                '2' => [
+                    'label' => '区域触发器 (AreaTrigger)',
+                ],
+                '3' => [
+                    'label' => '事件 (Event)',
+                ],
+                '9' => [
+                    'label' => '定时动作列表 (Timed ActionList)',
+                ],
+            ],
+            'base' => [
+                'entryorguid' => [
+                    'label' => 'Entry / GUID',
+                    'hint' => '根据 Source Type 填写对应的 entry 或 guid。',
+                ],
+                'source_type' => [
+                    'label' => 'Source Type',
+                    'hint' => '脚本类型（生物/游戏对象/定时动作列表等）。',
+                ],
+                'id' => [
+                    'label' => 'ID',
+                    'hint' => '同一 entry/source_type 下的脚本序号。',
+                ],
+                'link' => [
+                    'label' => 'Link',
+                    'hint' => '链接到上一条脚本的 ID（0 为不链接）。',
+                ],
+                'event_phase_mask' => [
+                    'label' => 'Phase Mask',
+                    'hint' => '事件阶段掩码（bitmask）。',
+                ],
+                'event_chance' => [
+                    'label' => 'Chance',
+                    'hint' => '触发概率（0-100）。',
+                ],
+                'event_flags' => [
+                    'label' => 'Event Flags',
+                    'hint' => '事件标志位（bitmask）。',
+                ],
+                'comment' => [
+                    'label' => 'Comment',
+                    'hint' => '备注（可选）。',
+                ],
+                'include_delete' => [
+                    'label' => '包含 DELETE',
+                    'hint' => '生成 SQL 时包含删除旧脚本的语句。',
+                ],
+            ],
+        ],
         'builder' => [
             'messages' => [
                 'validation_failed' => '参数校验失败',
@@ -825,7 +914,18 @@ return [
             'type_id' => '按ID',
             'placeholder' => '搜索…',
             'submit' => '查询',
+            'load_all' => '加载全部账号',
             'create' => '新增账号',
+        ],
+                'filters' => [
+            'online' => '在线状态',
+            'online_any' => '全部账号',
+            'online_only' => '仅在线',
+            'online_offline' => '仅离线',
+            'ban' => '封禁状态',
+            'ban_any' => '全部账号',
+            'ban_only' => '仅封禁',
+            'ban_unbanned' => '未封禁',
         ],
         'feedback' => [
             'found' => '找到 :total 条记录，当前第 :page / :pages 页。',
@@ -999,6 +1099,249 @@ return [
                 'query_characters_failed' => '查询角色失败: :message',
                 'password_schema_unsupported' => '修改失败：账号结构不支持当前方式 (缺少 v/s 或 sha_pass_hash)',
             ],
+        ],
+    ],
+
+    'character' => [
+        'index' => [
+            'title' => '角色管理',
+            'search' => [
+                'name_placeholder' => '名称包含',
+                'guid_placeholder' => 'GUID',
+                'account_placeholder' => '账号用户名',
+                'level_min' => '最低等级',
+                'level_max' => '最高等级',
+                'submit' => '搜索',
+                'load_all' => '加载全部角色',
+            ],
+            'filters' => [
+                'online_any' => '全部账号',
+                'online_only' => '仅在线',
+                'online_offline' => '仅离线',
+            ],
+            'sort' => [
+                'guid_desc' => 'GUID（最新优先）',
+                'logout_desc' => '最后下线（最新优先）',
+                'level_desc' => '等级（最高优先）',
+                'online_desc' => '在线优先',
+            ],
+            'feedback' => [
+                'found' => '共 :total 条 · 第 :page/:pages 页',
+                'empty' => '没有结果',
+                'enter_search' => '请输入查询条件',
+            ],
+            'table' => [
+                'guid' => 'GUID',
+                'name' => '名称',
+                'account' => '账号',
+                'level' => '等级',
+                'class' => '职业',
+                'race' => '种族',
+                'map' => '地图',
+                'zone' => '区域',
+                'online' => '在线',
+                'last_logout' => '最后下线',
+                'actions' => '操作',
+                'view' => '查看',
+            ],
+            'status' => [
+                'online' => '在线',
+                'offline' => '离线',
+                'banned' => '已封禁',
+            ],
+        ],
+        'show' => [
+            'title' => '角色：:name (GUID :guid)',
+            'title_not_found' => '角色不存在 (GUID :guid)',
+            'title_default' => '角色详情',
+            'back' => '返回列表',
+            'not_found' => '角色未找到',
+            'summary' => [
+                'title' => '概要',
+                'guid' => 'GUID',
+                'name' => '名称',
+                'account' => '账号',
+                'level' => '等级',
+                'class' => '职业',
+                'race' => '种族',
+                'online' => '在线',
+                'map' => '地图 / 区域',
+                'position' => '坐标',
+                'money' => '金钱',
+                'copper' => '铜币',
+                'mail' => '邮件（收件箱）',
+                'logout' => '最后下线',
+                'homebind' => '炉石位置',
+                'homebind_none' => '未设置',
+                'gmlevel' => 'GM等级',
+                'ban' => '封禁状态',
+            ],
+            'status' => [
+                'online' => '在线',
+                'offline' => '离线',
+            ],
+            'ban' => [
+                'active' => '已封禁：:reason (结束：:end)',
+                'permanent' => '永久',
+                'none' => '未封禁',
+            ],
+            'inventory' => [
+                'title' => '物品栏（装备/背包/银行）',
+                'bag' => '背包',
+                'slot' => '格子',
+                'item_guid' => '物品GUID',
+                'entry' => '物品模板',
+                'count' => '数量',
+                'random' => '随机属性',
+                'durability' => '耐久',
+                'text' => '文本',
+                'empty' => '无物品记录',
+            ],
+            'skills' => [
+                'title' => '技能',
+                'skill' => '技能',
+                'value' => '当前',
+                'max' => '上限',
+                'empty' => '无技能记录',
+            ],
+            'spells' => [
+                'title' => '法术',
+                'spell' => '法术',
+                'active' => '已学',
+                'disabled' => '禁用',
+                'empty' => '无法术记录',
+            ],
+            'reputations' => [
+                'title' => '声望',
+                'faction' => '阵营',
+                'standing' => '声望值',
+                'flags' => '标记',
+                'flags_labels' => [
+                    'visible' => '可见',
+                    'at_war' => '交战',
+                    'hidden' => '隐藏',
+                    'inactive' => '未激活',
+                    'peace_forced' => '强制和平',
+                    'unknown_20' => '未知(0x20)',
+                    'unknown_40' => '未知(0x40)',
+                    'rival' => '死敌',
+                ],
+                'empty' => '无声望记录',
+            ],
+            'quests' => [
+                'title' => '任务',
+                'regular' => '进行中 / 进度',
+                'daily' => '日常',
+                'weekly' => '周常',
+                'quest' => '任务',
+                'status' => '状态',
+                'status_map' => [
+                    0 => '无',
+                    1 => '已完成',
+                    2 => '已失败',
+                    3 => '未完成',
+                    4 => '已失败',
+                    5 => '已领取奖励',
+                ],
+                'timer' => '计时',
+                'mob_counts' => '怪物计数',
+                'item_counts' => '物品计数',
+                'empty' => '无任务进度',
+                'empty_daily' => '无日常任务记录',
+                'empty_weekly' => '无周常任务记录',
+            ],
+            'auras' => [
+                'title' => '光环',
+                'caster' => '施法者GUID',
+                'item' => '物品GUID',
+                'spell' => '法术',
+                'mask' => '效果掩码',
+                'amounts' => '数值',
+                'charges' => '充能',
+                'duration' => '最大持续',
+                'remaining' => '剩余',
+                'empty' => '无光环',
+            ],
+            'cooldowns' => [
+                'title' => '冷却',
+                'spell' => '法术',
+                'item' => '物品',
+                'time' => '时间戳',
+                'category' => '类别',
+                'empty' => '无冷却记录',
+            ],
+            'achievements' => [
+                'title' => '成就',
+                'unlocks' => '已解锁',
+                'progress' => '进度',
+                'achievement' => '成就',
+                'criteria' => '条件',
+                'counter' => '计数',
+                'date' => '日期',
+                'empty_unlocks' => '无解锁成就',
+                'empty_progress' => '无进度记录',
+            ],
+            'bool' => [
+                'yes' => '是',
+                'no' => '否',
+            ],
+        ],
+        'actions' => [
+            'title' => '操作',
+            'group_stats' => '属性',
+            'group_moderation' => '管理',
+            'group_movement' => '移动',
+            'group_tools' => '工具',
+
+            'default_reason' => '后台封禁',
+            'set_level' => '设置等级',
+            'set_gold' => '设置金币',
+            'level_label' => '等级',
+            'gold_label' => '金钱（铜）',
+            'set' => '设置',
+
+            'ban_label' => '封禁角色',
+            'ban' => '封禁角色',
+            'unban' => '解除封禁',
+            'ban_hours' => '小时',
+            'reason_placeholder' => '原因',
+            'teleport' => '传送',
+            'teleport_label' => '传送',
+            'teleport_preset_placeholder' => '常用传送点（快速选择）',
+            'teleport_presets' => [
+                'stormwind' => '暴风城',
+                'ironforge' => '铁炉堡',
+                'darnassus' => '达纳苏斯',
+                'exodar' => '埃索达',
+                'orgrimmar' => '奥格瑞玛',
+                'undercity' => '幽暗城',
+                'thunder_bluff' => '雷霆崖',
+                'silvermoon' => '银月城',
+                'dalaran' => '达拉然',
+                'shattrath' => '沙塔斯',
+            ],
+            'teleport_map' => '地图',
+            'teleport_zone' => '区域',
+            'teleport_x' => 'X',
+            'teleport_y' => 'Y',
+            'teleport_z' => 'Z',
+            'unstuck' => '脱困（回炉石）',
+            'reset_talents' => '重置天赋',
+            'reset_spells' => '重置法术',
+            'reset_cooldowns' => '重置冷却',
+            'rename_flag' => '允许改名',
+            'delete' => '删除角色',
+            'confirm_delete' => '确认删除该角色？',
+            'success' => '操作成功',
+            'failed' => '操作失败',
+            'blocked_online' => '角色在线，请先踢下线。',
+        ],
+
+        'controls' => [
+            'expand_all' => '全部展开',
+            'collapse_all' => '全部收起',
+            'filter_placeholder' => '筛选行...',
+            'filter_no_results' => '无匹配结果',
         ],
     ],
     'creature' => [
@@ -1972,8 +2315,9 @@ return [
                     'action_placeholder' => '--请选择--',
                     'action_options' => [
                         'send_mail' => '邮件(纯文本)',
-                        'send_item' => '物品(邮件附带)',
+                        'send_item' => '物品(可多件)',
                         'send_gold' => '金币(邮件附带)',
+                        'send_item_gold' => '物品 + 金币',
                     ],
                     'target_label' => '目标类型',
                     'target_options' => [
@@ -1984,8 +2328,13 @@ return [
                     'subject_default' => 'PureLand',
                     'body_label' => '正文',
                     'body_default' => '这是来自管理团队的邮件，祝您游戏愉快。',
+                    'items_label' => '物品列表',
                     'item_id_label' => '物品ID',
                     'quantity_label' => '数量',
+                    'add_item' => '添加物品',
+                    'remove_item' => '移除',
+                    'items_placeholder' => "",
+                    'items_hint' => '可添加多行物品，每行分别填写物品ID与数量。',
                     'gold_label' => '金币(铜为单位)',
                     'gold_preview_placeholder' => '—',
                     'custom_list_label' => '自定义角色列表 (每行一个)',
@@ -2012,6 +2361,7 @@ return [
                             'recipients' => '接收者',
                         ],
                         'item_prefix' => '物品：#:id',
+                        'items_label' => '物品：:value',
                         'item_name_separator' => ' - ',
                         'item_quantity_prefix' => ' ×',
                         'gold_units' => [
@@ -2053,7 +2403,7 @@ return [
         'confirm' => [
             'heading' => '即将执行 <strong>:action</strong>',
             'subject' => '标题：:value',
-            'item' => '物品ID：:id × :count',
+            'items' => '物品：:items',
             'gold' => '金币（铜）：:amount',
             'target_type' => '目标类型：:value',
             'custom_count' => '自定义角色数：:count',
@@ -2101,6 +2451,7 @@ return [
                 'no_targets' => '未选择任何收件人',
                 'target_limit' => '收件人数量超过上限（最多 :max 个）',
                 'item_invalid' => '物品 ID 或数量无效',
+                'items_invalid' => '物品列表格式无效，请使用 itemId:数量（每行一个）',
                 'item_missing' => '物品不存在（ID :id）',
                 'gold_invalid' => '金额必须大于 0',
                 'unknown_action' => '未知操作类型',
@@ -2108,6 +2459,7 @@ return [
                     'send_mail' => '发送邮件',
                     'send_item' => '发送物品',
                     'send_gold' => '发送金币',
+                    'send_item_gold' => '发送物品+金币',
                 ],
                 'summary' => '操作：:action · 批次：:batches · 目标：:targets · 成功：:success · 失败：:fail',
                 'sample_errors' => '错误示例：:errors',
@@ -2327,6 +2679,118 @@ return [
             'title' => '原始日志',
             'empty' => '-- 等待加载 --',
         ],
+        'index' => [
+            'page_title' => '统一日志管理',
+            'errors' => [
+                'invalid_module' => '模块或类型无效',
+                'read_failed' => '读取日志失败：:message',
+                'unauthorized' => '未授权',
+            ],
+        ],
+        'manager' => [
+            'pipe_sql' => [
+                'summary' => ':type :status（影响：:affected）',
+                'sql_suffix' => ' | :sql',
+                'error_suffix' => ' | 错误：:error',
+            ],
+        ],
+        'config' => [
+            'modules' => [
+                'account' => [
+                    'label' => '账号',
+                    'description' => '账号管理相关操作记录。',
+                    'types' => [
+                        'actions' => [
+                            'label' => '操作记录',
+                        ],
+                    ],
+                ],
+                'bag_query' => [
+                    'label' => '背包查询',
+                    'description' => '背包/物品查询模块操作记录。',
+                    'types' => [
+                        'actions' => [
+                            'label' => '操作记录',
+                        ],
+                    ],
+                ],
+                'item' => [
+                    'label' => '物品',
+                    'description' => '物品编辑与操作相关日志。',
+                    'types' => [
+                        'sql' => [
+                            'label' => 'SQL 执行',
+                        ],
+                        'actions' => [
+                            'label' => '操作记录',
+                        ],
+                        'deleted' => [
+                            'label' => '删除记录',
+                        ],
+                    ],
+                ],
+                'item_owner' => [
+                    'label' => '物品归属',
+                    'description' => '批量删除与替换历史。',
+                    'types' => [
+                        'actions' => [
+                            'label' => '操作记录',
+                        ],
+                    ],
+                ],
+                'creature' => [
+                    'label' => '生物',
+                    'description' => '生物编辑相关 SQL 日志。',
+                    'types' => [
+                        'sql' => [
+                            'label' => 'SQL 执行',
+                        ],
+                    ],
+                ],
+                'quest' => [
+                    'label' => '任务',
+                    'description' => '任务编辑相关日志。',
+                    'types' => [
+                        'sql' => [
+                            'label' => 'SQL 执行',
+                        ],
+                        'deleted' => [
+                            'label' => '删除记录',
+                        ],
+                    ],
+                ],
+                'mail' => [
+                    'label' => '邮件',
+                    'description' => '邮件模块 SQL 与删除日志。',
+                    'types' => [
+                        'sql' => [
+                            'label' => 'SQL 执行',
+                        ],
+                        'deleted' => [
+                            'label' => '删除记录',
+                        ],
+                    ],
+                ],
+                'massmail' => [
+                    'label' => '群发',
+                    'description' => '群发模块执行记录。',
+                    'types' => [
+                        'actions' => [
+                            'label' => '操作记录',
+                        ],
+                    ],
+                ],
+                'server' => [
+                    'label' => '服务器',
+                    'description' => '服务器切换与调试输出。',
+                    'types' => [
+                        'debug' => [
+                            'label' => '调试日志',
+                        ],
+                    ],
+                ],
+            ],
+        ],
     ],
     'bag_query' => [
         'page_title' => '背包 / 物品查询',
@@ -2416,6 +2880,116 @@ return [
                 'actions' => [
                     'auto_on' => '开启自动刷新',
                     'auto_off' => '关闭自动刷新',
+                ],
+            ],
+            'soap' => [
+                'meta' => [
+                    'updated_at' => '指令表更新于 :date',
+                    'source_link' => 'GM Commands',
+                    'source_label' => '参考：:link',
+                    'separator' => ' · ',
+                ],
+                'categories' => [
+                    'all' => [
+                        'label' => '全部命令',
+                        'summary' => '显示所有收录的命令',
+                    ],
+                ],
+                'list' => [
+                    'empty' => '未找到匹配的命令',
+                ],
+                'risk' => [
+                    'badge' => [
+                        'low' => '低风险',
+                        'medium' => '中风险',
+                        'high' => '高风险',
+                        'unknown' => '未知风险',
+                    ],
+                    'short' => [
+                        'low' => '低',
+                        'medium' => '中',
+                        'high' => '高',
+                        'unknown' => '？',
+                    ],
+                ],
+                'fields' => [
+                    'empty' => '此命令无需额外参数。',
+                ],
+                'errors' => [
+                    'missing_required' => '存在未填写的必填参数。',
+                    'unknown_response' => '未知响应',
+                ],
+                'form' => [
+                    'error_joiner' => '、',
+                ],
+                'feedback' => [
+                    'execute_success' => '执行成功',
+                    'execute_failed' => '执行失败',
+                ],
+                'output' => [
+                    'unknown_time' => '未知耗时',
+                    'meta' => '状态：:code · 耗时：:time',
+                    'empty' => '(无输出)',
+                ],
+                'copy' => [
+                    'empty' => '暂无命令可复制',
+                    'success' => '已复制到剪贴板',
+                    'failure' => '复制失败',
+                ],
+            ],
+            'smartai' => [
+                'segments' => [
+                    'move_up_title' => '上移',
+                    'move_down_title' => '下移',
+                    'delete_segment_title' => '删除分段',
+                    'default_label' => '分段 :number',
+                    'empty_prompt' => '请添加一个分段。',
+                ],
+                'search' => [
+                    'placeholder' => '搜索关键字或 ID',
+                ],
+                'list' => [
+                    'empty' => '未找到匹配项',
+                ],
+                'selector' => [
+                    'select_type' => '请选择类型。',
+                    'no_params' => '该类型没有额外参数。',
+                ],
+                'validation' => [
+                    'entry_required' => '请输入有效的 entry。',
+                    'entry_invalid' => '需要有效的 entry。',
+                    'segment_required' => '请至少添加一个分段。',
+                    'event_required_next' => '继续之前请选择事件类型。',
+                    'event_required' => '请选择事件类型。',
+                    'event_required_all' => '请为每个分段选择事件类型。',
+                    'action_required_next' => '继续之前请选择动作类型。',
+                    'action_required' => '请选择动作类型。',
+                    'action_required_all' => '请为每个分段选择动作类型。',
+                    'target_required_next' => '继续之前请选择目标类型。',
+                    'target_required' => '请选择目标类型。',
+                    'target_required_all' => '请为每个分段选择目标类型。',
+                ],
+                'api' => [
+                    'no_response' => '服务器无响应',
+                ],
+                'preview' => [
+                    'placeholder' => '-- 未生成 SQL --',
+                    'error_placeholder' => '-- 生成失败，请检查表单错误 --',
+                ],
+                'summary' => [
+                    'segments' => '分段数：:count',
+                    'event' => '事件：:name',
+                    'action' => '动作：:name',
+                    'target' => '目标：:name',
+                ],
+                'feedback' => [
+                    'generate_success' => 'SQL 生成成功',
+                    'generate_failed' => '生成失败',
+                    'copy_success' => '已复制到剪贴板',
+                    'copy_failed' => '复制失败，请手动复制',
+                ],
+                'errors' => [
+                    'request_failed' => '请求失败',
                 ],
             ],
             'bag_query' => [
@@ -2553,6 +3127,107 @@ return [
                     '5' => '传说',
                     '6' => '神器',
                     '7' => '传家宝',
+                ],
+            ],
+            'mail' => [
+                'actions' => [
+                    'view' => '查看',
+                    'delete' => '删除',
+                    'mark_read' => '标记已读',
+                ],
+                'confirm' => [
+                    'delete_one' => '确定删除这封邮件？',
+                    'delete_selected' => '确定删除选中的邮件？',
+                ],
+                'detail' => [
+                    'attachments_none' => '无',
+                    'attachments_yes' => '有',
+                    'expire' => [
+                        'expired' => '已过期',
+                        'today' => '今日到期',
+                    ],
+                    'no_body' => '(无内容)',
+                    'no_subject' => '(无主题)',
+                    'status' => [
+                        'read' => '已读',
+                        'unread' => '未读',
+                    ],
+                ],
+                'logs' => [
+                    'empty' => '暂无日志',
+                    'failed' => '日志加载失败',
+                    'loading' => '加载中…',
+                    'meta' => ':file | 行数：:count',
+                    'meta_with_server' => ':file | 行数：:count | 服务器：:server',
+                ],
+                'stats' => [
+                    'summary' => '未读估算：:unread | 7 天内到期：:expiring',
+                ],
+                'table' => [
+                    'loading' => '加载中…',
+                    'empty' => '暂无邮件',
+                ],
+            ],
+            'mass_mail' => [
+                'errors' => [
+                    'network' => '网络异常',
+                    'parse_failed' => '解析响应失败',
+                    'request_failed_retry' => '请求失败，请稍后重试',
+                ],
+                'feedback' => [
+                    'done' => '完成',
+                ],
+                'status' => [
+                    'sending' => '发送中…',
+                ],
+                'announce' => [
+                    'validation' => [
+                        'empty' => '请输入公告内容',
+                    ],
+                ],
+                'send' => [
+                    'gold_preview_placeholder' => '—',
+                ],
+                'confirm' => [
+                    'heading' => '即将执行 <strong>:action</strong>',
+                    'subject' => '主题：:value',
+                    'items' => '物品：:items',
+                    'gold' => '金币（铜）：:amount',
+                    'target_type' => '目标类型：:value',
+                    'custom_count' => '自定义角色数：:count',
+                    'online' => '在线角色：实时统计（发送时拉取）',
+                    'footer' => '已启用批量发送（每批 200）。继续前请再次确认。',
+                ],
+                'gold' => [
+                    'units' => [
+                        'gold' => '金',
+                        'silver' => '银',
+                        'copper' => '铜',
+                    ],
+                ],
+                'logs' => [
+                    'empty' => '暂无日志',
+                    'error_prefix' => '错误：',
+                    'items_label' => '物品：:value',
+                    'item_label' => '物品：#:id',
+                    'gold_label' => '金币：:value',
+                    'item_name_separator' => ' - ',
+                    'item_quantity_prefix' => ' ×',
+                ],
+                'boost' => [
+                    'summary' => [
+                        'gold' => '500 金（:copper 铜）',
+                        'bag' => '灵纹包 ×:count（#21841）',
+                        'mount' => '海龟坐骑 ×:count（#23720）',
+                        'set' => '职业 T2 套装（自动识别）',
+                    ],
+                    'validation' => [
+                        'name' => '请输入角色名',
+                        'level' => '请选择目标等级',
+                    ],
+                    'status' => [
+                        'executing' => '执行中…',
+                    ],
                 ],
             ],
             'creature' => [
@@ -2759,6 +3434,18 @@ return [
                     'delete_failed' => '删除失败',
                 ],
             ],
+			'account' => [
+				'errors' => [
+					'request_failed_message' => '请求失败，请稍后重试。',
+					'request_failed' => '请求失败',
+				],
+				'ip_lookup' => [
+					'private' => '内网IP',
+					'failed' => '查询失败',
+					'unknown' => '未知归属地',
+					'loading' => '查询中…',
+				],
+			],
             'quest' => [
                 'api' => [
                     'not_ready' => 'Panel.api 未就绪',
@@ -3219,6 +3906,7 @@ return [
                     'tags' => [
                         'shared_account' => '共享 Auth 库',
                         'single_realm' => '仅 1 个 Realm',
+                        'items_label' => '物品：:value',
                         'low_maintenance' => '维护成本低',
                     ],
                 ],

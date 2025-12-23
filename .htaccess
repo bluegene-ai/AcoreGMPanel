@@ -8,11 +8,13 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  # 自动推断 base（如果目录层级变化，可手动取消下行注释并改成实际子路径）
-  #RewriteBase /AcoreGMPanel/
+  # 如果站点部署在子目录（例如 https://example.com/acoremanage/），可能需要设置 RewriteBase。
+  # 未设置时，下面的相对重写规则通常也能工作；如遇到路径异常再手动启用。
+  #RewriteBase /acoremanage/
 
   # SOAP 模块走前端控制器，避免被敏感目录规则阻断
   RewriteRule ^soap(?:/.*)?$ public/index.php [L]
+  RewriteRule ^favicon\.ico$ - [L]
 
   # 阻止直接访问源码 / 配置 / 日志 / 资源模板等敏感路径
   RewriteRule ^(app|config|vendor|tests|cli|includes|resources|deprecated|errors|soap)(/|$) - [R=404,L]
@@ -24,6 +26,9 @@ Options -Indexes
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
+
+  # 如果请求路径为空，交给前端控制器
+  RewriteRule ^$ public/index.php [L]
 
   # 其余交给前端控制器
   RewriteRule ^ public/index.php [L]

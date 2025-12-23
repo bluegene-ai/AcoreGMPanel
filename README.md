@@ -37,6 +37,7 @@ A web game management toolkit for AzerothCore realms. Acore GM Panel is a modern
   - `storage/`
   - `storage/logs/`
   - `storage/cache/`
+  - `storage/ip_geo/`
   - `config/generated/`
 
 4. **Configure web server**
@@ -84,7 +85,7 @@ AcoreGMPanel/
 │   └── views/            # PHP view templates and components
 ├── routes/               # Route declarations (`web.php`)
 ├── storage/
-│   ├── cache/            # Cached data (IP geolocation, mass mail names, ...)
+│   ├── cache/            # Cached data (mass mail names, ...)
 │   └── logs/             # Runtime logs per module
 ├── docs/                 # Design notes and module-specific documentation
 └── vendor/               # Composer dependencies (optional)
@@ -109,6 +110,25 @@ AcoreGMPanel/
 
 Additional focused guides live in the `docs/` directory and project root:
 
+
+
+## IP Geolocation (Local Database)
+
+The panel resolves IP locations using a local MaxMind `.mmdb` database (no online queries, no disk cache).
+
+1. Runtime requirement (choose one):
+  - Recommended: deploy with `vendor/` (server does not need Composer).
+  - Optional: install the PHP `maxminddb` extension (if available for your PHP build).
+2. Download a MaxMind database (recommended: GeoLite2 City) and place it at:
+  - `storage/ip_geo/GeoLite2-City.mmdb`
+3. (Optional) Override path/locale in `config/generated/ip_location.php`:
+  - `mmdb_path` (absolute path)
+  - `locale` (e.g. `zh-CN`, `en`)
+
+To build `vendor/` locally (PowerShell):
+- `powershell -ExecutionPolicy Bypass -File .\scripts\install-deps.ps1`
+
+Note: the `.mmdb` file is not committed; place it manually under `storage/ip_geo/`.
 
 
 ## Contributing

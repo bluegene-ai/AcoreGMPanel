@@ -18,6 +18,12 @@
 
 const qs = (sel, ctx = document) => ctx.querySelector(sel);
 const getPanelApi = () => (window.Panel && window.Panel.api) ? window.Panel.api : null;
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
 
 function boot(){
   if(document.body.dataset.module !== 'logs') return;
@@ -45,6 +51,45 @@ function boot(){
   let timer = null;
   let panelReadyAttempts = 0;
   const MAX_PANEL_RETRIES = 12;
+  let lastLines = [];
+  let activeRowEl = null;
+
+  function renderRaw(lines){
+    lastLines = Array.isArray(lines) ? lines : [];
+    if(!rawBox) return;
+    if(!lastLines.length){
+      rawBox.textContent = status('no_raw', '-- No log --');
+      return;
+    }
+    rawBox.innerHTML = lastLines
+      .map((line, idx) => `<span class="logs-raw__line" data-line="${idx}">${escapeHtml(line)}</span>`)
+      .join('\n');
+  }
+
+  function clearRawHighlight(){
+    if(!rawBox) return;
+    rawBox.querySelectorAll('.logs-raw__line.is-active').forEach(el => el.classList.remove('is-active'));
+  }
+
+  function highlightRawByText(rawText){
+    if(!rawBox || !rawText || !lastLines.length) return;
+    const idx = lastLines.lastIndexOf(rawText);
+    if(idx < 0) return;
+    const el = rawBox.querySelector(`.logs-raw__line[data-line="${idx}"]`);
+    if(!el) return;
+    clearRawHighlight();
+    el.classList.add('is-active');
+    const details = rawBox.closest ? rawBox.closest('details') : null;
+    if(details){ details.open = true; }
+
+    const boxRect = rawBox.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    rawBox.scrollTop += (elRect.top - boxRect.top) - rawBox.clientHeight * 0.35;
+
+    if(details && typeof details.scrollIntoView === 'function'){
+      details.scrollIntoView({ block: 'nearest' });
+    }
+  }
 
   function populateTypeOptions(moduleId){
     const module = modules[moduleId];
@@ -125,6 +170,7 @@ function boot(){
   function renderTable(entries){
     if(!tableBody) return;
     tableBody.innerHTML = '';
+    activeRowEl = null;
     if(!Array.isArray(entries) || entries.length === 0){
       const row = document.createElement('tr');
       const cell = document.createElement('td');
@@ -137,6 +183,9 @@ function boot(){
     }
     entries.forEach(entry => {
       const row = document.createElement('tr');
+      if(entry.raw){
+        row.dataset.raw = entry.raw;
+      }
       const timeCell = document.createElement('td');
       timeCell.textContent = entry.time || '-';
       row.appendChild(timeCell);
@@ -150,6 +199,7 @@ function boot(){
       row.appendChild(actorCell);
 
       const summaryCell = document.createElement('td');
+      summaryCell.className = 'logs-summary-cell';
       summaryCell.textContent = entry.summary || entry.raw || '-';
       if(entry.raw){
         row.title = entry.raw;
@@ -162,6 +212,26 @@ function boot(){
       row.appendChild(summaryCell);
 
       tableBody.appendChild(row);
+    });
+  }
+
+  if(tableBody){
+    tableBody.addEventListener('click', (e) => {
+      const cell = e.target && e.target.closest ? e.target.closest('td') : null;
+      if(!cell || !cell.classList || !cell.classList.contains('logs-summary-cell')){
+        return;
+      }
+      const row = cell.parentElement;
+      const rawText = row && row.dataset ? row.dataset.raw : '';
+      highlightRawByText(rawText);
+
+      if(activeRowEl && activeRowEl !== row){
+        activeRowEl.classList.remove('logs-row-active');
+      }
+      if(row && row.classList){
+        row.classList.add('logs-row-active');
+        activeRowEl = row;
+      }
     });
   }
 
@@ -202,10 +272,8 @@ function boot(){
         return;
       }
       const lines = res.lines || [];
-      if(rawBox){
-        rawBox.textContent = lines.length ? lines.join('\n') : status('no_raw', '-- No log --');
-        rawBox.scrollTop = rawBox.scrollHeight;
-      }
+      renderRaw(lines);
+      if(rawBox){ rawBox.scrollTop = rawBox.scrollHeight; }
       renderTable(res.entries || []);
       updateSummary(res);
     } catch(error){

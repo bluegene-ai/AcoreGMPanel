@@ -558,13 +558,13 @@ class QuestRepository extends MultiServerRepository
 
 
     private function logsDir(): string
-    { $dir=dirname(__DIR__,3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs'; if(!is_dir($dir)) @mkdir($dir,0777,true); return $dir; }
+    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
 
     private function appendDeletedLog(string $action,int $id,string $sql): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_deleted.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%d|%s|%d',date('Y-m-d H:i:s'),$user,$action,$id,$sql,$this->serverId); @file_put_contents($file,$line.PHP_EOL,FILE_APPEND); }
+    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_deleted.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%d|%s|%d',date('Y-m-d H:i:s'),$user,$action,$id,$sql,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
 
     private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); @file_put_contents($file,$line.PHP_EOL,FILE_APPEND); }
+    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
 
     private function currentUser(): string
     { return $_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); }

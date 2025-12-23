@@ -5,6 +5,7 @@
  */
 
  $module='account'; include __DIR__.'/../layouts/base_top.php'; ?>
+<?php $filter_online = $filter_online ?? 'any'; $filter_ban = $filter_ban ?? 'any'; $load_all = !empty($load_all); $sort = $sort ?? ''; ?>
 <h1 class="page-title"><?= htmlspecialchars(__('app.account.page_title')) ?></h1>
 <form class="account-search" method="get" action="">
   <div class="account-search__row">
@@ -14,11 +15,57 @@
     </select>
     <input type="text" name="search_value" value="<?= htmlspecialchars($search_value) ?>" placeholder="<?= htmlspecialchars(__('app.account.search.placeholder')) ?>">
   <button class="btn" type="submit"><?= htmlspecialchars(__('app.account.search.submit')) ?></button>
+  <button class="btn outline" type="submit" name="load_all" value="1"><?= htmlspecialchars(__('app.account.search.load_all')) ?></button>
   <button class="btn success action" type="button" data-action="create-account"><?= htmlspecialchars(__('app.account.search.create')) ?></button>
+  </div>
+  <div class="account-search__row account-search__filters">
+    <label style="display:flex;align-items:center;gap:6px;">
+      <span><?= htmlspecialchars(__('app.account.filters.online')) ?>:</span>
+      <select name="online">
+        <option value="any" <?= $filter_online==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.online_any')) ?></option>
+        <option value="online" <?= $filter_online==='online'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.online_only')) ?></option>
+        <option value="offline" <?= $filter_online==='offline'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.online_offline')) ?></option>
+      </select>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;">
+      <span><?= htmlspecialchars(__('app.account.filters.ban')) ?>:</span>
+      <select name="ban">
+        <option value="any" <?= $filter_ban==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_any')) ?></option>
+        <option value="banned" <?= $filter_ban==='banned'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_only')) ?></option>
+        <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_unbanned')) ?></option>
+      </select>
+    </label>
   </div>
   <div id="account-feedback" class="panel-flash panel-flash--inline"></div>
 </form>
-<?php if($search_value!==''): ?>
+<?php $hasCriteria = $load_all || ($search_value!=='') || ($filter_online!=='any') || ($filter_ban!=='any'); ?>
+<?php if($hasCriteria): ?>
+<?php
+  $sortUrl = static function(?string $value): string {
+    $base = url_with_server('/account');
+    $qs = $_GET;
+    unset($qs['page'], $qs['server']);
+    if($value === null || $value === ''){
+      unset($qs['sort']);
+    } else {
+      $qs['sort'] = $value;
+    }
+    $query = http_build_query($qs);
+    return $query ? ($base . (str_contains($base,'?') ? '&' : '?') . $query) : $base;
+  };
+  $nextSort = static function(string $column) use ($sort): string {
+    $cur = (string)$sort;
+    $asc = $column . '_asc';
+    $desc = $column . '_desc';
+    if($cur === $asc) return $desc;
+    if($cur === $desc) return '';
+    return $asc;
+  };
+  $isActive = static function(string $column) use ($sort): bool {
+    $cur = (string)$sort;
+    return $cur !== '' && str_starts_with($cur, $column . '_');
+  };
+?>
 <?php $friendlyTime=function(int $seconds): string {
   if($seconds < 0) {
     return __('app.account.ban.permanent');
@@ -64,7 +111,16 @@
     <?= htmlspecialchars(__('app.account.feedback.found', ['total' => $pager->total, 'page' => $pager->page, 'pages' => $pager->pages])) ?>
   </p>
   <table class="table">
-  <thead><tr><th><?= htmlspecialchars(__('app.account.table.id')) ?></th><th><?= htmlspecialchars(__('app.account.table.username')) ?></th><th><?= htmlspecialchars(__('app.account.table.gm')) ?></th><th><?= htmlspecialchars(__('app.account.table.online')) ?></th><th><?= htmlspecialchars(__('app.account.table.last_login')) ?></th><th><?= htmlspecialchars(__('app.account.table.last_ip')) ?></th><th><?= htmlspecialchars(__('app.account.table.ip_location')) ?></th><th><?= htmlspecialchars(__('app.account.table.actions')) ?></th></tr></thead>
+  <thead><tr>
+    <th><a class="table-sort<?= $isActive('id')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('id'))) ?>"><?= htmlspecialchars(__('app.account.table.id')) ?></a></th>
+    <th><?= htmlspecialchars(__('app.account.table.username')) ?></th>
+    <th><?= htmlspecialchars(__('app.account.table.gm')) ?></th>
+    <th><a class="table-sort<?= $isActive('online')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('online'))) ?>"><?= htmlspecialchars(__('app.account.table.online')) ?></a></th>
+    <th><a class="table-sort<?= $isActive('last_login')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('last_login'))) ?>"><?= htmlspecialchars(__('app.account.table.last_login')) ?></a></th>
+    <th><?= htmlspecialchars(__('app.account.table.last_ip')) ?></th>
+    <th><?= htmlspecialchars(__('app.account.table.ip_location')) ?></th>
+    <th><?= htmlspecialchars(__('app.account.table.actions')) ?></th>
+  </tr></thead>
     <tbody>
     <?php foreach($pager->items as $row): ?>
       <?php

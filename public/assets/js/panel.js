@@ -4,6 +4,36 @@
   const BASE = (window.APP_BASE||'').replace(/\/$/,'');
   const localeStore = { common: {}, modules: {} };
 
+  function looksLikeI18nKey(value){
+    if(typeof value !== 'string') return false;
+    const text = value.trim();
+    if(!text) return false;
+    return /^app\.[A-Za-z0-9_.-]+$/.test(text) || /^modules\.[A-Za-z0-9_.-]+$/.test(text);
+  }
+
+  function humanizeI18nKey(value){
+    if(typeof value !== 'string') return value;
+    let text = value.trim();
+    if(!text) return value;
+
+    text = text
+      .replace(/^app\.js\.modules\./, '')
+      .replace(/^app\.js\./, '')
+      .replace(/^app\./, '')
+      .replace(/^modules\./, '');
+
+    const parts = text.split('.').map((p)=>p.trim()).filter(Boolean);
+    const tail = parts.length ? parts.slice(-2).join(' ') : text;
+    text = tail
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    text = text.replace(/\b(label|hint|description|tooltip|placeholder|help|message)\b/ig, '').replace(/\s+/g, ' ').trim();
+    if(!text) text = parts[parts.length - 1] || value;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
   function isPlainObject(value){
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
@@ -54,6 +84,7 @@
   function getLocale(path, fallback){
     if(path == null) return localeStore;
     const segments = Array.isArray(path) ? path : String(path).split('.');
+    const resolvedPath = Array.isArray(path) ? segments.join('.') : String(path);
     let node = localeStore;
     for(let i=0;i<segments.length;i+=1){
       const segment = String(segments[i] ?? '').trim();
@@ -61,11 +92,20 @@
       if(node && typeof node === 'object' && segment in node){
         node = node[segment];
       } else {
-        return fallback !== undefined ? fallback : (Array.isArray(path) ? segments.join('.') : path);
+        if(fallback !== undefined){
+          return looksLikeI18nKey(fallback) ? humanizeI18nKey(fallback) : fallback;
+        }
+        return looksLikeI18nKey(resolvedPath) ? humanizeI18nKey(resolvedPath) : resolvedPath;
       }
     }
     if(node === undefined){
-      return fallback !== undefined ? fallback : (Array.isArray(path) ? segments.join('.') : path);
+      if(fallback !== undefined){
+        return looksLikeI18nKey(fallback) ? humanizeI18nKey(fallback) : fallback;
+      }
+      return looksLikeI18nKey(resolvedPath) ? humanizeI18nKey(resolvedPath) : resolvedPath;
+    }
+    if(looksLikeI18nKey(node)){
+      return fallback !== undefined ? fallback : humanizeI18nKey(node);
     }
     return node;
   }
@@ -78,17 +118,29 @@
     const moduleSegments = ['modules', moduleName, ...pathSegments];
 
     let value = getLocale(moduleSegments, null);
-    if(value !== null && value !== undefined) return value;
+    if(value !== null && value !== undefined){
+      if(looksLikeI18nKey(value)) return fallback !== undefined ? fallback : humanizeI18nKey(value);
+      return value;
+    }
 
     if(pathSegments.length){
       value = getLocale(['common','modules', moduleName, ...pathSegments], null);
-      if(value !== null && value !== undefined) return value;
+      if(value !== null && value !== undefined){
+        if(looksLikeI18nKey(value)) return fallback !== undefined ? fallback : humanizeI18nKey(value);
+        return value;
+      }
 
       value = getLocale(['common','api', ...pathSegments], null);
-      if(value !== null && value !== undefined) return value;
+      if(value !== null && value !== undefined){
+        if(looksLikeI18nKey(value)) return fallback !== undefined ? fallback : humanizeI18nKey(value);
+        return value;
+      }
 
       value = getLocale(['common', ...pathSegments], null);
-      if(value !== null && value !== undefined) return value;
+      if(value !== null && value !== undefined){
+        if(looksLikeI18nKey(value)) return fallback !== undefined ? fallback : humanizeI18nKey(value);
+        return value;
+      }
     }
 
     if(fallback !== undefined) return fallback;

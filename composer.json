@@ -3,7 +3,9 @@
     "description": "Acore GM Panel for AzerothCore realms",
     "homepage": "https://github.com/bluegene-ai/AcoreGMPanel",
     "type": "project",
-    "require": {},
+    "require": {
+        "maxmind-db/reader": "^1.12"
+    },
     "autoload": {
         "psr-4": {
             "Acme\\Panel\\": "app/"

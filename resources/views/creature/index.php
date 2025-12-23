@@ -12,24 +12,11 @@
 <?php
 $serverParam = isset($_GET['server']) ? (int)$_GET['server'] : null;
 
+use Acme\Panel\Support\ConfigLocalization;
+
 $creatureCfg = include __DIR__.'/../../../config/creature.php';
 $creatureCfg = is_array($creatureCfg) ? $creatureCfg : [];
-if (!function_exists('creature_localize_config_value')) {
-  function creature_localize_config_value($value) {
-    if (is_array($value)) {
-      foreach ($value as $key => $item) {
-        $value[$key] = creature_localize_config_value($item);
-      }
-      return $value;
-    }
-    if (is_string($value) && strncmp($value, 'lang:', 5) === 0) {
-      $langKey = substr($value, 5);
-      return __($langKey);
-    }
-    return $value;
-  }
-}
-$creatureCfg = creature_localize_config_value($creatureCfg);
+$creatureCfg = ConfigLocalization::localizeArray($creatureCfg);
 $flagsConfig = $creatureCfg['flags'] ?? [];
 $FACTION_LABELS = $creatureCfg['factions'] ?? [];
 $NPCFLAG_LABELS = $flagsConfig['npcflag'] ?? [];

@@ -83,7 +83,7 @@
       <td><?= htmlspecialchars($r['sender_name'] ?? ('#'.($r['sender']??''))) ?></td>
       <td><?= htmlspecialchars($r['receiver_name'] ?? ('#'.($r['receiver']??''))) ?></td>
       <td><?= htmlspecialchars(mb_strimwidth($r['subject']??'',0,50,'...','UTF-8')) ?></td>
-      <td><?= (int)($r['money']??0) ?></td>
+      <td><?= htmlspecialchars(format_money_gsc($r['money'] ?? 0)) ?></td>
       <td><?= (int)($r['has_items']??0)===1 ? '<span class="badge">'.htmlspecialchars(__('app.mail.table.attachments.has')).'</span>' : '' ?></td>
       <td><?= htmlspecialchars($remainText) ?></td>
       <td><?= $unread ? '<span class="badge primary">'.htmlspecialchars(__('app.mail.table.status.unread')).'</span>' : '<span class="badge">'.htmlspecialchars(__('app.mail.table.status.read')).'</span>' ?></td>

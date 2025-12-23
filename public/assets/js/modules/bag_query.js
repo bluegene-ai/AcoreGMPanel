@@ -79,6 +79,9 @@
   const ctx=window.__BAG_QUERY_CTX||{};
   const ctxPrefill=ctx.prefill||null;
   const ctxAutoSearch=!!ctx.autoSearch;
+  const ctxEmbed = ctx.embed || null;
+  const ctxEmbedGuid = parseInt((ctx.embedGuid ?? (ctxEmbed && ctxEmbed.guid) ?? 0), 10) || 0;
+  const ctxEmbedName = (ctx.embedName ?? (ctxEmbed && ctxEmbed.name) ?? '');
   const ctxLabels = ctx.labels || {};
   const CLASS_META_FALLBACK = [
     [1,'warrior','Warrior'],
@@ -402,6 +405,12 @@
     bindSearch();
     bindFilter();
     updateItemsSubtitle();
+
+    // Embedded mode: allow other pages (e.g., character detail) to reuse the items list.
+    if(ctxEmbedGuid > 0){
+      loadItems(ctxEmbedGuid, ctxEmbedName || '').catch(()=>{});
+      return;
+    }
     applyPrefill().catch(()=>{});
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();

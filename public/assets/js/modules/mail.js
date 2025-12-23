@@ -167,7 +167,13 @@
     return `<span class="${cls}">${escapeHtml(label)}</span>`;
   }
   function formatMoney(value){
-    return Number(value || 0);
+    let amount = Number(value || 0);
+    if(!Number.isFinite(amount) || amount < 0) amount = 0;
+    amount = Math.floor(amount);
+    const gold = Math.floor(amount / 10000);
+    const silver = Math.floor((amount % 10000) / 100);
+    const copper = amount % 100;
+    return `${gold}金${silver}银${copper}铜`;
   }
 
   function selectedIds(){

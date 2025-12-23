@@ -255,16 +255,14 @@ class BagQueryRepository extends MultiServerRepository
             }
             $data=array_filter($data,static fn($v)=>$v!==null);
             $json=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-            $line=sprintf('[%s] bag.%s %s%s',date('Y-m-d H:i:s'),$event,$json?:'{}',PHP_EOL);
-            @file_put_contents($this->logFile,$line,FILE_APPEND);
+            $line=sprintf('[%s] bag.%s %s',date('Y-m-d H:i:s'),$event,$json?:'{}');
+            \Acme\Panel\Support\LogPath::appendTo($this->logFile, $line, true, 0777);
         } catch(Throwable $e){  }
     }
 
     private function logsDir(): string
     {
-        $dir=dirname(__DIR__,3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
-        if(!is_dir($dir)) @mkdir($dir,0777,true);
-        return $dir;
+        return \Acme\Panel\Support\LogPath::logsDir(true, 0777);
     }
 
     private function currentUser(): string

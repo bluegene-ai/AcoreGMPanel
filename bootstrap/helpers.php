@@ -91,3 +91,36 @@ if (!function_exists('__')) {
     }
 }
 
+if (!function_exists('format_datetime')) {
+    function format_datetime($value, string $format = 'Y-m-d H:i:s'): string
+    {
+        if ($value === null || $value === '' || $value === 0 || $value === '0') {
+            return '-';
+        }
+
+        if (is_numeric($value)) {
+            $ts = (int)$value;
+            if ($ts >= 1000000000) {
+                return date($format, $ts);
+            }
+        }
+
+        return (string)$value;
+    }
+}
+
+if (!function_exists('format_money_gsc')) {
+    function format_money_gsc($copper): string
+    {
+        $amount = is_numeric($copper) ? (int)$copper : 0;
+        if ($amount < 0) {
+            $amount = 0;
+        }
+
+        $gold = intdiv($amount, 10000);
+        $silver = intdiv($amount % 10000, 100);
+        $copperLeft = $amount % 100;
+        return $gold . '金' . $silver . '银' . $copperLeft . '铜';
+    }
+}
+

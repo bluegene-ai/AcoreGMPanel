@@ -1076,12 +1076,12 @@ class QuestAggregateService extends MultiServerRepository
             $ok ? '' : $error,
             $this->serverId
         );
-        @file_put_contents($file, $line.PHP_EOL, FILE_APPEND);
+        \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777);
     }
 
     private function logsDir(): string
     {
-        $dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
+        $dir = \Acme\Panel\Support\LogPath::logsDir(true, 0777);
         if(!is_dir($dir)){
             @mkdir($dir, 0777, true);
         }

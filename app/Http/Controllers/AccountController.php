@@ -31,7 +31,7 @@ use Acme\Panel\Core\{Controller,Request,Response,Lang};
 use Acme\Panel\Support\{Auth,Audit,Csrf,IpLocationService};
 use Acme\Panel\Support\SoapService;
 use Acme\Panel\Domain\Account\AccountRepository;
-use Acme\Panel\Support\{ServerContext,ServerList};
+use Acme\Panel\Support\{LogPath,ServerContext,ServerList};
 
 class AccountController extends Controller
 {
@@ -70,9 +70,21 @@ class AccountController extends Controller
         $this->maybeSwitchServer($request);
         $type = $request->input('search_type','username');
         $value = $request->input('search_value','');
+        $online = $request->input('online','any');
+        $ban = $request->input('ban','any');
+        $sort = (string)$request->input('sort','');
+        $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
+        if(!in_array($sort,$allowedSort,true)){
+            $sort = '';
+        }
+        $loadAll = ((int)$request->input('load_all', 0) === 1);
+        $filters = [
+            'online' => in_array($online,['online','offline'],true)?$online:'any',
+            'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
+        ];
         $page = (int)$request->input('page',1); $per=20;
-        $pager = $this->repo()->search($type,$value,$page,$per);
-    return $this->view('account.index',[ 'title'=>Lang::get('app.account.page_title'),'pager'=>$pager,'search_type'=>$type,'search_value'=>$value ]);
+        $pager = $this->repo()->search($type,$value,$page,$per,$filters,$loadAll,$sort);
+    return $this->view('account.index',[ 'title'=>Lang::get('app.account.page_title'),'pager'=>$pager,'search_type'=>$type,'search_value'=>$value,'filter_online'=>$filters['online'],'filter_ban'=>$filters['ban'], 'load_all'=>$loadAll, 'sort'=>$sort ]);
     }
 
     public function login(Request $request): Response
@@ -102,7 +114,19 @@ class AccountController extends Controller
     {
     if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
         $this->maybeSwitchServer($request);
-        $pager=$this->repo()->search($request->input('search_type','username'),$request->input('search_value',''),(int)$request->input('page',1),20);
+        $online = $request->input('online','any');
+        $ban = $request->input('ban','any');
+        $sort = (string)$request->input('sort','');
+        $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
+        if(!in_array($sort,$allowedSort,true)){
+            $sort = '';
+        }
+        $loadAll = ((int)$request->input('load_all', 0) === 1);
+        $filters = [
+            'online' => in_array($online,['online','offline'],true)?$online:'any',
+            'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
+        ];
+        $pager=$this->repo()->search($request->input('search_type','username'),$request->input('search_value',''),(int)$request->input('page',1),20,$filters,$loadAll,$sort);
         return $this->json(['success'=>true,'page'=>$pager->page,'pages'=>$pager->pages,'total'=>$pager->total,'items'=>$pager->items]);
     }
 
@@ -350,8 +374,6 @@ class AccountController extends Controller
     private function logAccountAction(string $action, string $stage, array $context = []): void
     {
         try {
-            $logDir = dirname(__DIR__,3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
-            if(!is_dir($logDir)) @mkdir($logDir,0777,true);
             if(!array_key_exists('ip',$context)){
                 $context['ip'] = $_SERVER['REMOTE_ADDR'] ?? '';
             }
@@ -360,8 +382,8 @@ class AccountController extends Controller
                 'server' => ServerContext::currentId(),
             ];
             $payload = array_merge($base,$context);
-            $line = sprintf('[%s] %s.%s %s'.PHP_EOL,date('Y-m-d H:i:s'),$action,$stage,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-            @file_put_contents($logDir.DIRECTORY_SEPARATOR.'account_actions.log',$line,FILE_APPEND);
+            $line = sprintf('[%s] %s.%s %s',date('Y-m-d H:i:s'),$action,$stage,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+            LogPath::appendLine('account_actions.log', $line, true, 0777);
         } catch(\Throwable $e){  }
     }
 

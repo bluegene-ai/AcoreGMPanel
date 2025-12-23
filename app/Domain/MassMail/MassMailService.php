@@ -97,7 +97,9 @@ class MassMailService
         $this->actionLogFile = $baseStorage.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.'massmail_actions.log';
         $this->itemCacheFile  = $baseStorage.DIRECTORY_SEPARATOR.'cache'.DIRECTORY_SEPARATOR.'massmail_item_names.json';
         $this->loadItemCache();
-        $this->ensureLogTable(); $this->migrateAddServerIdColumn();
+        $this->ensureLogTable();
+        $this->migrateAddServerIdColumn();
+        $this->migrateAddItemsColumn();
     }
 
 
@@ -123,7 +125,7 @@ class MassMailService
         return ['success'=>$ok,'message'=>$ok?__('app.mass_mail.service.announce.success'):__('app.mass_mail.service.announce.partial'),'types'=>$sent,'errors'=>$errors];
     }
 
-    public function sendBulk(string $action,string $subject,string $body,array $targets, ?int $itemId=null, ?int $qty=null, ?int $amount=null): array
+    public function sendBulk(string $action,string $subject,string $body,array $targets, string $itemsRaw = '', ?int $amount=null): array
     {
         $subject=trim($subject); if($subject==='') return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.subject_required')];
         $body=trim((string)$body);
@@ -131,12 +133,22 @@ class MassMailService
         if(!$targets) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.no_targets')];
         $total=count($targets);
         if($total>$this->targetMax) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.target_limit',['max'=>$this->targetMax])];
-        if($action==='send_item'){
-            if(!$itemId || $itemId<=0 || !$qty || $qty<=0) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.item_invalid')];
 
-            if(!$this->validateItemExists($itemId)) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.item_missing',['id'=>$itemId])];
+        $items = [];
+        if($action==='send_item' || $action==='send_item_gold'){
+            $items = $this->parseItems($itemsRaw);
+            if(!$items) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.items_invalid')];
+            foreach($items as $it){
+                if(!$this->validateItemExists($it['id'])){
+                    return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.item_missing',['id'=>$it['id']])];
+                }
+            }
         }
-        if($action==='send_gold'){ if(!$amount || $amount<=0) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.gold_invalid')]; }
+        if($action==='send_gold' || $action==='send_item_gold'){
+            if(!$amount || $amount<=0) return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.gold_invalid')];
+        }
+
+        $itemString = $items ? implode(' ', array_map(fn($it)=>$it['id'].':'.$it['qty'], $items)) : '';
 
 
         $success=0; $fail=0; $errors=[]; $sentNames=[]; $failedNames=[];
@@ -146,14 +158,41 @@ class MassMailService
             $batchIndex++;
             foreach($chunk as $name){
                 try {
-                    $cmd='';
-                    if($action==='send_mail') $cmd=sprintf('.send mail %s "%s" "%s"',$name,$subject,$body);
-                    elseif($action==='send_item') $cmd=sprintf('.send items %s "%s" "%s" %d:%d',$name,$subject,$body,$itemId,$qty);
-                    elseif($action==='send_gold') $cmd=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
-                    else return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.unknown_action')];
-                    $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
-                    if($res['success']) { $success++; $sentNames[]=$name; }
-                    else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
+                    if($action==='send_mail'){
+                        $cmd=sprintf('.send mail %s "%s" "%s"',$name,$subject,$body);
+                        $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
+                    }
+                    elseif($action==='send_item'){
+                        $cmd=sprintf('.send items %s "%s" "%s" %s',$name,$subject,$body,$itemString);
+                        $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
+                    }
+                    elseif($action==='send_gold'){
+                        $cmd=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
+                        $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
+                    }
+                    elseif($action==='send_item_gold'){
+                        $cmdItems=sprintf('.send items %s "%s" "%s" %s',$name,$subject,$body,$itemString);
+                        $resItems = $this->soapExec->execute($cmdItems,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        $cmdGold=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
+                        $resGold = $this->soapExec->execute($cmdGold,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        $ok = ($resItems['success'] ?? false) && ($resGold['success'] ?? false);
+                        if($ok){
+                            $success++; $sentNames[]=$name;
+                        } else {
+                            $fail++; $failedNames[]=$name;
+                            if(!($resItems['success'] ?? false)) $errors[]=$name.'[items]:'.($resItems['message'] ?? $resItems['code'] ?? 'fail');
+                            if(!($resGold['success'] ?? false)) $errors[]=$name.'[gold]:'.($resGold['message'] ?? $resGold['code'] ?? 'fail');
+                        }
+                    }
+                    else {
+                        return ['success'=>false,'message'=>__('app.mass_mail.service.bulk.unknown_action')];
+                    }
                 } catch(Throwable $e){ $fail++; $failedNames[]=$name; $errors[]=$name.':'.$e->getMessage(); }
             }
 
@@ -171,9 +210,10 @@ class MassMailService
             ['errors'=>implode(' | ',array_slice($errors,0,3))]
         );
         $ok = $fail===0;
-    $this->logBulk($action,$subject,$itemId,$qty,$amount,$total,$success,$fail,$errors,$sentNames,$failedNames);
-    Audit::log('massmail',$action,'bulk',[ 'targets'=>$total,'success_count'=>$success,'fail_count'=>$fail,'item_id'=>$itemId,'qty'=>$qty,'amount'=>$amount,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'sample_errors'=>array_slice($errors,0,3), 'server_id'=>$this->serverId ]);
-        $this->appendActionLog($action,$success,$fail,$itemId??0,$amount??0,$subject);
+        $itemsSummary = $items ? implode(' ', array_map(fn($it)=>$it['id'].':'.$it['qty'], $items)) : null;
+        $this->logBulk($action,$subject,$itemsSummary,$amount,$total,$success,$fail,$errors,$sentNames,$failedNames);
+        Audit::log('massmail',$action,'bulk',[ 'targets'=>$total,'success_count'=>$success,'fail_count'=>$fail,'items'=>$itemsSummary,'amount'=>$amount,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'sample_errors'=>array_slice($errors,0,3), 'server_id'=>$this->serverId ]);
+        $this->appendActionLog($action,$success,$fail,0,$amount??0,$subject);
         return ['success'=>$ok,'message'=>$msg,'success_count'=>$success,'fail_count'=>$fail,'batches'=>$batchTotal,'batch_size'=>$this->batchSize];
     }
 
@@ -242,7 +282,7 @@ class MassMailService
     }
 
     public function recentLogs(int $limit=30): array
-    { $limit=max(1,min($limit,100)); $st=$this->chars->prepare("SELECT id,created_at,action,subject,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors FROM {$this->logTable} ORDER BY id DESC LIMIT :lim"); $st->bindValue(':lim',$limit,PDO::PARAM_INT); $st->execute(); return $st->fetchAll(PDO::FETCH_ASSOC)?:[]; }
+    { $limit=max(1,min($limit,100)); $st=$this->chars->prepare("SELECT id,created_at,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors FROM {$this->logTable} ORDER BY id DESC LIMIT :lim"); $st->bindValue(':lim',$limit,PDO::PARAM_INT); $st->execute(); return $st->fetchAll(PDO::FETCH_ASSOC)?:[]; }
 
 
     private function buildBoostItems(string $classKey): array
@@ -308,6 +348,7 @@ class MassMailService
             " created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,".
             " action VARCHAR(16) NOT NULL,".
             " subject VARCHAR(120) NOT NULL,".
+            " items TEXT NULL,".
             " item_id INT NULL,".
             " item_name VARCHAR(160) NULL,".
             " quantity INT NULL,".
@@ -326,17 +367,28 @@ class MassMailService
     }
 
     private function logAnnounce(string $content,bool $ok,array $errors): void
-    { $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"); $sample=$errors?implode(' | ',array_slice($errors,0,3)):null; $st->execute([$this->serverId,'announce',mb_substr($content,0,120),null,null,null,null,0,$ok?1:0,$ok?0:1,$ok?1:0,null,$sample]); }
+    { $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"); $sample=$errors?implode(' | ',array_slice($errors,0,3)):null; $st->execute([$this->serverId,'announce',mb_substr($content,0,120),null,null,null,null,null,0,$ok?1:0,$ok?0:1,$ok?1:0,null,$sample]); }
 
-    private function logBulk(string $action,string $subject,?int $itemId,?int $qty,?int $amount,int $targets,int $success,int $fail,array $errors,array $sent,array $failed): void
+    private function logBulk(string $action,string $subject,?string $items,?int $amount,int $targets,int $success,int $fail,array $errors,array $sent,array $failed): void
     {
-        $itemName=$this->resolveItemName($itemId);
-    $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+        $itemId = null;
+        $qty = null;
+        $itemName = null;
+        // Best-effort: keep legacy columns for single-item sends
+        if($items){
+            $first = preg_split('/\s+/', trim($items))[0] ?? '';
+            if(preg_match('/^(\d+):(\d+)$/', $first, $m)){
+                $itemId = (int)$m[1];
+                $qty = (int)$m[2];
+                $itemName = $this->resolveItemName($itemId);
+            }
+        }
+    $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
         $sample=$errors?implode(' | ',array_slice($errors,0,3)):null; $recipients=null;
-        if(in_array($action,['send_mail','send_item','send_gold'],true)){
+        if(in_array($action,['send_mail','send_item','send_gold','send_item_gold'],true)){
             $markFailed=array_map(fn($n)=>$n.'!',$failed); $list=array_merge($sent,$markFailed); $list=array_values(array_unique($list)); $recipients=implode(',',$list); if(mb_strlen($recipients)>800){ $recipients=mb_substr($recipients,0,800); $pos=mb_strrpos($recipients,','); if($pos!==false) $recipients=mb_substr($recipients,0,$pos).',...'; }
         }
-    $st->execute([$this->serverId,$action,mb_substr($subject,0,120),$itemId,$itemName,$qty,$amount,$targets,$success,$fail,$fail===0?1:0,$recipients,$sample]);
+    $st->execute([$this->serverId,$action,mb_substr($subject,0,120),$items?mb_substr($items,0,800):null,$itemId,$itemName,$qty,$amount,$targets,$success,$fail,$fail===0?1:0,$recipients,$sample]);
     }
 
     private function resolveItemName(?int $itemId): ?string
@@ -351,10 +403,40 @@ class MassMailService
     { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>3000){ $this->itemNameCache=array_slice($this->itemNameCache,-2500,null,true); } $dir=dirname($this->itemCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
 
     private function appendActionLog(string $action,int $successOrCount,int $fail,int $itemId,int $amount,string $subject): void
-    { $dir=dirname($this->actionLogFile); if(!is_dir($dir)) @mkdir($dir,0777,true); $user=$_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); @file_put_contents($this->actionLogFile,$line.PHP_EOL,FILE_APPEND); }
+    { $user=$_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); \Acme\Panel\Support\LogPath::appendTo($this->actionLogFile, $line, true, 0777); }
 
     private function migrateAddServerIdColumn(): void
     { try { $chk=$this->chars->query("SHOW COLUMNS FROM {$this->logTable} LIKE 'server_id'"); if(!$chk->fetch()){ $this->chars->exec("ALTER TABLE {$this->logTable} ADD server_id INT NOT NULL DEFAULT 0 AFTER id, ADD KEY idx_server(server_id)"); } }catch(\Throwable $e){} }
+
+    private function migrateAddItemsColumn(): void
+    {
+        try {
+            $chk=$this->chars->query("SHOW COLUMNS FROM {$this->logTable} LIKE 'items'");
+            if(!$chk->fetch()){
+                $this->chars->exec("ALTER TABLE {$this->logTable} ADD items TEXT NULL AFTER subject");
+            }
+        } catch(\Throwable $e){}
+    }
+
+    private function parseItems(string $raw): array
+    {
+        $raw = trim($raw);
+        if($raw==='') return [];
+        $tokens = preg_split('/[\s,;]+|\r\n|\r|\n/', $raw);
+        $items = [];
+        foreach($tokens as $tok){
+            $tok = trim((string)$tok);
+            if($tok==='') continue;
+            if(!preg_match('/^(\d+)\s*:\s*(\d+)$/', $tok, $m)){
+                return [];
+            }
+            $id = (int)$m[1];
+            $qty = (int)$m[2];
+            if($id<=0 || $qty<=0) return [];
+            $items[] = ['id'=>$id,'qty'=>$qty];
+        }
+        return $items;
+    }
 
     private function validateItemExists(int $itemId): bool
     { if($itemId<=0) return false; if(!$this->world) return true; try{ $st=$this->world->prepare('SELECT 1 FROM item_template WHERE entry=:i LIMIT 1'); $st->execute([':i'=>$itemId]); return (bool)$st->fetchColumn(); }catch(\Throwable $e){ return true; } }

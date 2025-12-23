@@ -7,26 +7,12 @@
  */
 
   $module='creature';
+  use Acme\Panel\Support\ConfigLocalization;
   include __DIR__.'/../layouts/base_top.php';
   $id=(int)$creature['entry'];
   $creatureCfg = include __DIR__.'/../../../config/creature.php';
   $creatureCfg = is_array($creatureCfg) ? $creatureCfg : [];
-  if (!function_exists('creature_localize_config_value')) {
-    function creature_localize_config_value($value) {
-      if (is_array($value)) {
-        foreach ($value as $key => $item) {
-          $value[$key] = creature_localize_config_value($item);
-        }
-        return $value;
-      }
-      if (is_string($value) && strncmp($value, 'lang:', 5) === 0) {
-        $langKey = substr($value, 5);
-        return __($langKey);
-      }
-      return $value;
-    }
-  }
-  $creatureCfg = creature_localize_config_value($creatureCfg);
+  $creatureCfg = ConfigLocalization::localizeArray($creatureCfg);
   $groups = $creatureCfg['groups'] ?? [];
   $rankEnum=[
     0=>__('app.creature.edit.rank_enum.0'),

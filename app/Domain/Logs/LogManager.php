@@ -31,6 +31,7 @@ namespace Acme\Panel\Domain\Logs;
 
 use Acme\Panel\Support\ConfigLocalization;
 use Acme\Panel\Core\Lang;
+use Acme\Panel\Support\LogPath;
 use InvalidArgumentException;
 
 class LogManager
@@ -52,7 +53,7 @@ class LogManager
         $this->defaults['limit'] = $this->sanitizeLimit((int)($this->defaults['limit'] ?? 200));
         $maxLimit = (int)($this->defaults['max_limit'] ?? 500);
         $this->defaults['max_limit'] = $maxLimit > 0 ? $maxLimit : 500;
-        $this->logDir = $this->resolvePath('storage/logs');
+        $this->logDir = LogPath::logsDir(true, 0777);
     }
 
     public function defaults(): array

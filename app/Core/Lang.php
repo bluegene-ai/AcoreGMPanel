@@ -28,6 +28,8 @@ final class Lang
 
     private static array $cache = [];
 
+    private static array $cacheMtime = [];
+
 
     private static array $available = [];
 
@@ -140,12 +142,23 @@ final class Lang
     private static function loadFile(string $locale, string $file): ?array
     {
         $cacheKey = $locale . ':' . $file;
-        if (array_key_exists($cacheKey, self::$cache)) {
+        $path = dirname(__DIR__, 2) . '/resources/lang/' . $locale . '/' . $file . '.php';
+
+        $mtime = 0;
+        if (is_file($path)) {
+            $mtime = (int) (filemtime($path) ?: 0);
+        }
+
+        if (array_key_exists($cacheKey, self::$cache)
+            && array_key_exists($cacheKey, self::$cacheMtime)
+            && self::$cacheMtime[$cacheKey] === $mtime
+        ) {
             return self::$cache[$cacheKey];
         }
-        $path = dirname(__DIR__, 2) . '/resources/lang/' . $locale . '/' . $file . '.php';
+
         if (!is_file($path)) {
             self::$cache[$cacheKey] = null;
+            self::$cacheMtime[$cacheKey] = 0;
             return null;
         }
         $data = require $path;
@@ -153,6 +166,7 @@ final class Lang
             $data = self::normalizeAppSections($locale, $data);
         }
         self::$cache[$cacheKey] = is_array($data) ? $data : null;
+        self::$cacheMtime[$cacheKey] = $mtime;
         return self::$cache[$cacheKey];
     }
 

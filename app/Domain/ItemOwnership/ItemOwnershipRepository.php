@@ -674,11 +674,7 @@ class ItemOwnershipRepository extends MultiServerRepository
 
     private function logsDir(): string
     {
-        $dir = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
-        }
-        return $dir;
+        return \Acme\Panel\Support\LogPath::logsDir(true, 0777);
     }
 
     private function logAction(string $action, array $context, ?string $summary = null): void
@@ -697,8 +693,8 @@ class ItemOwnershipRepository extends MultiServerRepository
                 $data['message'] = ucfirst($action) . ' action executed';
             }
             $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $line = sprintf('[%s] item_owner.%s %s%s', date('Y-m-d H:i:s'), $action, $json ?: '{}', PHP_EOL);
-            @file_put_contents($this->logFile, $line, FILE_APPEND);
+            $line = sprintf('[%s] item_owner.%s %s', date('Y-m-d H:i:s'), $action, $json ?: '{}');
+            \Acme\Panel\Support\LogPath::appendTo($this->logFile, $line, true, 0777);
         } catch (Throwable $e) {
 
         }

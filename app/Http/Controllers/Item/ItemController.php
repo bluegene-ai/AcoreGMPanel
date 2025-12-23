@@ -23,7 +23,7 @@ namespace Acme\Panel\Http\Controllers\Item;
 
 use Acme\Panel\Core\{Controller,Request,Response,ItemMeta,Lang};
 use Acme\Panel\Domain\Item\ItemRepository;
-use Acme\Panel\Support\{ServerContext,ServerList};
+use Acme\Panel\Support\{LogPath,ServerContext,ServerList};
 use Acme\Panel\Support\Auth;
 
 class ItemController extends Controller
@@ -88,7 +88,7 @@ class ItemController extends Controller
             return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.log_type_unknown')],422);
         }
         $file=$map[$type];
-        $path=dirname(__DIR__,4).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.$file;
+        $path = LogPath::logFile($file, false);
         $lines=[]; if(is_file($path)){ $content=file($path, FILE_IGNORE_NEW_LINES); $lines=array_slice($content,-$limit); }
         return $this->json(['success'=>true,'type'=>$type,'logs'=>$lines]);
     }

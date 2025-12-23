@@ -74,22 +74,99 @@ class AccountRepository extends MultiServerRepository
         $this->accountColumnTypes = [];
     }
 
-    public function search(string $type,string $value,int $page,int $perPage): Paginator
+    public function search(string $type,string $value,int $page,int $perPage,array $filters = [], bool $loadAll = false, string $sort = ''): Paginator
     {
-        $value=trim($value); if($value==='') return new Paginator([],0,$page,$perPage);
-        $where=''; $param=[];
-    if($type==='id'){ $where='WHERE a.id = :v'; $param[':v']=(int)$value; }
-    else { $where='WHERE a.username LIKE :v'; $param[':v']='%'.$value.'%'; }
-    $cnt=$this->authPdo->prepare("SELECT COUNT(*) FROM account a $where");
-        $cnt->execute($param); $total=(int)$cnt->fetchColumn();
+        $value = trim($value);
+        $filters = $filters ?: [];
+
+        $sort = (string)$sort;
+
+        $onlineFilter = $filters['online'] ?? 'any';
+        $banFilter = $filters['ban'] ?? 'any';
+
+        $hasOnlineFilter = in_array($onlineFilter, ['online','offline'], true);
+        $hasBanFilter = in_array($banFilter, ['banned','unbanned'], true);
+
+        $hasCriteria = $loadAll || ($value !== '') || $hasOnlineFilter || $hasBanFilter;
+        if(!$hasCriteria){ return new Paginator([],0,$page,$perPage); }
+
+        $wheres = [];
+        $param = [];
+
+        if($value !== ''){
+            if($type === 'id'){
+                $wheres[] = 'a.id = :v';
+                $param[':v'] = (int)$value;
+            } else {
+                $wheres[] = 'a.username LIKE :v';
+                $param[':v'] = '%'.$value.'%';
+            }
+        }
+
+        $onlineColumn = $this->hasColumn('online') ? $this->columnName('online') : null;
+        if($hasOnlineFilter){
+            if($onlineColumn){
+                $col = '`'.str_replace('`','``',$onlineColumn).'`';
+                if($onlineFilter === 'online'){
+                    $wheres[] = "a.$col = 1";
+                } elseif($onlineFilter === 'offline'){
+                    $wheres[] = "a.$col = 0";
+                }
+            } else {
+                try {
+                    $charsPdo = $this->characters();
+                    $onlineIds = $charsPdo->query('SELECT DISTINCT account FROM characters WHERE online=1')->fetchAll(PDO::FETCH_COLUMN,0);
+                    $onlineIds = array_values(array_unique(array_map('intval',$onlineIds)));
+                    if($onlineFilter === 'online'){
+                        if(!$onlineIds){ return new Paginator([],0,$page,$perPage); }
+                        $ph = [];
+                        foreach($onlineIds as $idx=>$id){ $key=':on'.$idx; $ph[]=$key; $param[$key]=$id; }
+                        $wheres[] = 'a.id IN ('.implode(',',$ph).')';
+                    } elseif($onlineFilter === 'offline' && $onlineIds){
+                        $ph = [];
+                        foreach($onlineIds as $idx=>$id){ $key=':off'.$idx; $ph[]=$key; $param[$key]=$id; }
+                        $wheres[] = 'a.id NOT IN ('.implode(',',$ph).')';
+                    }
+                } catch(\Throwable $e){ }
+            }
+        }
+
+        if($hasBanFilter){
+            $banSql = 'EXISTS (SELECT 1 FROM account_banned b WHERE b.id=a.id AND b.active=1 AND (b.unbandate=0 OR b.unbandate>UNIX_TIMESTAMP()))';
+            if($banFilter === 'banned'){
+                $wheres[] = $banSql;
+            } elseif($banFilter === 'unbanned'){
+                $wheres[] = 'NOT '.$banSql;
+            }
+        }
+
+        $where = $wheres ? 'WHERE '.implode(' AND ',$wheres) : '';
+
+        $cnt = $this->authPdo->prepare("SELECT COUNT(*) FROM account a $where");
+        foreach($param as $k=>$v){ $cnt->bindValue($k,$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
+        $cnt->execute(); $total=(int)$cnt->fetchColumn();
         $offset=($page-1)*$perPage;
 
+        $orderMap = [
+            '' => 'a.id DESC',
+            'id_desc' => 'a.id DESC',
+            'id_asc' => 'a.id ASC',
+            'last_login_desc' => 'a.last_login DESC, a.id DESC',
+            'last_login_asc' => 'a.last_login ASC, a.id ASC',
+        ];
+        if($onlineColumn){
+            $col = '`'.str_replace('`','``',$onlineColumn).'`';
+            $orderMap['online_desc'] = "a.$col DESC, a.id DESC";
+            $orderMap['online_asc'] = "a.$col ASC, a.id ASC";
+        }
+        $orderBy = $orderMap[$sort] ?? $orderMap[''];
 
-        $sql="SELECT a.id,a.username,aa.gmlevel,a.last_login,a.last_ip
+        $selectOnline = $onlineColumn ? ', a.`'.str_replace('`','``',$onlineColumn).'` AS account_online' : '';
+        $sql="SELECT a.id,a.username,aa.gmlevel,a.last_login,a.last_ip{$selectOnline}
               FROM account a
               LEFT JOIN account_access aa ON aa.id=a.id
-              $where ORDER BY a.id DESC LIMIT :limit OFFSET :offset";
-    $st=$this->authPdo->prepare($sql);
+              $where ORDER BY $orderBy LIMIT :limit OFFSET :offset";
+        $st=$this->authPdo->prepare($sql);
         foreach($param as $k=>$v){ $st->bindValue($k,$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
         $st->bindValue(':limit',$perPage,PDO::PARAM_INT);
         $st->bindValue(':offset',$offset,PDO::PARAM_INT);
@@ -98,8 +175,10 @@ class AccountRepository extends MultiServerRepository
 
         if(!$rows){ return new Paginator([],0,$page,$perPage); }
 
-
-        $ids=[]; foreach($rows as &$r){ $r['online']=0; $ids[]=(int)$r['id']; }
+        $ids=[]; foreach($rows as &$r){
+            $r['online']=isset($r['account_online'])?(int)$r['account_online']:0; unset($r['account_online']);
+            $ids[]=(int)$r['id'];
+        }
         unset($r);
 
         try {

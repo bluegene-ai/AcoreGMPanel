@@ -7,28 +7,33 @@
  * Functions:
  *   - __construct()
  *   - lookup()
- *   - cachePath()
- *   - readCache()
- *   - writeCache()
- *   - fetchFromProvider()
+ *   - lookupMmdb()
+ *   - lookupMmdbViaExtension()
+ *   - pickName()
  *   - isPrivate()
  */
 
 namespace Acme\Panel\Support;
 
+use Acme\Panel\Core\Config;
 use Acme\Panel\Core\Lang;
 
 class IpLocationService
 {
-    private string $cacheDir;
-    private int $ttl;
-    private string $provider;
+    private string $driver;
+    private string $mmdbPath;
+    private string $locale;
+    private $reader = null;
+    private $mmdbHandle = null;
 
-    public function __construct(?string $cacheDir = null, ?int $ttlSeconds = null)
+    public function __construct(?string $mmdbPath = null, ?string $locale = null)
     {
-    $this->cacheDir = $cacheDir ?? dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'ip_geo';
-        $this->ttl = $ttlSeconds ?? 86400;
-        $this->provider = 'ip-api';
+        $this->driver = (string)Config::get('ip_location.driver', 'mmdb');
+        $this->mmdbPath = $mmdbPath ?? (string)Config::get(
+            'ip_location.mmdb_path',
+            dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'ip_geo' . DIRECTORY_SEPARATOR . 'GeoLite2-City.mmdb'
+        );
+        $this->locale = $locale ?? (string)Config::get('ip_location.locale', 'zh-CN');
     }
 
     public function lookup(string $ip): array
@@ -44,111 +49,197 @@ class IpLocationService
             return ['success' => false, 'message' => Lang::get('app.support.ip_location.errors.invalid')];
         }
 
-        $now = time();
-        $path = $this->cachePath($ip);
-        $cached = $this->readCache($path);
-        if ($cached && ($cached['expires_at'] ?? 0) >= $now) {
-            return ['success' => true, 'text' => $cached['text'] ?? Lang::get('app.support.ip_location.labels.unknown'), 'cached' => true, 'provider' => $cached['provider'] ?? $this->provider];
+        $result = $this->lookupMmdb($ip);
+        if ($result !== null) {
+            return $result;
         }
 
-        [$text, $raw, $error] = $this->fetchFromProvider($ip);
-        if ($text === null) {
-            if ($cached) {
-                return [
-                    'success' => true,
-                    'text' => $cached['text'] ?? Lang::get('app.support.ip_location.labels.unknown'),
-                    'cached' => true,
-                    'provider' => $cached['provider'] ?? $this->provider,
-                    'stale' => true,
-                    'message' => $error ?? Lang::get('app.support.ip_location.errors.failed'),
-                ];
-            }
-            return ['success' => false, 'message' => $error ?? Lang::get('app.support.ip_location.errors.failed')];
-        }
-
-        $payload = [
-            'ip' => $ip,
-            'text' => $text,
-            'provider' => $this->provider,
-            'fetched_at' => $now,
-            'expires_at' => $now + $this->ttl,
-            'raw' => $raw,
+        // Non-fatal fallback: keep UI usable even if mmdb is not configured.
+        return [
+            'success' => true,
+            'text' => Lang::get('app.support.ip_location.labels.unknown'),
+            'cached' => true,
+            'provider' => 'mmdb',
+            'message' => Lang::get('app.support.ip_location.errors.mmdb_unavailable'),
         ];
-        $this->writeCache($path, $payload);
-
-        return ['success' => true, 'text' => $text, 'cached' => false, 'provider' => $this->provider];
     }
 
-    private function cachePath(string $ip): string
+    private function lookupMmdb(string $ip): ?array
     {
-        $hash = sha1($ip);
-        return $this->cacheDir . DIRECTORY_SEPARATOR . substr($hash, 0, 2) . DIRECTORY_SEPARATOR . $hash . '.json';
-    }
-
-    private function readCache(string $path): ?array
-    {
-        if (!is_file($path)) return null;
-        try {
-            $raw = file_get_contents($path);
-            if ($raw === false) return null;
-            $data = json_decode($raw, true);
-            return is_array($data) ? $data : null;
-        } catch (\Throwable $e) {
+        if ($this->driver !== 'mmdb') {
             return null;
         }
-    }
 
-    private function writeCache(string $path, array $data): void
-    {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+        // Prefer the PHP extension if available (no Composer/vendor needed).
+        if (function_exists('maxminddb_open') && function_exists('maxminddb_get')) {
+            return $this->lookupMmdbViaExtension($ip);
         }
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($json === false) return;
-        @file_put_contents($path, $json, LOCK_EX);
-    }
 
-    private function fetchFromProvider(string $ip): array
-    {
-        $url = 'http://ip-api.com/json/' . rawurlencode($ip) . '?lang=zh-CN';
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 3,
-                'ignore_errors' => true,
-                'header' => [
-                    'Accept: application/json',
-                    'User-Agent: AcoreGMPanel/1.0 (+https://github.com/bluegene-ai/AcoreGMPanel)'
-                ]
-            ],
-        ]);
+        if (!class_exists('MaxMind\\Db\\Reader')) {
+            return [
+                'success' => true,
+                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'cached' => true,
+                'provider' => 'mmdb',
+                'message' => Lang::get('app.support.ip_location.errors.mmdb_reader_missing'),
+            ];
+        }
+        if (!is_file($this->mmdbPath)) {
+            return [
+                'success' => true,
+                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'cached' => true,
+                'provider' => 'mmdb',
+                'message' => Lang::get('app.support.ip_location.errors.mmdb_file_missing'),
+            ];
+        }
+
         try {
-            $body = @file_get_contents($url, false, $context);
-            if ($body === false) {
-                return [null, null, Lang::get('app.support.ip_location.errors.provider_unreachable')];
+            if ($this->reader === null) {
+                $cls = 'MaxMind\\Db\\Reader';
+                $this->reader = new $cls($this->mmdbPath);
             }
-            $decoded = json_decode($body, true);
-            if (!is_array($decoded)) {
-                return [null, $body, Lang::get('app.support.ip_location.errors.response_invalid')];
+            $record = $this->reader->get($ip);
+            if (!is_array($record)) {
+                return [
+                    'success' => true,
+                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'cached' => false,
+                    'provider' => 'mmdb',
+                ];
             }
-            if (($decoded['status'] ?? '') !== 'success') {
-                $msg = $decoded['message'] ?? ('status=' . ($decoded['status'] ?? 'unknown'));
-                return [null, $decoded, Lang::get('app.support.ip_location.errors.failed_reason', ['message'=>$msg])];
-            }
-            $parts = [];
-            $country = trim((string)($decoded['country'] ?? ''));
-            $region = trim((string)($decoded['regionName'] ?? ''));
-            $city = trim((string)($decoded['city'] ?? ''));
-            $isp = trim((string)($decoded['isp'] ?? ''));
-            if ($country !== '') $parts[] = $country;
-            if ($region !== '' && (!count($parts) || $parts[count($parts)-1] !== $region)) $parts[] = $region;
-            if ($city !== '' && (!count($parts) || $parts[count($parts)-1] !== $city)) $parts[] = $city;
-            if (!count($parts) && $isp !== '') $parts[] = $isp;
-            $text = count($parts) ? implode(' ', $parts) : Lang::get('app.support.ip_location.labels.unknown');
-            return [$text, $decoded, null];
+
+            $text = $this->formatLocationFromRecord($record);
+            return [
+                'success' => true,
+                'text' => $text,
+                'cached' => false,
+                'provider' => 'mmdb',
+            ];
         } catch (\Throwable $e) {
-            return [null, null, Lang::get('app.support.ip_location.errors.failed_reason', ['message'=>$e->getMessage()])];
+            return [
+                'success' => true,
+                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'cached' => true,
+                'provider' => 'mmdb',
+                'message' => Lang::get('app.support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
+            ];
         }
+    }
+
+    private function lookupMmdbViaExtension(string $ip): array
+    {
+        if (!is_file($this->mmdbPath)) {
+            return [
+                'success' => true,
+                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'cached' => true,
+                'provider' => 'mmdb',
+                'message' => Lang::get('app.support.ip_location.errors.mmdb_file_missing'),
+            ];
+        }
+        try {
+            if ($this->mmdbHandle === null) {
+                $this->mmdbHandle = @maxminddb_open($this->mmdbPath);
+            }
+            if (!$this->mmdbHandle) {
+                return [
+                    'success' => true,
+                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'cached' => true,
+                    'provider' => 'mmdb',
+                    'message' => Lang::get('app.support.ip_location.errors.mmdb_open_failed'),
+                ];
+            }
+            $record = @maxminddb_get($this->mmdbHandle, $ip);
+            if (!is_array($record)) {
+                return [
+                    'success' => true,
+                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'cached' => false,
+                    'provider' => 'mmdb',
+                ];
+            }
+
+            $text = $this->formatLocationFromRecord($record);
+            return [
+                'success' => true,
+                'text' => $text,
+                'cached' => false,
+                'provider' => 'mmdb',
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => true,
+                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'cached' => true,
+                'provider' => 'mmdb',
+                'message' => Lang::get('app.support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
+            ];
+        }
+    }
+
+    private function pickName($names, string $preferredLocale): ?string
+    {
+        if (!is_array($names) || !$names) return null;
+        if ($preferredLocale !== '' && isset($names[$preferredLocale]) && is_string($names[$preferredLocale])) {
+            return $names[$preferredLocale];
+        }
+        if (isset($names['zh-CN']) && is_string($names['zh-CN'])) return $names['zh-CN'];
+        if (isset($names['en']) && is_string($names['en'])) return $names['en'];
+        foreach ($names as $v) {
+            if (is_string($v) && trim($v) !== '') return $v;
+        }
+        return null;
+    }
+
+    private function formatLocationFromRecord(array $record): string
+    {
+        // Format 1: Standard MaxMind GeoIP2 schema (GeoLite2-City).
+        $loc = $this->locale !== '' ? $this->locale : 'zh-CN';
+        $hasGeoip2 = (isset($record['country']) && is_array($record['country']))
+            || (isset($record['city']) && is_array($record['city']))
+            || (isset($record['subdivisions']) && is_array($record['subdivisions']));
+        if ($hasGeoip2) {
+            $country = $this->pickName($record['country']['names'] ?? null, $loc);
+            $region = null;
+            if (!empty($record['subdivisions']) && is_array($record['subdivisions'])) {
+                $first = $record['subdivisions'][0] ?? null;
+                if (is_array($first)) {
+                    $region = $this->pickName($first['names'] ?? null, $loc);
+                }
+            }
+            $city = $this->pickName($record['city']['names'] ?? null, $loc);
+            $parts = [];
+            foreach ([$country, $region, $city] as $p) {
+                $p = trim((string)$p);
+                if ($p === '') continue;
+                if (!count($parts) || $parts[count($parts) - 1] !== $p) {
+                    $parts[] = $p;
+                }
+            }
+            return count($parts) ? implode(' ', $parts) : Lang::get('app.support.ip_location.labels.unknown');
+        }
+
+        // Format 2: Common CN-only IP DB schema (province/city/districts/isp/net).
+        $parts = [];
+        foreach (['province', 'city', 'districts'] as $k) {
+            $v = trim((string)($record[$k] ?? ''));
+            if ($v === '') continue;
+            if (!count($parts) || $parts[count($parts) - 1] !== $v) {
+                $parts[] = $v;
+            }
+        }
+        if (!count($parts)) {
+            $isp = trim((string)($record['isp'] ?? ''));
+            if ($isp !== '') $parts[] = $isp;
+        }
+        if (!count($parts)) {
+            $net = trim((string)($record['net'] ?? ''));
+            if ($net !== '') $parts[] = $net;
+        }
+
+        return count($parts) ? implode(' ', $parts) : Lang::get('app.support.ip_location.labels.unknown');
     }
 
     private function isPrivate(string $ip): bool

@@ -6,6 +6,7 @@
  *   - GameMeta
  * Functions:
  *   - className()
+ *   - raceName()
  *   - classColorHex()
  *   - itemQualityColorHex()
  *   - qualityName()
@@ -63,6 +64,12 @@ class GameMeta
     {
         $fallback = Lang::get('app.game_meta.fallbacks.class', ['id'=>$id], 'Class #:id');
         return Lang::get('app.game_meta.classes.'.$id, ['id'=>$id], $fallback);
+    }
+
+    public static function raceName(int $id): string
+    {
+        $fallback = Lang::get('app.game_meta.fallbacks.race', ['id'=>$id], 'Race #:id');
+        return Lang::get('app.game_meta.races.'.$id, ['id'=>$id], $fallback);
     }
     public static function classColorHex(int $id): string { return self::CLASS_COLORS[$id] ?? 'FFFFFF'; }
     public static function itemQualityColorHex(int $q): string { return self::QUALITY_COLORS[$q] ?? 'FFFFFF'; }

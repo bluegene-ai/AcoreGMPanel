@@ -301,7 +301,7 @@ class ItemRepository extends MultiServerRepository
 
 
     private function logsDir(): string
-    { $dir=dirname(__DIR__,3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs'; if(!is_dir($dir)) @mkdir($dir,0777,true); return $dir; }
+    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
 
     private function writeLogLine(string $file,string $action,string $stage,array $context): void
     {
@@ -315,8 +315,8 @@ class ItemRepository extends MultiServerRepository
             }
             $payload = array_filter($payload, static fn($v)=>$v!==null);
             $json = json_encode($payload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-            $line = sprintf('[%s] %s.%s %s%s', date('Y-m-d H:i:s'), $action, $stage, $json ?: '{}', PHP_EOL);
-            @file_put_contents($this->logsDir().DIRECTORY_SEPARATOR.$file, $line, FILE_APPEND);
+            $line = sprintf('[%s] %s.%s %s', date('Y-m-d H:i:s'), $action, $stage, $json ?: '{}');
+            \Acme\Panel\Support\LogPath::appendTo($this->logsDir().DIRECTORY_SEPARATOR.$file, $line, true, 0777);
         } catch(\Throwable $e){  }
     }
 

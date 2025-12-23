@@ -59,10 +59,18 @@ class MassMailController extends Controller
         $targetType=$request->input('target_type','online');
         $custom=$request->input('custom_char_list','');
         $targets=$this->svc->resolveTargets($targetType,$custom);
-        $itemId=$action==='send_item' ? (int)$request->input('itemId',0) : null;
-        $qty=$action==='send_item' ? (int)$request->input('quantity',0) : null;
-        $amount=$action==='send_gold' ? (int)$request->input('amount',0) : null;
-        $res=$this->svc->sendBulk($action,$subject,$body,$targets,$itemId,$qty,$amount);
+        $itemsRaw = ($action==='send_item' || $action==='send_item_gold') ? (string)$request->input('items','') : '';
+        // Backward compatibility (older clients)
+        if(trim($itemsRaw)==='' && ($action==='send_item' || $action==='send_item_gold')){
+            $legacyItemId = (int)$request->input('itemId',0);
+            $legacyQty = (int)$request->input('quantity',0);
+            if($legacyItemId>0 && $legacyQty>0){
+                $itemsRaw = $legacyItemId.':'.$legacyQty;
+            }
+        }
+        $amount = ($action==='send_gold' || $action==='send_item_gold') ? (int)$request->input('amount',0) : null;
+
+        $res=$this->svc->sendBulk($action,$subject,$body,$targets,$itemsRaw,$amount);
         return $this->json($res,$res['success']?200:422);
     }
 
