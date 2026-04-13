@@ -1,0 +1,28 @@
+.item-owner-layout{display:flex;flex-direction:column;gap:24px;margin-bottom:18px;}
+.item-owner-layout__row{display:flex;gap:24px;align-items:stretch;flex-wrap:nowrap;}
+.item-owner-card{background:#141b1f;border:1px solid rgba(52,70,82,.55);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.28);display:flex;flex-direction:column;min-width:300px;}
+.item-owner-card--search{flex:0 0 100%;}
+.item-owner-card--characters{flex:1 1 340px;max-width:420px;}
+.item-owner-card--instances{flex:2 1 720px;min-width:560px;}
+.item-owner-card__header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(94,168,255,.12);}
+.item-owner-card__title{margin:0;font-size:18px;font-weight:600;letter-spacing:.4px;color:#e7f4ff;}
+.item-owner-card__subtitle{margin-top:4px;font-size:13px;line-height:1.5;color:#8b96a1;}
+.item-owner-card__actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+.item-owner-card__header--summary{align-items:flex-start;}
+.item-owner-card__header--actions{align-items:center;}
+.item-owner-card__body{padding:18px 20px;display:flex;flex-direction:column;gap:16px;flex:1 1 auto;min-width:0;}
+.item-owner-card__section-title{margin:0;font-size:15px;font-weight:600;letter-spacing:.3px;color:#e7f4ff;}
+.item-owner-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;}
+.item-owner-form__field{display:flex;flex-direction:column;gap:6px;min-width:140px;}
+.item-owner-form__field--grow{flex:1 1 260px;}
+.item-owner-table-wrap{width:100%;overflow:auto;border:1px solid rgba(94,168,255,.12);border-radius:10px;background:#0f161f;}
+.item-owner-table-wrap .table{margin:0;}
+.item-owner-card--instances .panel-flash{margin:0;}
+@media (max-width:1500px){
+	.item-owner-layout__row{flex-wrap:wrap;}
+	.item-owner-card--characters,.item-owner-card--instances{flex:1 1 100%;max-width:none;min-width:0;}
+}
+@media (max-width:900px){
+	.item-owner-form__field--grow{flex-basis:100%;}
+	.item-owner-card__actions{justify-content:flex-start;}
+}

@@ -20,13 +20,55 @@
 namespace Acme\Panel\Http\Controllers\Mail;
 
 use Acme\Panel\Core\{Controller,Request,Response,Lang};
+use Acme\Panel\Domain\Mail\MailMutationHydrator;
 use Acme\Panel\Domain\Mail\MailRepository;
 use Acme\Panel\Support\{Auth,Audit,ServerContext,ServerList};
 
 class MailController extends Controller
 {
     private ?MailRepository $repo = null;
+    private ?MailMutationHydrator $mutations = null;
     private ?\Throwable $repoError = null;
+
+    private function mutations(): MailMutationHydrator
+    {
+        if ($this->mutations === null) {
+            $this->mutations = new MailMutationHydrator();
+        }
+
+        return $this->mutations;
+    }
+
+    private function requireListCapability(): void
+    {
+        $this->requireCapability('mail.list');
+    }
+
+    private function requireViewCapability(): void
+    {
+        $this->requireCapability('mail.view');
+    }
+
+    private function requireMarkReadCapability(): void
+    {
+        $this->requireCapability('mail.mark_read');
+    }
+
+    private function requireDeleteCapability(): void
+    {
+        $this->requireCapability('mail.delete');
+    }
+
+    private function requireStatsCapability(): void
+    {
+        $this->requireCapability('mail.stats');
+    }
+
+    private function requireLogsCapability(): void
+    {
+        $this->requireCapability('mail.logs');
+    }
+
     public function __construct(){
         try { $this->repo = new MailRepository(); }
         catch(\Throwable $e){ $this->repoError=$e; error_log('[MAIL_REPO_CTOR_FATAL] '.$e->getMessage().' @'.$e->getFile().':'.$e->getLine()); }
@@ -51,26 +93,39 @@ class MailController extends Controller
                 $heading = Lang::get('app.mail.errors.init_failed');
                 return $this->response(500,'<h2>'.$heading.'</h2><pre style="white-space:pre-wrap;font-size:12px">'.htmlspecialchars($this->repoError->getMessage().'\n'.$this->repoError->getFile().':'.$this->repoError->getLine()).'</pre>');
             }
-            if(!Auth::check()) return $this->redirect('/account/login');
+            $this->requireListCapability();
 
-            $reqServer=$request->input('server',null); if($reqServer!==null){ $sid=(int)$reqServer; if(ServerContext::currentId()!==$sid && ServerList::valid($sid)){ ServerContext::set($sid); $this->repo=new MailRepository(); } }
+            $this->switchServerAndRefresh($request, function (): void { $this->repo=new MailRepository(); });
 
-            $filters=[
-                'sender'=>$request->input('filter_sender',''),
-                'receiver'=>$request->input('filter_receiver',''),
-                'subject'=>$request->input('filter_subject',''),
-                'unread'=>$request->input('filter_unread',''),
-                'has_items'=>$request->input('filter_has_items',''),
-                'expiring'=>$request->input('filter_expiring','')
+            $state = $this->prepareMailListState($request);
+            $offset=($state['page']-1)*$state['limit'];
+            $res=$this->repo->search($state['filters'],$state['limit'],$offset,$state['sort'],$state['dir']);
+            $pages=$res['total']? (int)ceil($res['total']/$state['limit']) : 1;
+            $pager=(object)[
+                'items' => $res['rows'],
+                'page' => $state['page'],
+                'pages' => $pages,
+                'total' => $res['total'],
+                'limit' => $state['limit'],
             ];
-            $page=max(1,(int)$request->input('page',1));
-            $limit=max(10,min(200,(int)$request->input('limit',50)));
-            $offset=($page-1)*$limit;
-            $sort=$request->input('sort','id');
-            $dir=$request->input('dir','DESC');
-            $res=$this->repo->search($filters,$limit,$offset,$sort,$dir);
-            $pages=$res['total']? (int)ceil($res['total']/$limit) : 1;
-            return $this->view('mail.index',[ 'title'=>Lang::get('app.mail.page_title'),'rows'=>$res['rows'],'total'=>$res['total'],'page'=>$page,'pages'=>$pages,'limit'=>$limit,'filters'=>$filters,'sort'=>$sort,'dir'=>strtoupper($dir)==='ASC'?'ASC':'DESC','current_server'=>ServerContext::currentId(),'servers'=>ServerList::options() ]);
+            return $this->pageView('mail.index', $this->listViewData($pager, $state['filters'], [
+                'rows' => $res['rows'],
+                'total' => $res['total'],
+                'page' => $state['page'],
+                'pages' => $pages,
+                'limit' => $state['limit'],
+                'sort' => $state['sort'],
+                'dir' => $state['dir'],
+            ]), [
+                'capabilities' => [
+                    'list' => 'mail.list',
+                    'view' => 'mail.view',
+                    'mark_read' => 'mail.mark_read',
+                    'delete' => 'mail.delete',
+                    'stats' => 'mail.stats',
+                    'logs' => 'mail.logs',
+                ],
+            ]);
         } catch(\Throwable $e) {
             error_log('[MAIL_INDEX_FATAL] '.$e->getMessage().' @'.$e->getFile().':'.$e->getLine());
             $heading = Lang::get('app.mail.errors.exception');
@@ -81,54 +136,155 @@ class MailController extends Controller
 
     public function apiList(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401);
-        $filters=[
-            'sender'=>$request->input('filter_sender',''),
-            'receiver'=>$request->input('filter_receiver',''),
-            'subject'=>$request->input('filter_subject',''),
-            'unread'=>$request->input('filter_unread',''),
-            'has_items'=>$request->input('filter_has_items',''),
-            'expiring'=>$request->input('filter_expiring','')
+    $this->requireListCapability();
+        $state = $this->prepareMailListState($request);
+        $offset=($state['page']-1)*$state['limit'];
+        $res=$this->repo->search($state['filters'],$state['limit'],$offset,$state['sort'],$state['dir']);
+        $pages=$res['total']? (int)ceil($res['total']/$state['limit']) : 1;
+        return $this->json(['success'=>true]+$res+['page'=>$state['page'],'pages'=>$pages,'limit'=>$state['limit'],'server_id'=>ServerContext::currentId()]);
+    }
+
+    private function prepareMailListState(Request $request): array
+    {
+        return [
+            'filters' => [
+                'sender' => $this->normalizedString($request, 'filter_sender'),
+                'receiver' => $this->normalizedString($request, 'filter_receiver'),
+                'subject' => $this->normalizedString($request, 'filter_subject'),
+                'unread' => $this->normalizedEnum($request, 'filter_unread', ['', '1'], ''),
+                'has_items' => $this->normalizedEnum($request, 'filter_has_items', ['', '1'], ''),
+                'expiring' => $this->normalizedString($request, 'filter_expiring'),
+            ],
+            'page' => $this->normalizedPage($request),
+            'limit' => $this->boundedInt($request, 'limit', 50, 10, 200),
+            'sort' => $this->normalizedString($request, 'sort', 'id') ?: 'id',
+            'dir' => $this->normalizedDirection($request, 'dir', 'DESC'),
         ];
-        $page=max(1,(int)$request->input('page',1));
-        $limit=max(10,min(200,(int)$request->input('limit',50)));
-        $offset=($page-1)*$limit;
-        $sort=$request->input('sort','id');
-        $dir=$request->input('dir','DESC');
-        $res=$this->repo->search($filters,$limit,$offset,$sort,$dir);
-        $pages=$res['total']? (int)ceil($res['total']/$limit) : 1;
-        return $this->json(['success'=>true]+$res+['page'=>$page,'pages'=>$pages,'limit'=>$limit,'server_id'=>ServerContext::currentId()]);
     }
 
     public function apiView(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $id=(int)$request->input('mail_id',0); if($id<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_id')],422); $row=$this->repo->getWithItems($id); if(!$row) return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.not_found')],404); Audit::log('mail','view',(string)$id,['receiver'=>$row['receiver']??null,'srv'=>ServerContext::currentId()]); return $this->json(['success'=>true,'mail'=>$row,'server_id'=>ServerContext::currentId()]); }
+    {
+        $this->requireViewCapability();
+        $state = $this->prepareMailViewState($request);
+        $hydrated = $state['hydrated'];
+        if (!$hydrated['valid'])
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
+
+        $id = (int) $hydrated['payload']['mail_id'];
+        $row = $this->repo->getWithItems($id);
+        if (!$row)
+            return $this->json(['success' => false, 'message' => Lang::get('app.common.errors.not_found')], 404);
+
+        Audit::log('mail', 'view', (string) $id, ['receiver' => $row['receiver'] ?? null, 'srv' => ServerContext::currentId()]);
+        return $this->json(['success' => true, 'mail' => $row, 'server_id' => ServerContext::currentId()]);
+    }
 
     public function apiMarkRead(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $id=(int)$request->input('mail_id',0); if($id<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_id')],422); $ok=$this->repo->markRead($id); Audit::log('mail','mark_read',(string)$id,['ok'=>$ok,'srv'=>ServerContext::currentId()]); return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.mail.api.success.marked_read'):Lang::get('app.mail.api.success.no_changes'),'server_id'=>ServerContext::currentId()]); }
+    {
+        $this->requireMarkReadCapability();
+        $hydrated = $this->mutations()->mailId([
+            'mail_id' => $request->input('mail_id', 0),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid'])
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
+
+        $id = (int) $hydrated['payload']['mail_id'];
+        $ok = $this->repo->markRead($id);
+        Audit::log('mail', 'mark_read', (string) $id, ['ok' => $ok, 'srv' => ServerContext::currentId()]);
+        return $this->json([
+            'success' => $ok,
+            'message' => $ok ? Lang::get('app.mail.api.success.marked_read') : Lang::get('app.mail.api.success.no_changes'),
+            'server_id' => ServerContext::currentId(),
+        ]);
+    }
 
     public function apiMarkReadBulk(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $raw=(string)$request->input('ids',''); if($raw==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.id_required')],422); $ids=array_values(array_unique(array_filter(array_map('intval',explode(',',$raw)),fn($v)=>$v>0))); if(!$ids) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.no_valid_id')],422); $res=$this->repo->markReadBulk($ids); Audit::log('mail','mark_read_bulk',implode(',',$ids),['aff'=>$res['affected'],'srv'=>ServerContext::currentId()]); return $this->json(['success'=>true,'message'=>Lang::get('app.mail.api.success.bulk_marked',['count'=>$res['affected']]),'server_id'=>ServerContext::currentId()]+$res); }
+    {
+        $this->requireMarkReadCapability();
+        $hydrated = $this->mutations()->mailIds([
+            'ids' => $request->input('ids', ''),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid'])
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
+
+        $ids = $hydrated['payload']['ids'];
+        $res = $this->repo->markReadBulk($ids);
+        Audit::log('mail', 'mark_read_bulk', implode(',', $ids), ['aff' => $res['affected'], 'srv' => ServerContext::currentId()]);
+        return $this->json(['success' => true, 'message' => Lang::get('app.mail.api.success.bulk_marked', ['count' => $res['affected']]), 'server_id' => ServerContext::currentId()] + $res);
+    }
 
     public function apiDelete(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $id=(int)$request->input('mail_id',0); if($id<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_id')],422); $ok=$this->repo->delete($id); Audit::log('mail','delete',(string)$id,['ok'=>$ok,'srv'=>ServerContext::currentId()]); return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.mail.api.success.deleted_single'):Lang::get('app.mail.api.errors.delete_restricted'),'server_id'=>ServerContext::currentId()]); }
+    {
+        $this->requireDeleteCapability();
+        $hydrated = $this->mutations()->mailId([
+            'mail_id' => $request->input('mail_id', 0),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid'])
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
+
+        $id = (int) $hydrated['payload']['mail_id'];
+        $ok = $this->repo->delete($id);
+        Audit::log('mail', 'delete', (string) $id, ['ok' => $ok, 'srv' => ServerContext::currentId()]);
+        return $this->json([
+            'success' => $ok,
+            'message' => $ok ? Lang::get('app.mail.api.success.deleted_single') : Lang::get('app.mail.api.errors.delete_restricted'),
+            'server_id' => ServerContext::currentId(),
+        ]);
+    }
 
     public function apiDeleteBulk(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $raw=(string)$request->input('ids',''); if($raw==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.id_required')],422); $ids=array_values(array_unique(array_filter(array_map('intval',explode(',',$raw)),fn($v)=>$v>0))); if(!$ids) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.no_valid_id')],422); $res=$this->repo->deleteBulk($ids); Audit::log('mail','delete_bulk',implode(',',$ids),['del'=>count($res['deleted']),'blocked'=>count($res['blocked']),'srv'=>ServerContext::currentId()]); $msg=Lang::get('app.mail.api.success.bulk_deleted',['count'=>count($res['deleted'])]); if($res['blocked']) $msg.=Lang::get('app.mail.api.success.bulk_deleted_blocked_suffix',['count'=>count($res['blocked'])]); return $this->json(['success'=>true,'message'=>$msg,'server_id'=>ServerContext::currentId()]+$res); }
+    {
+        $this->requireDeleteCapability();
+        $hydrated = $this->mutations()->mailIds([
+            'ids' => $request->input('ids', ''),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid'])
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
+
+        $ids = $hydrated['payload']['ids'];
+        $res = $this->repo->deleteBulk($ids);
+        Audit::log('mail', 'delete_bulk', implode(',', $ids), ['del' => count($res['deleted']), 'blocked' => count($res['blocked']), 'srv' => ServerContext::currentId()]);
+        $msg = Lang::get('app.mail.api.success.bulk_deleted', ['count' => count($res['deleted'])]);
+        if ($res['blocked'])
+            $msg .= Lang::get('app.mail.api.success.bulk_deleted_blocked_suffix', ['count' => count($res['blocked'])]);
+        return $this->json(['success' => true, 'message' => $msg, 'server_id' => ServerContext::currentId()] + $res);
+    }
 
     public function apiStats(Request $request): Response
-    { if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401); $stat=$this->repo->stats(); return $this->json(['success'=>true,'server_id'=>ServerContext::currentId()]+$stat); }
+    { $this->requireStatsCapability(); $stat=$this->repo->stats(); return $this->json(['success'=>true,'server_id'=>ServerContext::currentId()]+$stat); }
 
     public function apiLogs(Request $request): Response
     {
-        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.unauthorized')],401);
+        $this->requireLogsCapability();
         if(!$this->repo){
             $msg = $this->repoError ? $this->repoError->getMessage() : Lang::get('app.mail.api.errors.repository_not_ready');
             return $this->json(['success'=>false,'message'=>$msg],500);
         }
-        $type = (string)$request->input('type','sql');
-        $limit = (int)$request->input('limit',50);
-        $res = $this->repo->tailLog($type,$limit);
+        $state = $this->prepareMailLogState($request);
+        $res = $this->repo->tailLog($state['type'],$state['limit']);
         return $this->json($res, $res['success'] ? 200 : 422);
+    }
+
+    private function prepareMailViewState(Request $request): array
+    {
+        return [
+            'hydrated' => $this->mutations()->mailId([
+                'mail_id' => $request->input('mail_id', 0),
+                'ip' => $request->ip(),
+            ]),
+        ];
+    }
+
+    private function prepareMailLogState(Request $request): array
+    {
+        return [
+            'type' => $this->normalizedString($request, 'type', 'sql') ?: 'sql',
+            'limit' => max(1, (int) $request->input('limit', 50)),
+        ];
     }
 }
 

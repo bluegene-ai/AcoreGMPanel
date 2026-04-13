@@ -4,10 +4,30 @@
  * Purpose: Provides functionality for the resources/views/account module.
  */
 
- $module='account'; include __DIR__.'/../layouts/base_top.php'; ?>
+?>
 <?php $filter_online = $filter_online ?? 'any'; $filter_ban = $filter_ban ?? 'any'; $load_all = !empty($load_all); $sort = $sort ?? ''; ?>
 <?php $exclude_username = $exclude_username ?? ''; ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.account.page_title')) ?></h1>
+<?php
+  $__accountCapabilities = $__pageCapabilities ?? [
+    'list' => $__can('accounts.list'),
+    'characters' => $__can('accounts.characters'),
+    'create' => $__can('accounts.create'),
+    'update' => $__can('accounts.update'),
+    'password' => $__can('accounts.password'),
+    'gm' => $__can('accounts.gm'),
+    'ban' => $__can('accounts.ban'),
+    'ip' => $__can('accounts.ip'),
+    'kick' => $__can('accounts.kick'),
+    'delete' => $__can('accounts.delete'),
+  ];
+  $__pageCapabilities = $__accountCapabilities;
+  $__accountCanBulk = $__accountCapabilities['ban'] || $__accountCapabilities['delete'];
+  $capabilityNotice = $__canAll(['accounts.characters', 'accounts.create', 'accounts.update', 'accounts.password', 'accounts.gm', 'accounts.ban', 'accounts.ip', 'accounts.kick', 'accounts.delete'])
+    ? null
+    : __('app.common.capabilities.page_limited');
+?>
+<?php include __DIR__.'/../components/page_header.php'; ?>
+<?php include __DIR__.'/../components/capability_notice.php'; ?>
 <form class="account-search" method="get" action="">
   <div class="account-search__row">
     <select name="search_type">
@@ -17,10 +37,12 @@
     <input type="text" name="search_value" value="<?= htmlspecialchars($search_value) ?>" placeholder="<?= htmlspecialchars(__('app.account.search.placeholder')) ?>">
   <button class="btn" type="submit"><?= htmlspecialchars(__('app.account.search.submit')) ?></button>
   <button class="btn outline" type="submit" name="load_all" value="1"><?= htmlspecialchars(__('app.account.search.load_all')) ?></button>
+  <?php if($__accountCapabilities['create']): ?>
   <button class="btn success action" type="button" data-action="create-account"><?= htmlspecialchars(__('app.account.search.create')) ?></button>
+  <?php endif; ?>
   </div>
   <div class="account-search__row account-search__filters">
-    <label style="display:flex;align-items:center;gap:6px;">
+    <label class="account-search__inline-field">
       <span><?= htmlspecialchars(__('app.account.filters.online')) ?>:</span>
       <select name="online">
         <option value="any" <?= $filter_online==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.online_any')) ?></option>
@@ -28,7 +50,7 @@
         <option value="offline" <?= $filter_online==='offline'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.online_offline')) ?></option>
       </select>
     </label>
-    <label style="display:flex;align-items:center;gap:6px;">
+    <label class="account-search__inline-field">
       <span><?= htmlspecialchars(__('app.account.filters.ban')) ?>:</span>
       <select name="ban">
         <option value="any" <?= $filter_ban==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_any')) ?></option>
@@ -36,9 +58,9 @@
         <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.account.filters.ban_unbanned')) ?></option>
       </select>
     </label>
-    <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
-      <span style="white-space:nowrap;"><?= htmlspecialchars(__('app.account.filters.exclude_username')) ?>:</span>
-      <input type="text" name="exclude_username" value="<?= htmlspecialchars($exclude_username) ?>" placeholder="<?= htmlspecialchars(__('app.account.filters.exclude_username_placeholder')) ?>" style="min-width:180px;">
+    <label class="account-search__inline-field account-search__inline-field--nowrap">
+      <span class="account-search__label-text--nowrap"><?= htmlspecialchars(__('app.account.filters.exclude_username')) ?>:</span>
+      <input type="text" name="exclude_username" value="<?= htmlspecialchars($exclude_username) ?>" placeholder="<?= htmlspecialchars(__('app.account.filters.exclude_username_placeholder')) ?>" class="account-search__exclude-input">
     </label>
   </div>
   <div id="account-feedback" class="panel-flash panel-flash--inline"></div>
@@ -112,23 +134,34 @@
   }
   return implode(__('app.account.ban.separator'), array_slice($parts, 0, 2));
 }; ?>
-  <p style="margin-top:10px;font-size:13px;color:#8aa4b8;">
+  <p class="account-search__summary">
     <?= htmlspecialchars(__('app.account.feedback.found', ['total' => $pager->total, 'page' => $pager->page, 'pages' => $pager->pages])) ?>
   </p>
-  <div class="flex between center" style="gap:10px;flex-wrap:wrap;margin:8px 0;">
-    <div class="flex center" style="gap:10px;flex-wrap:wrap;">
-      <label class="small" style="display:inline-flex;align-items:center;gap:6px;">
+  <?php if(!$__accountCanBulk && !$__canAny(['accounts.characters', 'accounts.gm', 'accounts.ban', 'accounts.password', 'accounts.update', 'accounts.ip', 'accounts.kick'])): ?>
+  <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.read_only')) ?></div>
+  <?php endif; ?>
+  <?php if($__accountCanBulk): ?>
+  <div class="flex between center account-bulk-toolbar">
+    <div class="flex center account-bulk-toolbar__actions">
+      <label class="small account-bulk-toolbar__select-all">
         <input type="checkbox" class="js-account-select-all">
         <span><?= htmlspecialchars(__('app.account.bulk.select_all')) ?></span>
       </label>
+      <?php if($__accountCapabilities['delete']): ?>
       <button class="btn-sm btn danger js-account-bulk" data-bulk="delete" type="button"><?= htmlspecialchars(__('app.account.bulk.delete')) ?></button>
+      <?php endif; ?>
+      <?php if($__accountCapabilities['ban']): ?>
       <button class="btn-sm btn danger js-account-bulk" data-bulk="ban" type="button"><?= htmlspecialchars(__('app.account.bulk.ban')) ?></button>
       <button class="btn-sm btn success js-account-bulk" data-bulk="unban" type="button"><?= htmlspecialchars(__('app.account.bulk.unban')) ?></button>
+      <?php endif; ?>
     </div>
   </div>
+  <?php endif; ?>
   <table class="table">
   <thead><tr>
-    <th style="width:34px;"><input type="checkbox" class="js-account-select-all" aria-label="select all"></th>
+    <?php if($__accountCanBulk): ?>
+    <th class="account-table__select-col"><input type="checkbox" class="js-account-select-all" aria-label="select all"></th>
+    <?php endif; ?>
     <th><a class="table-sort<?= $isActive('id')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('id'))) ?>"><?= htmlspecialchars(__('app.account.table.id')) ?></a></th>
     <th><?= htmlspecialchars(__('app.account.table.username')) ?></th>
     <th><?= htmlspecialchars(__('app.account.table.gm')) ?></th>
@@ -155,7 +188,9 @@
         }
       ?>
       <tr data-id="<?= (int)$row['id'] ?>" data-username="<?= htmlspecialchars($row['username']) ?>" data-gm="<?= isset($row['gmlevel'])?(int)$row['gmlevel']:'0' ?>" data-last-ip="<?= htmlspecialchars($lastIp) ?>">
+        <?php if($__accountCanBulk): ?>
         <td><input type="checkbox" class="js-account-select" value="<?= (int)$row['id'] ?>" aria-label="select"></td>
+        <?php endif; ?>
         <td><?= (int)$row['id'] ?></td>
         <td><?= htmlspecialchars($row['username']) ?></td>
         <td><?= isset($row['gmlevel'])?(int)$row['gmlevel']:'-' ?></td>
@@ -171,12 +206,12 @@
                 'end' => $banEnd,
               ]);
             ?>
-            <span class="badge" style="background:#7a1b1b" title="<?= htmlspecialchars($tooltip) ?>">
+            <span class="badge account-badge account-badge--banned" title="<?= htmlspecialchars($tooltip) ?>">
               <?= htmlspecialchars(__('app.account.ban.badge', ['duration' => $friendlyTime($b['remaining_seconds'])])) ?>
             </span>
           <?php else: ?>
             <?= (int)$row['online']
-              ? '<span class="badge" style="background:#16a34a">'.htmlspecialchars(__('app.account.status.online')).'</span>'
+              ? '<span class="badge account-badge account-badge--online">'.htmlspecialchars(__('app.account.status.online')).'</span>'
               : '<span class="badge">'.htmlspecialchars(__('app.account.status.offline')).'</span>'
             ?>
           <?php endif; ?>
@@ -184,21 +219,40 @@
         <td><?= !empty($row['last_login'])?htmlspecialchars($row['last_login']):'-' ?></td>
         <td><?= htmlspecialchars($lastIp) ?></td>
         <td class="ip-location" data-ip="<?= htmlspecialchars($lastIp) ?>">-</td>
-        <td style="white-space:nowrap">
+        <td class="account-table__actions-cell">
+          <?php if($__accountCapabilities['characters']): ?>
           <button class="btn-sm btn info action" data-action="chars"><?= htmlspecialchars(__('app.account.actions.chars')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['gm']): ?>
           <button class="btn-sm btn warn action" data-action="gm"><?= htmlspecialchars(__('app.account.actions.gm')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['ban']): ?>
           <button class="btn-sm btn danger action" data-action="ban"><?= htmlspecialchars(__('app.account.actions.ban')) ?></button>
           <button class="btn-sm btn success action" data-action="unban"><?= htmlspecialchars(__('app.account.actions.unban')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['password']): ?>
           <button class="btn-sm btn info outline action" data-action="pass"><?= htmlspecialchars(__('app.account.actions.password')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['update']): ?>
           <button class="btn-sm btn neutral action" data-action="email"><?= htmlspecialchars(__('app.account.actions.email')) ?></button>
           <button class="btn-sm btn neutral outline action" data-action="rename"><?= htmlspecialchars(__('app.account.actions.rename')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['ip']): ?>
           <button class="btn-sm btn neutral action" data-action="ip-accounts" <?= $isPrivateIp?'disabled title="'.htmlspecialchars(__('app.account.feedback.private_ip_disabled')).'"':''; ?>><?= htmlspecialchars(__('app.account.actions.same_ip')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['kick']): ?>
           <button class="btn-sm btn outline danger action" data-action="kick"><?= htmlspecialchars(__('app.account.actions.kick')) ?></button>
+          <?php endif; ?>
+          <?php if($__accountCapabilities['delete']): ?>
           <button class="btn-sm btn danger action" data-action="delete"><?= htmlspecialchars(__('app.account.actions.delete')) ?></button>
+          <?php endif; ?>
+          <?php if(!$__canAny(['accounts.characters', 'accounts.gm', 'accounts.ban', 'accounts.password', 'accounts.update', 'accounts.ip', 'accounts.kick', 'accounts.delete'])): ?>
+          <span class="muted small"><?= htmlspecialchars(__('app.common.capabilities.no_actions')) ?></span>
+          <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
-  <?php if(!$pager->items): ?><tr><td colspan="9" style="text-align:center;"><?= htmlspecialchars(__('app.account.feedback.empty')) ?></td></tr><?php endif; ?>
+  <?php if(!$pager->items): ?><tr><td colspan="<?= $__accountCanBulk ? 9 : 8 ?>" class="account-table__empty-cell"><?= htmlspecialchars(__('app.account.feedback.empty')) ?></td></tr><?php endif; ?>
     </tbody>
   </table>
   <?php
@@ -216,4 +270,3 @@
 <?php else: ?>
   <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.account.feedback.enter_search')) ?></div>
 <?php endif; ?>
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>

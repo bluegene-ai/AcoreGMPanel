@@ -10,8 +10,6 @@
  *   - classColorHex()
  *   - itemQualityColorHex()
  *   - qualityName()
- *   - classColorStyle()
- *   - qualityColorStyle()
  */
 
 namespace Acme\Panel\Support;
@@ -62,24 +60,21 @@ class GameMeta
 
     public static function className(int $id): string
     {
-        $fallback = Lang::get('app.game_meta.fallbacks.class', ['id'=>$id], 'Class #:id');
-        return Lang::get('app.game_meta.classes.'.$id, ['id'=>$id], $fallback);
+        $fallback = Lang::get('game.fallbacks.class', ['id'=>$id], 'Class #:id');
+        return Lang::get('game.classes.'.$id, ['id'=>$id], $fallback);
     }
 
     public static function raceName(int $id): string
     {
-        $fallback = Lang::get('app.game_meta.fallbacks.race', ['id'=>$id], 'Race #:id');
-        return Lang::get('app.game_meta.races.'.$id, ['id'=>$id], $fallback);
+        $fallback = Lang::get('game.fallbacks.race', ['id'=>$id], 'Race #:id');
+        return Lang::get('game.races.'.$id, ['id'=>$id], $fallback);
     }
     public static function classColorHex(int $id): string { return self::CLASS_COLORS[$id] ?? 'FFFFFF'; }
     public static function itemQualityColorHex(int $q): string { return self::QUALITY_COLORS[$q] ?? 'FFFFFF'; }
     public static function qualityName(int $q): string
     {
-        $fallback = Lang::get('app.game_meta.fallbacks.quality', ['id'=>$q], 'Quality #:id');
-        return Lang::get('app.game_meta.qualities.'.$q, ['id'=>$q], $fallback);
+        $fallback = Lang::get('game.fallbacks.quality', ['id'=>$q], 'Quality #:id');
+        return Lang::get('game.qualities.'.$q, ['id'=>$q], $fallback);
     }
-
-    public static function classColorStyle(int $id): string { return 'style="color:#'.self::classColorHex($id).'"'; }
-    public static function qualityColorStyle(int $q): string { return 'style="color:#'.self::itemQualityColorHex($q).'"'; }
 }
 

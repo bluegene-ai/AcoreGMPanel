@@ -4,14 +4,19 @@
  * Purpose: Provides functionality for the resources/views/setup module.
  */
 
- ob_start(); ?>
+$page = is_array($setupPage ?? null) ? $setupPage : [];
+$section = is_array($page['section'] ?? null) ? $page['section'] : [];
+$language = is_array($page['language'] ?? null) ? $page['language'] : [];
+$messages = is_array($page['messages'] ?? null) ? $page['messages'] : [];
+$actions = is_array($page['actions'] ?? null) ? $page['actions'] : [];
+?>
 <section class="setup-section" aria-labelledby="setup-env-title">
   <div class="setup-section__header">
     <div>
-      <h2 class="setup-section__title" id="setup-env-title"><?= htmlspecialchars(__('app.setup.env.title')) ?></h2>
-      <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.env.hint')) ?></p>
+      <h2 class="setup-section__title" id="setup-env-title"><?= htmlspecialchars((string)($section['title'] ?? __('app.setup.env.title'))) ?></h2>
+      <p class="setup-section__hint"><?= htmlspecialchars((string)($section['hint'] ?? __('app.setup.env.hint'))) ?></p>
     </div>
-    <span class="setup-section__pill"><?= htmlspecialchars(__('app.setup.env.pill')) ?></span>
+    <span class="setup-section__pill"><?= htmlspecialchars((string)($section['pill'] ?? __('app.setup.env.pill'))) ?></span>
   </div>
   <div class="table-like">
     <?php foreach($checks as $k=>$c): ?>
@@ -23,15 +28,15 @@
     <?php endforeach; ?>
   </div>
   <?php if($allOk): ?>
-    <div class="alert success"><?= htmlspecialchars(__('app.setup.env.check_passed')) ?></div>
-    <form id="setup-lang-form" class="setup-actions setup-lang" method="post" action="<?= url('/setup/post') ?>">
+    <div class="alert success"><?= htmlspecialchars((string)($messages['passed'] ?? __('app.setup.env.check_passed'))) ?></div>
+    <form id="setup-lang-form" class="setup-actions setup-lang" method="post" action="<?= url('/setup/post') ?>" data-submit-fail="<?= htmlspecialchars((string)($language['submit_fail'] ?? __('app.setup.env.language_submit_fail'))) ?>">
       <?= Acme\Panel\Support\Csrf::field() ?>
       <input type="hidden" name="action" value="lang_save">
       <div class="setup-lang__intro">
-        <h3 class="setup-lang__title"><?= htmlspecialchars(__('app.setup.env.language_title')) ?></h3>
-        <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.env.language_intro')) ?></p>
+        <h3 class="setup-lang__title"><?= htmlspecialchars((string)($language['title'] ?? __('app.setup.env.language_title'))) ?></h3>
+        <p class="setup-section__hint"><?= htmlspecialchars((string)($language['intro'] ?? __('app.setup.env.language_intro'))) ?></p>
       </div>
-      <div class="mode-cards setup-lang__cards" role="radiogroup" aria-label="<?= htmlspecialchars(__('app.setup.env.language_title')) ?>">
+      <div class="mode-cards setup-lang__cards" role="radiogroup" aria-label="<?= htmlspecialchars((string)($language['title'] ?? __('app.setup.env.language_title'))) ?>">
         <?php foreach($locales as $locale): ?>
           <?php
             $isActive = $currentLocale === $locale;
@@ -45,53 +50,12 @@
           </label>
         <?php endforeach; ?>
       </div>
-      <button type="submit" class="btn primary" data-action="lang-submit"><?= htmlspecialchars(__('app.setup.env.language_submit')) ?></button>
+      <button type="submit" class="btn primary" data-action="lang-submit"><?= htmlspecialchars((string)($language['submit'] ?? __('app.setup.env.language_submit'))) ?></button>
     </form>
   <?php else: ?>
-    <div class="alert error"><?= htmlspecialchars(__('app.setup.env.check_failed')) ?></div>
+    <div class="alert error"><?= htmlspecialchars((string)($messages['failed'] ?? __('app.setup.env.check_failed'))) ?></div>
     <div class="setup-actions">
-      <a class="btn secondary" href="<?= url('/setup?step=1') ?>"><?= htmlspecialchars(__('app.setup.env.retry')) ?></a>
+      <a class="btn secondary" href="<?= url('/setup?step=1') ?>"><?= htmlspecialchars((string)($actions['retry'] ?? __('app.setup.env.retry'))) ?></a>
     </div>
   <?php endif; ?>
 </section>
-<script>
-(function(){
-  const form = document.getElementById('setup-lang-form');
-  if(!form) return;
-  const cards = form.querySelectorAll('[data-locale-card]');
-  const updateActive = () => {
-    cards.forEach(c => {
-      const radio = c.querySelector('input');
-      c.classList.toggle('active', !!(radio && radio.checked));
-    });
-  };
-  cards.forEach(card => {
-    const input = card.querySelector('input[type="radio"]');
-    if(!input) return;
-    card.addEventListener('click', (event) => {
-      if(event.target.tagName !== 'INPUT'){
-        input.checked = true;
-        updateActive();
-      }
-    });
-    input.addEventListener('change', updateActive);
-  });
-  updateActive();
-
-  form.addEventListener('submit', function(event){
-    event.preventDefault();
-    const fd = new FormData(form);
-    fetch('<?= url('/setup/post') ?>',{method:'POST',body:fd})
-      .then(resp => resp.json())
-      .then(json => {
-        if(json && json.success){
-          window.location.href = json.redirect;
-        } else {
-          alert((json && json.message) || '<?= addslashes(__('app.setup.env.language_submit_fail')) ?>');
-        }
-      })
-      .catch(() => alert('<?= addslashes(__('app.setup.env.language_submit_fail')) ?>'));
-  });
-})();
-</script>
-<?php $content=ob_get_clean(); include __DIR__.'/layout.php'; ?>

@@ -4,7 +4,6 @@
  * Purpose: Character list and search UI.
  */
 
- $module='character'; include __DIR__.'/../layouts/base_top.php';
  $filters = $filters ?? [];
  $name = $filters['name'] ?? '';
  $guid = (int)($filters['guid'] ?? 0);
@@ -14,15 +13,27 @@
  $filter_online = $filters['online'] ?? 'any';
  $sort = $sort ?? '';
  $load_all = !empty($load_all);
+ $characterCapabilities = $__pageCapabilities ?? [
+   'list' => $__can('characters.list'),
+   'details' => $__can('characters.details'),
+   'ban' => $__can('characters.ban'),
+   'delete' => $__can('characters.delete'),
+ ];
+ $__pageCapabilities = $characterCapabilities;
+ $characterCanBulk = $characterCapabilities['ban'] || $characterCapabilities['delete'];
+ $capabilityNotice = $__canAll(['characters.details', 'characters.ban', 'characters.delete'])
+   ? null
+   : __('app.common.capabilities.page_limited');
 ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.character.index.title')) ?></h1>
+<?php include __DIR__.'/../components/page_header.php'; ?>
+<?php include __DIR__.'/../components/capability_notice.php'; ?>
 <form class="character-search" method="get" action="">
   <div class="character-search__row">
     <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.name_placeholder')) ?>">
-    <input type="number" name="guid" value="<?= $guid>0?(int)$guid:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.guid_placeholder')) ?>" style="width:140px;">
+    <input type="number" name="guid" value="<?= $guid>0?(int)$guid:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.guid_placeholder')) ?>" class="character-search__guid">
     <input type="text" name="account" value="<?= htmlspecialchars($account) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.account_placeholder')) ?>">
-    <input type="number" name="level_min" value="<?= $levelMin>0?(int)$levelMin:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_min')) ?>" style="width:120px;">
-    <input type="number" name="level_max" value="<?= $levelMax>0?(int)$levelMax:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_max')) ?>" style="width:120px;">
+    <input type="number" name="level_min" value="<?= $levelMin>0?(int)$levelMin:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_min')) ?>" class="character-search__level">
+    <input type="number" name="level_max" value="<?= $levelMax>0?(int)$levelMax:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_max')) ?>" class="character-search__level">
     <select name="online">
       <option value="any" <?= $filter_online==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_any')) ?></option>
       <option value="online" <?= $filter_online==='online'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_only')) ?></option>
@@ -34,7 +45,7 @@
     </span>
   </div>
 </form>
-<div id="char-feedback" class="panel-flash panel-flash--inline" style="display:none"></div>
+<div id="char-feedback" class="panel-flash panel-flash--inline char-feedback--hidden"></div>
 <?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any'; ?>
 <?php if($hasCriteria): ?>
   <?php
@@ -107,24 +118,32 @@
     }
     return implode(__('app.account.ban.separator'), array_slice($parts, 0, 2));
   }; ?>
-  <p style="margin-top:10px;font-size:13px;color:#8aa4b8;">
+  <p class="char-results-meta">
     <?= htmlspecialchars(__('app.character.index.feedback.found', ['total' => $pager->total, 'page' => $pager->page, 'pages' => $pager->pages])) ?>
   </p>
-  <div class="flex between center" style="gap:10px;flex-wrap:wrap;margin:8px 0;">
-    <div class="flex center" style="gap:10px;flex-wrap:wrap;">
-      <label class="small" style="display:inline-flex;align-items:center;gap:6px;">
+  <?php if($characterCanBulk): ?>
+  <div class="char-bulk-bar">
+    <div class="char-bulk-actions">
+      <label class="small char-select-all-toggle">
         <input type="checkbox" class="js-char-select-all">
         <span><?= htmlspecialchars(__('app.account.bulk.select_all')) ?></span>
       </label>
+      <?php if($characterCapabilities['delete']): ?>
       <button class="btn-sm btn danger js-char-bulk" data-bulk="delete" type="button"><?= htmlspecialchars(__('app.account.bulk.delete')) ?></button>
+      <?php endif; ?>
+      <?php if($characterCapabilities['ban']): ?>
       <button class="btn-sm btn danger js-char-bulk" data-bulk="ban" type="button"><?= htmlspecialchars(__('app.account.bulk.ban')) ?></button>
       <button class="btn-sm btn success js-char-bulk" data-bulk="unban" type="button"><?= htmlspecialchars(__('app.account.bulk.unban')) ?></button>
+      <?php endif; ?>
     </div>
   </div>
+  <?php endif; ?>
   <table class="table">
     <thead>
       <tr>
-        <th style="width:34px;"><input type="checkbox" class="js-char-select-all" aria-label="select all"></th>
+        <?php if($characterCanBulk): ?>
+        <th class="char-select-col"><input type="checkbox" class="js-char-select-all" aria-label="select all"></th>
+        <?php endif; ?>
         <th><a class="table-sort<?= $isActive('guid')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('guid'))) ?>"><?= htmlspecialchars(__('app.character.index.table.guid')) ?></a></th>
         <th><?= htmlspecialchars(__('app.character.index.table.name')) ?></th>
         <th><?= htmlspecialchars(__('app.character.index.table.account')) ?></th>
@@ -141,7 +160,9 @@
     <tbody>
     <?php foreach($pager->items as $row): ?>
       <tr>
+        <?php if($characterCanBulk): ?>
         <td><input type="checkbox" class="js-char-select" value="<?= (int)$row['guid'] ?>" aria-label="select"></td>
+        <?php endif; ?>
         <td><?= (int)$row['guid'] ?></td>
         <td><?= htmlspecialchars($row['name']) ?></td>
         <?php $accName = (string)($row['account_username'] ?? ''); $accFallback = '#'.($row['account'] ?? ''); ?>
@@ -174,22 +195,29 @@
               ]);
               $duration = $friendlyTime((int)($b['remaining_seconds'] ?? -1));
             ?>
-            <span class="badge" style="background:#7a1b1b" title="<?= htmlspecialchars($tooltip) ?>">
+            <span class="badge status-banned" title="<?= htmlspecialchars($tooltip) ?>">
               <?= htmlspecialchars(__('app.account.ban.badge', ['duration' => $duration])) ?>
             </span>
           <?php else: ?>
-            <?= (int)$row['online'] ? '<span class="badge" style="background:#16a34a">'.htmlspecialchars(__('app.character.index.status.online')).'</span>' : '<span class="badge">'.htmlspecialchars(__('app.character.index.status.offline')).'</span>' ?>
+            <?= (int)$row['online'] ? '<span class="badge status-online">'.htmlspecialchars(__('app.character.index.status.online')).'</span>' : '<span class="badge">'.htmlspecialchars(__('app.character.index.status.offline')).'</span>' ?>
           <?php endif; ?>
         </td>
         <td><?= htmlspecialchars(format_datetime($row['logout_time'] ?? null)) ?></td>
         <?php $viewUrl = \Acme\Panel\Core\Url::to('/character/view') . '?guid=' . (int)$row['guid']; ?>
-        <td style="white-space:nowrap">
+        <td class="char-action-cell">
+          <?php if($characterCapabilities['details']): ?>
           <a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a>
+          <?php endif; ?>
+          <?php if($characterCapabilities['delete']): ?>
           <button class="btn-sm btn danger js-char-delete" type="button" data-guid="<?= (int)$row['guid'] ?>" data-name="<?= htmlspecialchars($row['name']) ?>"><?= htmlspecialchars(__('app.character.actions.delete')) ?></button>
+          <?php endif; ?>
+          <?php if(!$__canAny(['characters.details', 'characters.delete'])): ?>
+          <span class="muted small"><?= htmlspecialchars(__('app.common.capabilities.no_actions')) ?></span>
+          <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
-    <?php if(!$pager->items): ?><tr><td colspan="12" style="text-align:center;">&<?= 'nbsp;' ?><?= htmlspecialchars(__('app.character.index.feedback.empty')) ?></td></tr><?php endif; ?>
+    <?php if(!$pager->items): ?><tr><td colspan="<?= $characterCanBulk ? 12 : 11 ?>" class="char-empty-cell">&<?= 'nbsp;' ?><?= htmlspecialchars(__('app.character.index.feedback.empty')) ?></td></tr><?php endif; ?>
     </tbody>
   </table>
   <?php
@@ -204,4 +232,3 @@
 <?php else: ?>
   <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.character.index.feedback.enter_search')) ?></div>
 <?php endif; ?>
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>

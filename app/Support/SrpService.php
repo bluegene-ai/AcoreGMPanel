@@ -25,7 +25,7 @@ class SrpService
     public static function generate(string $username, string $plain): array
     {
         if (!function_exists('gmp_init')) {
-            throw new \RuntimeException(Lang::get('app.support.srp.errors.gmp_missing'));
+            throw new \RuntimeException(Lang::get('support.srp.errors.gmp_missing'));
         }
 
 
@@ -40,7 +40,7 @@ class SrpService
     public static function generateBinary32(string $username, string $plain): array
     {
         if (!function_exists('gmp_init')) {
-            throw new \RuntimeException(Lang::get('app.support.srp.errors.gmp_missing_binary'));
+            throw new \RuntimeException(Lang::get('support.srp.errors.gmp_missing_binary'));
         }
 
         [$salt, $verifier] = self::generatePair($username, $plain);

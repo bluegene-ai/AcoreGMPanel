@@ -28,6 +28,8 @@ const escapeHtml = (value) => String(value)
 function boot(){
   if(document.body.dataset.module !== 'logs') return;
   const config = window.LOGS_DATA || { modules:{}, defaults:{} };
+  const capabilities = window.PANEL_CAPABILITIES || {};
+  const canRead = capabilities.read !== false;
   const modules = config.modules || {};
   const defaults = config.defaults || {};
 
@@ -236,6 +238,12 @@ function boot(){
   }
 
   async function loadLogs(){
+    if(!canRead){
+      const message = status('read_required', 'Reading logs requires an additional capability.');
+      if(rawBox){ rawBox.textContent = message; }
+      if(tableBody){ tableBody.innerHTML = `<tr><td colspan="4" class="text-center muted">${message}</td></tr>`; }
+      return;
+    }
     if(!moduleSelect || !typeSelect){
       return;
     }
@@ -311,7 +319,7 @@ function boot(){
     });
   }
 
-  triggerLoad();
+  if(canRead) triggerLoad();
 }
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', boot);

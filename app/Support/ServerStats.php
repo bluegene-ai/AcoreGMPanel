@@ -30,30 +30,34 @@ class ServerStats
     {
         $sid = $serverId ?? ServerContext::currentId();
         if(array_key_exists($sid,self::$cache)) return self::$cache[$sid];
-        try {
+        $value = TransientCache::remember('server_stats', 'online_' . $sid, 15, static function () use ($sid): ?int {
+            try {
+                $pdo = Database::forServer($sid,'characters');
+                $st = $pdo->query('SELECT COUNT(*) FROM characters WHERE online=1');
+                return (int)$st->fetchColumn();
+            } catch(\Throwable $e){
+                return null;
+            }
+        });
 
-            $pdo = Database::forServer($sid,'characters');
-            $st = $pdo->query('SELECT COUNT(*) FROM characters WHERE online=1');
-            $val = (int)$st->fetchColumn();
-            return self::$cache[$sid] = $val;
-        } catch(\Throwable $e){
-            return self::$cache[$sid] = null;
-
-        }
+        return self::$cache[$sid] = ($value === null ? null : (int)$value);
     }
 
     public static function totalCharacters(?int $serverId=null): ?int
     {
         $sid = $serverId ?? ServerContext::currentId();
         if(array_key_exists($sid,self::$totalCache)) return self::$totalCache[$sid];
-        try {
-            $pdo = Database::forServer($sid,'characters');
-            $st = $pdo->query('SELECT COUNT(*) FROM characters');
-            $val = (int)$st->fetchColumn();
-            return self::$totalCache[$sid] = $val;
-        } catch(\Throwable $e){
-            return self::$totalCache[$sid] = null;
-        }
+        $value = TransientCache::remember('server_stats', 'total_' . $sid, 60, static function () use ($sid): ?int {
+            try {
+                $pdo = Database::forServer($sid,'characters');
+                $st = $pdo->query('SELECT COUNT(*) FROM characters');
+                return (int)$st->fetchColumn();
+            } catch(\Throwable $e){
+                return null;
+            }
+        });
+
+        return self::$totalCache[$sid] = ($value === null ? null : (int)$value);
     }
 }
 

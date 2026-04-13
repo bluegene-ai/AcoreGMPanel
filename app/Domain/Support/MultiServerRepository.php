@@ -52,7 +52,7 @@ abstract class MultiServerRepository
         if(!$this->auth){
             $cfg = ServerContext::server($this->serverId)['auth'] ?? null;
             if(!$cfg){
-                throw new RuntimeException(Lang::get('app.support.multi_server.errors.auth_config_missing', [
+                throw new RuntimeException(Lang::get('support.multi_server.errors.auth_config_missing', [
                     'server' => $this->serverId,
                 ]));
             }

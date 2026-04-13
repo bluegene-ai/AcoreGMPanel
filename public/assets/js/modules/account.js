@@ -39,6 +39,8 @@
 	const moduleTranslator = typeof panel.createModuleTranslator === 'function'
 		? panel.createModuleTranslator('account')
 		: null;
+	const capabilities = window.PANEL_CAPABILITIES || {};
+	const hasCap = key => capabilities[key] !== false;
 
 	function translate(path, fallback, replacements){
 		const defaultValue = fallback ?? `modules.account.${path}`;
@@ -329,6 +331,7 @@
 			const statusOnline = translate('status.online', 'Online');
 			const statusOffline = translate('status.offline', 'Offline');
 			const privateIpTitle = translate('feedback.private_ip_disabled', 'LAN IP lookup disabled');
+			const canBulk = hasCap('ban') || hasCap('delete');
 			const actionLabels = {
 				chars: translate('actions.chars', 'Characters'),
 				gm: translate('actions.gm', 'GM'),
@@ -360,17 +363,17 @@
 					statusHtml = `<span class="badge status-offline">${esc(statusOffline)}</span>`;
 				}
 				const actionButtons = [
-					{ action: 'chars', className: 'btn-sm btn info action', label: actionLabels.chars },
-					{ action: 'gm', className: 'btn-sm btn warn action', label: actionLabels.gm },
-					{ action: 'ban', className: 'btn-sm btn danger action', label: actionLabels.ban },
-					{ action: 'unban', className: 'btn-sm btn success action', label: actionLabels.unban },
-					{ action: 'pass', className: 'btn-sm btn info outline action', label: actionLabels.password },
-					{ action: 'email', className: 'btn-sm btn neutral action', label: actionLabels.email },
-					{ action: 'rename', className: 'btn-sm btn neutral outline action', label: actionLabels.rename },
-					{ action: 'ip-accounts', className: 'btn-sm btn neutral action', label: actionLabels.sameIp, disabled: privateIp, title: privateIp ? privateIpTitle : '' },
-					{ action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick },
-					{ action: 'delete', className: 'btn-sm btn danger action', label: actionLabels.delete }
-				];
+					hasCap('characters') ? { action: 'chars', className: 'btn-sm btn info action', label: actionLabels.chars } : null,
+					hasCap('gm') ? { action: 'gm', className: 'btn-sm btn warn action', label: actionLabels.gm } : null,
+					hasCap('ban') ? { action: 'ban', className: 'btn-sm btn danger action', label: actionLabels.ban } : null,
+					hasCap('ban') ? { action: 'unban', className: 'btn-sm btn success action', label: actionLabels.unban } : null,
+					hasCap('password') ? { action: 'pass', className: 'btn-sm btn info outline action', label: actionLabels.password } : null,
+					hasCap('update') ? { action: 'email', className: 'btn-sm btn neutral action', label: actionLabels.email } : null,
+					hasCap('update') ? { action: 'rename', className: 'btn-sm btn neutral outline action', label: actionLabels.rename } : null,
+					hasCap('ip') ? { action: 'ip-accounts', className: 'btn-sm btn neutral action', label: actionLabels.sameIp, disabled: privateIp, title: privateIp ? privateIpTitle : '' } : null,
+					hasCap('kick') ? { action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick } : null,
+					hasCap('delete') ? { action: 'delete', className: 'btn-sm btn danger action', label: actionLabels.delete } : null
+				].filter(Boolean);
 				const buttonsHtml = actionButtons.map(btn => {
 					const attrs = [
 						`class="${btn.className}"`,
@@ -386,8 +389,12 @@
 				const gmData = row.gmlevel != null ? row.gmlevel : 0;
 				const lastLogin = row.last_login || '-';
 				const lastIpCell = lastIp || '-';
+				const selectCell = canBulk
+					? `<td><input type="checkbox" class="js-account-select" value="${esc(idValue)}" aria-label="select"></td>`
+					: '';
+				const actionsHtml = buttonsHtml || `<span class="muted small">${esc(translate('readonly.no_actions', 'No actions available'))}</span>`;
 				return `<tr data-id="${esc(idValue)}" data-username="${esc(usernameValue)}" data-gm="${esc(gmData)}" data-last-ip="${esc(lastIp)}">`
-					+ `<td><input type="checkbox" class="js-account-select" value="${esc(idValue)}" aria-label="select"></td>`
+					+ selectCell
 					+ `<td>${esc(idValue)}</td>`
 					+ `<td>${esc(usernameValue)}</td>`
 					+ `<td>${esc(gmValue)}</td>`
@@ -395,11 +402,11 @@
 					+ `<td>${esc(lastLogin)}</td>`
 					+ `<td>${esc(lastIpCell)}</td>`
 					+ `<td class="ip-location" data-ip="${esc(lastIp)}">-</td>`
-					+ `<td class="nowrap">${buttonsHtml}</td>`
+					+ `<td class="nowrap">${actionsHtml}</td>`
 					+ `</tr>`;
 			}).join('');
 			const emptyText = translate('feedback.empty', 'No results');
-			tbody.innerHTML = rows || `<tr><td colspan="9" style="text-align:center;">${esc(emptyText)}</td></tr>`;
+			tbody.innerHTML = rows || `<tr><td colspan="${canBulk ? 9 : 8}" class="account-table__empty-cell">${esc(emptyText)}</td></tr>`;
 			fillIpLocations(tbody);
 		}catch(err){
 			console.error('[account] failed to reload account table', err);
@@ -488,23 +495,26 @@
 				const statusTag = online
 					? `<span class="tag status-online-alt">${esc(onlineLabel)}</span>`
 					: `<span class="tag status-offline">${esc(offlineLabel)}</span>`;
-				const buttonAttrs = [
-					'class="btn-sm btn outline danger action-kick-char"',
-					`data-char="${esc(character.name)}"`
-				];
-				if(!online){
-					buttonAttrs.push('disabled');
-					buttonAttrs.push(`title="${esc(offlineTooltip)}"`);
+				let kickButton = '';
+				if(hasCap('kick')){
+					const buttonAttrs = [
+						'class="btn-sm btn outline danger action-kick-char"',
+						`data-char="${esc(character.name)}"`
+					];
+					if(!online){
+						buttonAttrs.push('disabled');
+						buttonAttrs.push(`title="${esc(offlineTooltip)}"`);
+					}
+					kickButton = `<button ${buttonAttrs.join(' ')}>${esc(kickLabel)}</button>`;
 				}
-				const kickButton = `<button ${buttonAttrs.join(' ')}>${esc(kickLabel)}</button>`;
 				return `<tr data-guid="${esc(character.guid)}" data-name="${esc(character.name)}" data-online="${online ? 1 : 0}">`
 					+ `<td>${esc(character.guid)}</td>`
 					+ `<td><a href="${esc(toCharacter)}"><span data-class-id="${esc(character.class)}">${esc(character.name)}</span></a></td>`
 					+ `<td>${esc(character.level)}</td>`
-					+ `<td>${statusTag} ${kickButton}</td>`
+					+ `<td>${statusTag}${kickButton ? ` ${kickButton}` : ''}</td>`
 					+ `</tr>`;
 			}).join('');
-			const emptyRow = `<tr><td colspan="4" style="text-align:center">${esc(translate('characters.empty', 'No characters'))}</td></tr>`;
+			const emptyRow = `<tr><td colspan="4" class="account-table__empty-cell">${esc(translate('characters.empty', 'No characters'))}</td></tr>`;
 			modal.querySelector('.modal-body').innerHTML = `<table class="table modal-table-left"><thead><tr>`
 				+ `<th>${esc(tableLabels.guid)}</th>`
 				+ `<th>${esc(tableLabels.name)}</th>`
@@ -524,7 +534,7 @@
 				const header = modal.querySelector('header h3');
 				if(header){
 					const badge = document.createElement('span');
-					badge.style.marginLeft = '12px';
+					badge.className = 'account-characters__ban-meta';
 					badge.innerHTML = `<span class="tag status-banned">${esc(badgeLabel)}</span> <span class="small muted" title="${esc(tooltip)}">${esc(remain)}</span>`;
 					header.appendChild(badge);
 				}
@@ -734,7 +744,7 @@
 					<label>${esc(label)}</label>
 					<input type="email" name="email" placeholder="${esc(placeholder)}" maxlength="255" required>
 				</div>
-				<div class="form-error" style="display:none;color:#c53030;margin-top:8px;"></div>
+				<div class="form-error account-form-error" hidden></div>
 			</form>
 		`;
 		const modal = showModal(title, formHtml);
@@ -757,10 +767,10 @@
 			if(!errorBox) return;
 			if(message){
 				errorBox.textContent = message;
-				errorBox.style.display = 'block';
+				errorBox.hidden = false;
 			}else{
 				errorBox.textContent = '';
-				errorBox.style.display = 'none';
+				errorBox.hidden = true;
 			}
 		};
 		const submit = async () => {
@@ -814,7 +824,7 @@
 					<label>${esc(passConfirmLabel)}</label>
 					<input type="password" name="password_confirm" minlength="8" required>
 				</div>
-				<div class="form-error" style="display:none;color:#c53030;margin-top:8px;"></div>
+				<div class="form-error account-form-error" hidden></div>
 			</form>
 		`;
 		const modal = showModal(title, formHtml);
@@ -837,10 +847,10 @@
 			if(!errorBox) return;
 			if(message){
 				errorBox.textContent = message;
-				errorBox.style.display = 'block';
+				errorBox.hidden = false;
 			}else{
 				errorBox.textContent = '';
-				errorBox.style.display = 'none';
+				errorBox.hidden = true;
 			}
 		};
 		const submit = async () => {
@@ -928,7 +938,7 @@
 						<option value="3">${esc(gmThree)}</option>
 					</select>
 				</div>
-				<div class="form-error" style="display:none;color:#c53030;margin-top:8px;"></div>
+				<div class="form-error account-form-error" hidden></div>
 			</form>
 		`;
 		const modal = showModal(title, formHtml);
@@ -955,10 +965,10 @@
 			if(!errorBox) return;
 			if(message){
 				errorBox.textContent = message;
-				errorBox.style.display = 'block';
+				errorBox.hidden = false;
 			}else{
 				errorBox.textContent = '';
-				errorBox.style.display = 'none';
+				errorBox.hidden = true;
 			}
 		};
 

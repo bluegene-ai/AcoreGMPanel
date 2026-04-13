@@ -27,8 +27,7 @@ class HomeController extends Controller
             }
         }
 
-        return $this->view('home.index', [
-            'title' => Config::get('app.name', 'Acore GM Panel'),
+        return $this->pageView('home.index', [
             'version' => Config::get('app.version', 'dev'),
             'readmeHtml' => $readmeHtml,
             'readmeSource' => $readmeFile,

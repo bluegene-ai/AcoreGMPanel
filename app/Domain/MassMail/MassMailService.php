@@ -31,7 +31,7 @@
 
 namespace Acme\Panel\Domain\MassMail;
 
-use Acme\Panel\Core\Database; use Acme\Panel\Support\Audit; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
+use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\Audit; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
 
 
 
@@ -159,35 +159,62 @@ class MassMailService
             foreach($chunk as $name){
                 try {
                     if($action==='send_mail'){
+                        $beforeMailId = $this->latestMailId();
                         $cmd=sprintf('.send mail %s "%s" "%s"',$name,$subject,$body);
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
-                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        if($res['success']) {
+                            $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, null);
+                            if($deliveryError === null) { $success++; $sentNames[]=$name; }
+                            else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.$deliveryError; }
+                        }
                         else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
                     }
                     elseif($action==='send_item'){
+                        $beforeMailId = $this->latestMailId();
                         $cmd=sprintf('.send items %s "%s" "%s" %s',$name,$subject,$body,$itemString);
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
-                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        if($res['success']) {
+                            $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, null);
+                            if($deliveryError === null) { $success++; $sentNames[]=$name; }
+                            else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.$deliveryError; }
+                        }
                         else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
                     }
                     elseif($action==='send_gold'){
+                        $beforeMailId = $this->latestMailId();
                         $cmd=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
-                        if($res['success']) { $success++; $sentNames[]=$name; }
+                        if($res['success']) {
+                            $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, $amount);
+                            if($deliveryError === null) { $success++; $sentNames[]=$name; }
+                            else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.$deliveryError; }
+                        }
                         else { $fail++; $failedNames[]=$name; $errors[]=$name.':'.($res['message'] ?? $res['code'] ?? 'fail'); }
                     }
                     elseif($action==='send_item_gold'){
+                        $beforeItemsMailId = $this->latestMailId();
                         $cmdItems=sprintf('.send items %s "%s" "%s" %s',$name,$subject,$body,$itemString);
                         $resItems = $this->soapExec->execute($cmdItems,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+                        $beforeGoldMailId = $this->latestMailId();
                         $cmdGold=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
                         $resGold = $this->soapExec->execute($cmdGold,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
-                        $ok = ($resItems['success'] ?? false) && ($resGold['success'] ?? false);
+                        $itemsError = null;
+                        if($resItems['success'] ?? false){
+                            $itemsError = $this->confirmMailDelivery($name, $subject, $beforeItemsMailId, null);
+                        }
+                        $goldError = null;
+                        if($resGold['success'] ?? false){
+                            $goldError = $this->confirmMailDelivery($name, $subject, $beforeGoldMailId, $amount);
+                        }
+                        $ok = ($resItems['success'] ?? false) && ($resGold['success'] ?? false) && $itemsError === null && $goldError === null;
                         if($ok){
                             $success++; $sentNames[]=$name;
                         } else {
                             $fail++; $failedNames[]=$name;
                             if(!($resItems['success'] ?? false)) $errors[]=$name.'[items]:'.($resItems['message'] ?? $resItems['code'] ?? 'fail');
+                            elseif($itemsError !== null) $errors[]=$name.'[items]:'.$itemsError;
                             if(!($resGold['success'] ?? false)) $errors[]=$name.'[gold]:'.($resGold['message'] ?? $resGold['code'] ?? 'fail');
+                            elseif($goldError !== null) $errors[]=$name.'[gold]:'.$goldError;
                         }
                     }
                     else {
@@ -338,6 +365,77 @@ class MassMailService
     { $st=$this->chars->query('SELECT name FROM characters WHERE online=1'); return $st->fetchAll(PDO::FETCH_COLUMN)?:[]; }
     private function parseCustom(string $raw): array
     { $lines=preg_split('/\r\n|\r|\n/',$raw); $out=[]; foreach($lines as $ln){ $ln=trim($ln); if($ln!=='') $out[$ln]=true; } return array_keys($out); }
+
+    private function characterGuidByName(string $name): ?int
+    {
+        $name = trim($name);
+        if ($name === '')
+            return null;
+
+        $st = $this->chars->prepare('SELECT guid FROM characters WHERE name=:name LIMIT 1');
+        $st->execute([':name' => $name]);
+        $guid = $st->fetchColumn();
+
+        return $guid === false ? null : (int) $guid;
+    }
+
+    private function latestMailId(): int
+    {
+        $st = $this->chars->query('SELECT COALESCE(MAX(id), 0) FROM mail');
+        return (int) ($st->fetchColumn() ?: 0);
+    }
+
+    private function configuredCharactersDatabase(): string
+    {
+        try {
+            $name = $this->chars->query('SELECT DATABASE()')->fetchColumn();
+            if (is_string($name) && $name !== '')
+                return $name;
+        } catch (\Throwable $e) {
+        }
+
+        return 'unknown';
+    }
+
+    private function mailExistsAfter(int $receiverGuid, string $subject, int $afterId, ?int $money = null): bool
+    {
+        $sql = 'SELECT COUNT(*) FROM mail WHERE receiver=:receiver AND id>:after_id AND subject=:subject';
+        $params = [
+            ':receiver' => $receiverGuid,
+            ':after_id' => $afterId,
+            ':subject' => $subject,
+        ];
+
+        if ($money !== null) {
+            $sql .= ' AND money=:money';
+            $params[':money'] = $money;
+        }
+
+        $st = $this->chars->prepare($sql);
+        $st->execute($params);
+        return (int) ($st->fetchColumn() ?: 0) > 0;
+    }
+
+    private function confirmMailDelivery(string $targetName, string $subject, int $afterId, ?int $money = null): ?string
+    {
+        $guid = $this->characterGuidByName($targetName);
+        if ($guid === null) {
+            return Lang::get('app.mass_mail.service.bulk.delivery_target_missing', ['target' => $targetName]);
+        }
+
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            if ($this->mailExistsAfter($guid, $subject, $afterId, $money))
+                return null;
+
+            if ($attempt < 3)
+                usleep(150000);
+        }
+
+        return Lang::get('app.mass_mail.service.bulk.delivery_not_confirmed', [
+            'target' => $targetName,
+            'database' => $this->configuredCharactersDatabase(),
+        ]);
+    }
 
 
 

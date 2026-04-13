@@ -4,8 +4,8 @@
  * Purpose: Provides functionality for the resources/views/item_owner module.
  */
 
- $module = 'item_owner'; include __DIR__ . '/../layouts/base_top.php'; ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.item_owner.page_title')) ?></h1>
+include dirname(__DIR__) . '/components/page_header.php';
+?>
 <div class="item-owner-layout">
   <section class="item-owner-card item-owner-card--search">
     <header class="item-owner-card__header">
@@ -125,11 +125,4 @@
   </div>
 </div>
 
-<script>
-window.__ITEM_OWNER_CTX = {
-  csrf: window.__CSRF_TOKEN,
-  locale: <?= json_encode(\Acme\Panel\Core\Lang::locale(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
-};
-</script>
-<?php include __DIR__ . '/../layouts/base_bottom.php'; ?>
 

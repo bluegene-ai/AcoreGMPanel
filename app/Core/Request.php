@@ -19,12 +19,15 @@ declare(strict_types=1);
 
 namespace Acme\Panel\Core;
 
+use Acme\Panel\Support\ClientIp;
+
 class Request
 {
     public string $method;
     public string $uri;
     public array $get;
     public array $post;
+    public array $headers;
     public array $server;
 
     public static function capture(): self
@@ -34,6 +37,7 @@ class Request
         $request->uri = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
         $request->get = $_GET;
         $request->post = $_POST;
+        $request->headers = self::captureHeaders($_SERVER);
         $request->server = $_SERVER;
 
         if ($request->expectsJsonPayload() && empty($_POST)) {
@@ -122,39 +126,51 @@ class Request
 
     public function ip(): string
     {
-        $candidates = [
-            'HTTP_CLIENT_IP',
-            'HTTP_X_FORWARDED_FOR',
-            'HTTP_X_FORWARDED',
-            'HTTP_X_CLUSTER_CLIENT_IP',
-            'HTTP_FORWARDED_FOR',
-            'HTTP_FORWARDED',
-            'REMOTE_ADDR',
-        ];
+        return ClientIp::resolve($this->server);
+    }
 
-        foreach ($candidates as $header) {
-            if (empty($this->server[$header])) {
+    public function expectsJsonResponse(): bool
+    {
+        return self::expectsJsonResponseForServer($this->server, $this->uri);
+    }
+
+    public static function expectsJsonResponseForServer(array $server, ?string $uri = null): bool
+    {
+        $accept = strtolower((string) ($server['HTTP_ACCEPT'] ?? ''));
+        if (str_contains($accept, 'application/json'))
+            return true;
+
+        $requestedWith = strtolower((string) ($server['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($requestedWith === 'xmlhttprequest')
+            return true;
+
+        $uri ??= strtok((string) ($server['REQUEST_URI'] ?? '/'), '?') ?: '/';
+
+        return str_contains($uri, '/api/');
+    }
+
+    private static function captureHeaders(array $server): array
+    {
+        $headers = [];
+
+        foreach ($server as $key => $value) {
+            if (!is_string($key)) {
                 continue;
             }
 
-            $value = $this->server[$header];
-
-            if ($header === 'HTTP_X_FORWARDED_FOR') {
-                $parts = array_map('trim', explode(',', (string) $value));
-
-                foreach ($parts as $part) {
-                    if ($part !== '') {
-                        return $part;
-                    }
-                }
-
+            if (str_starts_with($key, 'HTTP_')) {
+                $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($key, 5)))));
+                $headers[$name] = (string) $value;
                 continue;
             }
 
-            return is_string($value) ? $value : (string) $value;
+            if ($key === 'CONTENT_TYPE' || $key === 'CONTENT_LENGTH') {
+                $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', $key))));
+                $headers[$name] = (string) $value;
+            }
         }
 
-        return '0.0.0.0';
+        return $headers;
     }
 
     private function expectsJsonPayload(): bool

@@ -28,9 +28,14 @@ class CsrfMiddleware
 
 
             if(!$token){
-                $hdrs = $request->headers ?? [];
+                $hdrs = is_array($request->headers ?? null) ? $request->headers : [];
                 foreach(['X-CSRF-TOKEN','X-XSRF-TOKEN'] as $h){
-                    if(isset($hdrs[$h])){ $token=$hdrs[$h]; break; }
+                    if(isset($hdrs[$h]) && $hdrs[$h] !== ''){ $token=$hdrs[$h]; break; }
+                }
+            }
+            if(!$token){
+                foreach(['HTTP_X_CSRF_TOKEN','HTTP_X_XSRF_TOKEN'] as $h){
+                    if(!empty($request->server[$h])){ $token=(string)$request->server[$h]; break; }
                 }
             }
             if(!Csrf::verify($token)){

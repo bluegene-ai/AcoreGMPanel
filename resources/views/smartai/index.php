@@ -4,9 +4,8 @@
  * Purpose: Provides functionality for the resources/views/smartai module.
  */
 
- $module = 'smart_ai_wizard'; include __DIR__ . '/../layouts/base_top.php'; ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.smartai.page_title')) ?></h1>
-<p class="muted" style="margin-top:-8px;margin-bottom:24px"><?= htmlspecialchars(__('app.smartai.intro')) ?></p>
+include dirname(__DIR__) . '/components/page_header.php';
+?>
 <div class="smartai-layout">
   <aside class="smartai-sidebar">
     <div class="smartai-card">
@@ -28,13 +27,13 @@
           <a href="<?= htmlspecialchars($catalog['metadata']['source'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars(__('app.smartai.sidebar.view_wiki')) ?></a>
         <?php endif; ?>
         <?php if (!empty($catalog['metadata']['updated_at'])): ?>
-          <p class="small muted" style="margin-top:12px"><?= htmlspecialchars(__('app.smartai.sidebar.updated_at', ['date' => $catalog['metadata']['updated_at']])) ?></p>
+          <p class="small muted smartai-meta-updated"><?= htmlspecialchars(__('app.smartai.sidebar.updated_at', ['date' => $catalog['metadata']['updated_at']])) ?></p>
         <?php endif; ?>
       </div>
     </div>
   </aside>
   <section class="smartai-content">
-    <div id="smartAiFlash" class="panel-flash" style="display:none"></div>
+    <div id="smartAiFlash" class="panel-flash smartai-flash-hidden"></div>
     <form id="smartAiForm" autocomplete="off">
       <div class="smartai-step" data-step="1">
         <header>
@@ -99,8 +98,5 @@
     </footer>
   </section>
 </div>
-<script>
-window.SMART_AI_WIZARD_DATA = <?= json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-</script>
-<?php include __DIR__ . '/../layouts/base_bottom.php'; ?>
+<script type="application/json" data-panel-json data-global="SMART_AI_WIZARD_DATA"><?= json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 

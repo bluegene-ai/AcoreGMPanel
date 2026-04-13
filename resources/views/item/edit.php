@@ -4,16 +4,33 @@
  * Purpose: Provides functionality for the resources/views/item module.
  */
 
- $module='item'; include __DIR__.'/../layouts/base_top.php'; use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
+use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
+<?php
+  $itemEditCapabilities = is_array($__pageCapabilities ?? null)
+    ? $__pageCapabilities
+    : [
+      'view' => $__can('content.view'),
+      'update' => $__can('content.update'),
+      'delete' => $__can('content.delete'),
+      'sql' => $__can('content.sql'),
+    ];
+  $__pageCapabilities = $itemEditCapabilities;
+  $capabilityNotice = $__canAll(['content.update', 'content.delete', 'content.sql'])
+    ? null
+    : __('app.common.capabilities.page_limited');
+?>
+<?php include __DIR__.'/../components/page_header.php'; ?>
 <div class="page-toolbar item-toolbar">
   <div class="toolbar-line top-line">
-    <h1 class="page-title no-margin"><?= htmlspecialchars(__('app.item.edit.title', ['id' => (int)$item['entry']])) ?></h1>
     <div class="toolbar-spacer"></div>
     <div class="toolbar-actions primary-actions">
-      <a class="btn outline" href="<?= url('/item?'.htmlspecialchars($cancel_query)) ?>"><?= htmlspecialchars(__('app.item.edit.back_to_list')) ?></a>
       <button class="btn outline" type="button" id="btn-compact-toggle" data-label-normal="<?= htmlspecialchars(__('app.item.edit.compact.normal')) ?>" data-label-compact="<?= htmlspecialchars(__('app.item.edit.compact.compact')) ?>"><?= htmlspecialchars(__('app.item.edit.compact.compact')) ?></button>
+      <?php if($itemEditCapabilities['delete']): ?>
       <button class="btn danger" id="btn-delete-item" data-id="<?= (int)$item['entry'] ?>"><?= htmlspecialchars(__('app.item.edit.delete')) ?></button>
+      <?php endif; ?>
+      <?php if($itemEditCapabilities['update']): ?>
       <button class="btn success" type="button" id="btn-save-item-top"><?= htmlspecialchars(__('app.item.edit.save')) ?></button>
+      <?php endif; ?>
       <button class="btn info outline" type="button" id="btn-diff-sql"><?= htmlspecialchars(__('app.item.edit.diff_sql')) ?></button>
     </div>
   </div>
@@ -22,6 +39,7 @@
   </div>
 </div>
 <div id="item-feedback" class="panel-flash panel-flash--inline"></div>
+<?php include __DIR__.'/../components/capability_notice.php'; ?>
 <form id="itemEditForm" data-entry="<?= (int)$item['entry'] ?>" class="item-edit-grid">
   <?php
     $schema = include __DIR__.'/../../../config/item_fields.php';
@@ -126,29 +144,31 @@
 </form>
 
 <section class="item-edit-span-2 sql-section" id="itemDiffSqlSection">
-  <h2 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+  <h2 class="item-sql-section__heading">
     <span><?= htmlspecialchars(__('app.item.edit.diff.title')) ?></span>
-    <label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;">
-      <input type="checkbox" id="sqlFullMode" style="margin:0;"> <?= htmlspecialchars(__('app.item.edit.diff.full_mode')) ?>
+    <label class="item-sql-section__toggle-label">
+      <input type="checkbox" id="sqlFullMode" class="item-sql-section__toggle-input"> <?= htmlspecialchars(__('app.item.edit.diff.full_mode')) ?>
     </label>
-  <button type="button" class="btn info outline btn-sm" id="btn-copy-diff-inline" style="margin-left:auto;"><?= htmlspecialchars(__('app.item.edit.actions.copy')) ?></button>
+  <button type="button" class="btn info outline btn-sm item-sql-section__copy-button" id="btn-copy-diff-inline"><?= htmlspecialchars(__('app.item.edit.actions.copy')) ?></button>
+  <?php if($itemEditCapabilities['sql']): ?>
   <button type="button" class="btn success btn-sm" id="btn-exec-diff-sql"><?= htmlspecialchars(__('app.item.edit.actions.execute')) ?></button>
+  <?php endif; ?>
   </h2>
-  <div class="muted" style="font-size:12px;"><?= htmlspecialchars(__('app.item.edit.diff.hint')) ?></div>
-  <pre id="itemDiffSqlLive" class="sql-result mono" style="min-height:90px;"><?= htmlspecialchars(__('app.item.edit.diff.placeholder')) ?></pre>
-  <div id="itemDiffSqlExecResult" class="sql-exec-result" style="margin-top:10px;display:none;border:1px solid #2d3b45;background:#121a21;padding:10px 12px;border-radius:6px;font-size:12px;line-height:1.5">
-    <div class="result-head" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-      <strong style="color:#89c2ff"><?= htmlspecialchars(__('app.item.edit.diff.exec_title')) ?></strong>
-      <span id="sqlExecStatus" class="badge" style="display:none;padding:2px 6px;border-radius:4px;font-size:11px"></span>
-      <span id="sqlExecTiming" style="color:#6a7b86;font-size:11px"></span>
+  <div class="muted item-sql-section__hint"><?= htmlspecialchars(__('app.item.edit.diff.hint')) ?></div>
+  <pre id="itemDiffSqlLive" class="sql-result mono item-sql-section__live-box"><?= htmlspecialchars(__('app.item.edit.diff.placeholder')) ?></pre>
+  <div id="itemDiffSqlExecResult" class="sql-exec-result item-sql-section__exec-result">
+    <div class="result-head item-sql-section__result-head">
+      <strong class="item-sql-section__result-title"><?= htmlspecialchars(__('app.item.edit.diff.exec_title')) ?></strong>
+      <span id="sqlExecStatus" class="badge item-sql-section__status"></span>
+      <span id="sqlExecTiming" class="item-sql-section__timing"></span>
     </div>
-    <div id="sqlExecSummary" style="margin-bottom:6px"></div>
-    <pre id="sqlExecMessages" class="mono" style="max-height:180px;overflow:auto;background:#0c1318;padding:8px 10px;border-radius:4px;margin:0"></pre>
-    <div id="sqlExecSampleWrapper" style="display:none;margin-top:8px">
-      <div style="font-weight:bold;color:#8fa8b7;margin-bottom:4px"><?= htmlspecialchars(__('app.item.edit.diff.sample_title')) ?></div>
-      <pre id="sqlExecSample" class="mono" style="max-height:160px;overflow:auto;background:#0c1318;padding:8px 10px;border-radius:4px;margin:0"></pre>
+    <div id="sqlExecSummary" class="item-sql-section__summary"></div>
+    <pre id="sqlExecMessages" class="mono item-sql-section__messages"></pre>
+    <div id="sqlExecSampleWrapper" class="item-sql-section__sample-wrapper">
+      <div class="item-sql-section__sample-title"><?= htmlspecialchars(__('app.item.edit.diff.sample_title')) ?></div>
+      <pre id="sqlExecSample" class="mono item-sql-section__sample"></pre>
     </div>
-    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+    <div class="item-sql-section__actions">
   <button type="button" class="btn btn-sm outline" id="btn-clear-exec-result"><?= htmlspecialchars(__('app.item.edit.actions.clear')) ?></button>
   <button type="button" class="btn btn-sm neutral" id="btn-hide-exec-result"><?= htmlspecialchars(__('app.item.edit.actions.hide')) ?></button>
   <button type="button" class="btn btn-sm info outline" id="btn-copy-exec-json"><?= htmlspecialchars(__('app.item.edit.actions.copy_json')) ?></button>
@@ -157,73 +177,8 @@
 </section>
 
 <!-- 受限 SQL 执行模块已移除，仅保留自动差异预览；如需恢复可从版本控制回滚 -->
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>
-<script>
-// Bitmask 组件模块化加载
-(function(){
-  function ensure(){
-    import((window.APP_BASE||'') + '/assets/js/modules/bitmask_flags.js')
-      .then(mod=>{ mod.initBitmaskFlags(); })
-      .catch(()=>{});
-  }
-  if('noModule' in document.createElement('script')){ ensure(); } else { // fallback 非 module 浏览器（基本不考虑）
-    const s=document.createElement('script'); s.src=(window.APP_BASE||'') + '/assets/js/modules/bitmask_flags.js'; s.onload=ensure; document.head.appendChild(s);
-  }
-})();
-// 品质预览
-(function(){
-  const sel=document.getElementById('edit-quality-select'); const preview=document.getElementById('quality-preview'); if(!sel||!preview||!window.APP_ENUMS) return;
-  const codes=APP_ENUMS.qualityCodes; const names=APP_ENUMS.qualities; const fallback=<?= json_encode(__('app.item.quality.unknown'), JSON_UNESCAPED_UNICODE) ?>;
-  sel.addEventListener('change',()=>{ const q=parseInt(sel.value)||0; const code=codes[q]||'unknown'; preview.className='quality-badge item-quality-'+code; preview.textContent=names[q]||fallback; });
-})();
-// 顶部保存按钮复用底部逻辑 (若已有全局监听可复用，这里简单触发原按钮 ID)
-document.getElementById('btn-save-item-top')?.addEventListener('click',()=>{
-  // 如果之前脚本绑定在 #btn-save-item，可以兼容：
-  const legacy=document.getElementById('btn-save-item');
-  if(legacy){ legacy.click(); return; }
-  // 否则自行触发一个自定义事件供外部监听
-  document.dispatchEvent(new CustomEvent('itemEditSaveRequested'));
-});
-// 折叠记忆 + 快速导航 + 脏离开 + 紧凑模式
-(function(){
-  const KEY='itemEdit:sections:v1';
-  const details=[...document.querySelectorAll('#itemEditForm > details')];
-  const fallbackTemplate=<?= json_encode(__('app.item.edit.group_fallback'), JSON_UNESCAPED_UNICODE) ?>;
-  // 给每个 details 自动分配 id & data-title
-  details.forEach((d,i)=>{
-    if(!d.id) d.id='sec-'+i;
-    if(!d.dataset.title){
-      const sum=d.querySelector('summary');
-      const fb=fallbackTemplate.replace(':index', (i+1).toString());
-      d.dataset.title=sum?sum.textContent.trim():fb;
-    }
-  });
-  // 恢复 open 状态
-  try{ const saved=JSON.parse(localStorage.getItem(KEY)||'{}'); details.forEach(d=>{ if(saved[d.id]===false) d.open=false; }); }catch(_){ }
-  // 监听状态变更
-  details.forEach(d=> d.addEventListener('toggle',()=>{
-    const cur={}; details.forEach(x=> cur[x.id]=x.open); localStorage.setItem(KEY,JSON.stringify(cur));
-  }));
-  // 快速导航
-  const nav=document.getElementById('item-section-nav'); if(nav){ details.forEach(d=>{ const a=document.createElement('button'); a.type='button'; a.className='btn-sm btn outline'; a.textContent=d.dataset.title; a.addEventListener('click',()=>{ d.scrollIntoView({behavior:'smooth',block:'start'}); d.open=true; }); nav.appendChild(a); }); }
-  // 脏离开提示
-  let dirty=false; const form=document.getElementById('itemEditForm');
-  form?.addEventListener('input',()=> dirty=true,{once:true});
-  window.addEventListener('beforeunload',e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; }});
-  document.addEventListener('itemEditSaved',()=>{ dirty=false; });
-  // 紧凑模式
-  const compactBtn=document.getElementById('btn-compact-toggle');
-  const COMPACT_KEY='itemEdit:compact';
-  function applyCompact(flag){
-    document.body.classList.toggle('compact',flag);
-    localStorage.setItem(COMPACT_KEY,flag?'1':'0');
-    if(compactBtn){
-      const label = flag ? compactBtn.dataset.labelNormal : compactBtn.dataset.labelCompact;
-      if(label) compactBtn.textContent = label;
-    }
-  }
-  if(localStorage.getItem(COMPACT_KEY)==='1') applyCompact(true);
-  compactBtn?.addEventListener('click',()=> applyCompact(!document.body.classList.contains('compact')));
-})();
-</script>
+<script type="application/json" data-panel-json data-global="ITEM_EDIT_CONFIG"><?= json_encode([
+  'quality_unknown' => __('app.item.quality.unknown'),
+  'group_fallback' => __('app.item.edit.group_fallback'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 

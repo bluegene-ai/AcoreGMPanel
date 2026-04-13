@@ -1,0 +1,70 @@
+/* ==== Aegis ==== */
+.aegis-page-intro{margin-top:-8px;margin-bottom:20px;}
+.aegis-feedback-hidden{display:none;}
+.aegis-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:32px;}
+.aegis-panel{background:#0d1621;border:1px solid rgba(94,168,255,.14);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(4,16,28,.22);min-width:0;}
+.aegis-panel--full{grid-column:1 / -1;}
+.aegis-panel__head,.aegis-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.aegis-toolbar__group{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.aegis-inline-field,.aegis-field{display:flex;flex-direction:column;gap:6px;color:#d7e9ff;font-size:13px;}
+.aegis-inline-field select,.aegis-field input,.aegis-field select{background:#07111a;border:1px solid rgba(94,168,255,.22);border-radius:8px;color:#e5f3ff;padding:8px 10px;font-size:13px;}
+.aegis-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+.aegis-form-grid--dense{grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;}
+.aegis-field--span-2{grid-column:span 2;}
+.aegis-form-actions{display:flex;align-items:flex-end;gap:10px;}
+.panel-flash--inline{margin:0 0 14px;}
+.aegis-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px;}
+.aegis-stat-card{background:linear-gradient(180deg,rgba(18,36,52,.95),rgba(10,20,30,.95));border:1px solid rgba(94,168,255,.16);border-radius:10px;padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between;}
+.aegis-stat-card--loading{opacity:.75;}
+.aegis-stat-card__label{font-size:12px;color:#92b7e6;}
+.aegis-stat-card__value{font-size:28px;font-weight:700;color:#f2f8ff;line-height:1;}
+.aegis-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+.aegis-summary-card{background:#09131d;border:1px solid rgba(94,168,255,.12);border-radius:10px;padding:14px;min-height:160px;}
+.aegis-summary-card__head h2{margin:0 0 12px;font-size:15px;color:#e7f4ff;}
+.aegis-badge-list{display:flex;flex-wrap:wrap;gap:8px;}
+.aegis-list-stack{display:flex;flex-direction:column;gap:8px;}
+.aegis-list-item{display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;border:none;border-radius:8px;background:#122131;color:#d8ebff;padding:10px 12px;text-align:left;cursor:pointer;}
+.aegis-list-item:hover{background:#183149;}
+.aegis-player-card{min-height:180px;border:1px dashed rgba(94,168,255,.2);border-radius:10px;background:#09131c;padding:14px;color:#d8ebff;display:flex;flex-direction:column;gap:12px;}
+.aegis-player-card--empty{align-items:center;justify-content:center;color:#8fb4e6;text-align:center;}
+.aegis-player-card__header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.aegis-player-meta,.aegis-player-offense{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:13px;color:#bcd6f4;}
+.aegis-player-reason{padding:10px 12px;background:#101d29;border-radius:8px;color:#e8f3ff;}
+.aegis-player-events{display:flex;flex-direction:column;gap:8px;}
+.aegis-player-events h3{margin:0;font-size:14px;color:#e7f4ff;}
+.aegis-player-event{display:grid;grid-template-columns:160px 1fr 90px 1fr;gap:8px;padding:8px 10px;background:#0e1822;border-radius:8px;font-size:12px;color:#bfd8f5;}
+.aegis-help-list{margin:14px 0 0;padding-left:18px;color:#96b9e4;font-size:13px;line-height:1.5;}
+.aegis-help-list li+li{margin-top:6px;}
+.aegis-table-wrap{overflow:auto;border:1px solid rgba(94,168,255,.16);border-radius:10px;background:#08121c;}
+.aegis-table{margin:0;min-width:980px;}
+.aegis-table th,.aegis-table td{border-color:rgba(94,168,255,.1);vertical-align:top;}
+.aegis-table th{background:#102031;color:#ebf6ff;}
+.aegis-table tbody tr:nth-child(even){background:rgba(13,24,37,.45);}
+.aegis-table tbody tr:hover{background:rgba(50,118,188,.12);}
+.aegis-pagination{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:12px;flex-wrap:wrap;}
+.aegis-pagination__label{font-size:13px;color:#9fc3ef;}
+.aegis-log-meta{margin-bottom:10px;color:#92b7e6;font-size:12px;word-break:break-all;}
+.aegis-log-box{margin:0;background:#050c14;border:1px solid rgba(94,168,255,.18);border-radius:10px;padding:14px;color:#cfe7ff;font-family:'Fira Code','Consolas',monospace;font-size:12px;line-height:1.55;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word;}
+.link-button{appearance:none;background:none;border:none;color:#7ebcff;cursor:pointer;padding:0;font:inherit;text-align:left;}
+.link-button:hover{text-decoration:underline;}
+
+@media (max-width:1280px){
+	.aegis-stats{grid-template-columns:repeat(3,minmax(0,1fr));}
+	.aegis-summary-grid{grid-template-columns:1fr;}
+	.aegis-form-grid--dense{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+
+@media (max-width:980px){
+	.aegis-layout{grid-template-columns:1fr;}
+	.aegis-form-grid,.aegis-form-grid--dense{grid-template-columns:1fr;}
+	.aegis-field--span-2{grid-column:auto;}
+	.aegis-form-actions{align-items:stretch;}
+	.aegis-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+	.aegis-player-event{grid-template-columns:1fr 1fr;}
+}
+
+@media (max-width:640px){
+	.aegis-stats{grid-template-columns:1fr;}
+	.aegis-player-event{grid-template-columns:1fr;}
+	.aegis-pagination{justify-content:flex-start;}
+}

@@ -1,0 +1,15 @@
+.account-search__inline-field{display:flex;align-items:center;gap:6px;}
+.account-search__inline-field--nowrap{white-space:nowrap;}
+.account-search__label-text--nowrap{white-space:nowrap;}
+.account-search__exclude-input{min-width:180px;}
+.account-search__summary{margin-top:10px;font-size:13px;color:#8aa4b8;}
+.account-bulk-toolbar{gap:10px;flex-wrap:wrap;margin:8px 0;}
+.account-bulk-toolbar__actions{gap:10px;flex-wrap:wrap;}
+.account-bulk-toolbar__select-all{display:inline-flex;align-items:center;gap:6px;}
+.account-table__select-col{width:34px;}
+.account-badge--banned{background:#7a1b1b;}
+.account-badge--online{background:#16a34a;}
+.account-table__actions-cell{white-space:nowrap;}
+.account-table__empty-cell{text-align:center;}
+.account-characters__ban-meta{margin-left:12px;}
+.account-form-error{margin-top:8px;color:#c53030;}

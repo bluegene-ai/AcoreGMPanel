@@ -52,6 +52,8 @@
   const moduleTranslator = typeof panelLocale.createModuleTranslator === 'function'
     ? panelLocale.createModuleTranslator('soap')
     : null;
+  const capabilities = window.PANEL_CAPABILITIES || {};
+  const canExecute = capabilities.execute !== false;
 
   function translate(path, fallback, replacements){
     const defaultValue = fallback ?? `modules.soap.${path}`;
@@ -273,7 +275,7 @@
     renderFields(raw.arguments||[]);
     updatePreview();
     resetOutput();
-    dom.executeBtn.disabled = !canSubmit();
+    if(dom.executeBtn) dom.executeBtn.disabled = !canSubmit();
   }
 
   function renderRiskBadge(risk){
@@ -345,7 +347,7 @@
   function handleFieldInput(){
     clearFieldError(this);
     updatePreview();
-    dom.executeBtn.disabled = !canSubmit();
+    if(dom.executeBtn) dom.executeBtn.disabled = !canSubmit();
   }
 
   function getFormValues(){
@@ -365,6 +367,7 @@
   }
 
   function canSubmit(){
+    if(!canExecute) return false;
     if(!state.activeCommand) return false;
     const raw = state.activeCommand.raw || {};
     const args = raw.arguments||[];
@@ -410,6 +413,10 @@
 
   function handleSubmit(e){
     e.preventDefault();
+    if(!canExecute){
+      Feedback.error(dom.flashBox, translate('errors.execute_forbidden', 'This account cannot execute SOAP commands.'));
+      return;
+    }
     if(!state.activeCommand) return;
     if(dom.executeBtn) dom.executeBtn.disabled = true;
     Feedback.clear(dom.flashBox);

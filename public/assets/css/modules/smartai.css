@@ -1,0 +1,75 @@
+/* ==== SmartAI Wizard ==== */
+.smartai-page-intro{margin-top:-8px;margin-bottom:24px;}
+.smartai-meta-updated{margin-top:12px;}
+.smartai-flash-hidden{display:none;}
+.smartai-layout{display:grid;grid-template-columns:300px minmax(720px,1fr);gap:24px;margin-bottom:40px;align-items:start;}
+.smartai-sidebar{position:sticky;top:90px;align-self:start;}
+.smartai-card{background:#0f1a24;border:1px solid rgba(94,168,255,.12);border-radius:12px;padding:18px 20px;box-shadow:0 12px 32px rgba(5,19,34,.25);}
+.smartai-card h2{margin:0 0 16px;font-size:18px;color:#e7f4ff;}
+.smartai-steps{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:8px;}
+.smartai-steps li{padding:10px 12px;border-radius:8px;background:#08121c;color:#bcd3f4;font-size:14px;cursor:pointer;transition:background .2s,border-color .2s;position:relative;}
+.smartai-steps li.active{background:#1c3652;color:#fff;font-weight:600;}
+.smartai-steps li.completed{background:#13263a;color:#8cb8f0;}
+.smartai-meta h3{margin:12px 0 8px;font-size:15px;color:#e5f0ff;}
+.smartai-meta ul{margin:0 0 6px;padding-left:18px;color:#9fbce6;font-size:13px;line-height:1.5;}
+.smartai-selector{margin-bottom:18px;background:#0a1520;border:1px solid rgba(94,168,255,.12);border-radius:12px;padding:16px;}
+.smartai-selector.has-error{border-color:rgba(255,135,135,.45);box-shadow:0 0 0 1px rgba(255,135,135,.2);}
+.smartai-search{margin-bottom:12px;}
+.smartai-search input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(94,168,255,.25);background:#050f18;color:#d8e9ff;}
+.smartai-selector-list{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto;padding-right:4px;}
+.smartai-selector-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border-radius:10px;border:1px solid rgba(94,168,255,.15);background:#08121a;color:#d7e9ff;padding:12px 14px;cursor:pointer;transition:border .2s,background .2s;}
+.smartai-selector-item:hover{border-color:rgba(94,168,255,.35);}
+.smartai-selector-item.active{border-color:#62a7ff;background:#122840;}
+.smartai-selector-title{font-size:15px;font-weight:600;}
+.smartai-selector-sub{font-size:12px;color:#7ea6d6;margin-top:4px;}
+.smartai-selector-desc{margin:6px 0 0;}
+.smartai-empty{padding:16px;border-radius:10px;background:#0d1a27;}
+.smartai-content{background:#0c141d;border:1px solid rgba(94,168,255,.12);border-radius:14px;padding:24px 26px;box-shadow:0 14px 32px rgba(5,19,34,.25);}
+.smartai-step header h2{margin:0;font-size:20px;color:#f1fbff;}
+.smartai-step header p{margin:6px 0 18px;}
+.smartai-form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+.smartai-field{display:flex;flex-direction:column;gap:6px;background:#0a1824;border:1px solid rgba(94,168,255,.18);border-radius:10px;padding:12px 14px;transition:border .2s,box-shadow .2s;}
+.smartai-field label{font-size:13px;font-weight:600;color:#e2f1ff;}
+.smartai-field input,.smartai-field select,.smartai-field textarea{width:100%;background:#040d15;border:1px solid rgba(94,168,255,.25);border-radius:8px;padding:8px 10px;color:#e5f4ff;font-size:13px;}
+.smartai-field textarea{resize:vertical;min-height:80px;}
+.smartai-field select{appearance:none;}
+.smartai-field__hint{margin:0;color:#8aa8ce;}
+.smartai-field__error{min-height:16px;font-size:12px;color:#ff9797;}
+.smartai-field.has-error{border-color:rgba(255,135,135,.45);box-shadow:0 0 0 1px rgba(255,135,135,.25);}
+.smartai-selector-error{margin-top:10px;font-size:12px;color:#ff9797;}
+.smartai-required{color:#ff9b9b;margin-left:4px;}
+.smartai-checkbox-toggle{width:auto;align-self:flex-start;}
+.smartai-segment-section{margin:22px 0;background:#08121c;border:1px solid rgba(94,168,255,.12);border-radius:12px;padding:18px;box-shadow:0 10px 28px rgba(4,16,27,.25);}
+.smartai-segment-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.smartai-segment-tabs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+.smartai-segment-chip{display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:999px;background:#0a1724;border:1px solid rgba(94,168,255,.2);color:#d7e9ff;transition:background .2s,border .2s;}
+.smartai-segment-chip.active{border-color:#62a7ff;background:#132a43;box-shadow:0 0 0 1px rgba(98,167,255,.25);}
+.smartai-segment-chip.has-error{border-color:rgba(255,135,135,.55);box-shadow:0 0 0 1px rgba(255,135,135,.25);}
+.smartai-segment-chip__select{background:none;border:none;color:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;}
+.smartai-segment-chip__tools{display:inline-flex;gap:6px;align-items:center;}
+.smartai-segment-chip__tool{background:rgba(94,168,255,.12);border:none;color:#9fbce6;border-radius:6px;padding:4px 6px;font-size:12px;cursor:pointer;transition:opacity .2s,background .2s;}
+.smartai-segment-chip__tool:hover{opacity:.85;}
+.smartai-segment-chip__tool:disabled{opacity:.45;cursor:not-allowed;}
+.smartai-segment-chip__tool--danger{background:rgba(255,99,99,.18);color:#ff9d9d;}
+.smartai-segment-base{margin-top:16px;}
+.smartai-segment-base .smartai-field{background:#071422;}
+.smartai-segment-hint{margin:0;color:#7ea6d6;}
+.smartai-preview-card{margin-top:24px;background:#08121c;border:1px solid rgba(94,168,255,.18);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.smartai-preview-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.smartai-preview-actions{display:flex;gap:10px;}
+.smartai-preview-output{background:#040d16;border-radius:10px;padding:14px;color:#b7d2ff;font-family:'Fira Code','Consolas',monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto;}
+.smartai-footer{margin-top:28px;border-top:1px solid rgba(94,168,255,.12);padding-top:18px;}
+.smartai-step-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.smartai-step-indicator{font-size:14px;color:#9bbfea;}
+
+@media (max-width:1280px){
+	.smartai-layout{grid-template-columns:1fr;}
+	.smartai-sidebar{position:static;}
+}
+
+@media (max-width:720px){
+	.smartai-form-grid{grid-template-columns:1fr;}
+	.smartai-preview-actions{width:100%;justify-content:flex-start;}
+	.smartai-step-actions{flex-direction:column;align-items:flex-start;}
+	.smartai-step-indicator{order:-1;}
+}

@@ -32,14 +32,76 @@ class Bootstrap
         return true;
     }
 
+    private static function ensureSessionStarted(): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+    }
+
+    private static function pushWarnFlash(string $message): void
+    {
+        $existing = $_SESSION['flashes']['warn'] ?? [];
+        if (is_array($existing) && in_array($message, $existing, true)) {
+            return;
+        }
+
+        $_SESSION['flashes']['warn'][] = $message;
+    }
+
+    private static function persistBasePathOverride(string $generatedConfigDir, string $basePath): bool
+    {
+        $normalizedBasePath = trim($basePath);
+        if ($normalizedBasePath === '') {
+            return false;
+        }
+
+        if (!is_dir($generatedConfigDir) && !@mkdir($generatedConfigDir, 0775, true) && !is_dir($generatedConfigDir)) {
+            return false;
+        }
+
+        $cfgFile = $generatedConfigDir . '/app.php';
+        $appConfig = Config::get('app', []);
+        if (!is_array($appConfig)) {
+            $appConfig = [];
+        }
+
+        $appConfig['base_path'] = $normalizedBasePath;
+        $content = "<?php\nreturn " . var_export($appConfig, true) . ";\n";
+
+        $writable = (is_dir($generatedConfigDir) && is_writable($generatedConfigDir))
+            || (is_file($cfgFile) && is_writable($cfgFile));
+
+        if (!$writable || !self::atomicWrite($cfgFile, $content)) {
+            return false;
+        }
+
+        Config::set('app.base_path', $normalizedBasePath);
+        $_SESSION['__auto_base_written'] = 1;
+
+        return true;
+    }
+
     public static function run(): void
     {
         if (ob_get_level() === 0) {
             ob_start();
         }
 
-    Config::init(__DIR__ . '/../../config');
-    Lang::init();
+        Config::init(__DIR__ . '/../../config');
+        ErrorHandler::register();
+        self::ensureSessionStarted();
+
+        Lang::init();
+
+        $requestedLocale = isset($_GET['lang']) ? (string) $_GET['lang'] : null;
+        if ($requestedLocale !== null && $requestedLocale !== '') {
+            Lang::setLocale($requestedLocale);
+            $_SESSION['panel_locale'] = Lang::locale();
+        } elseif (!empty($_SESSION['panel_locale'])) {
+            Lang::setLocale((string) $_SESSION['panel_locale']);
+        }
+        Config::set('app.locale_active', Lang::locale());
 
         if (!ini_get('date.timezone')) {
             date_default_timezone_set(Config::get('app.timezone', 'UTC'));
@@ -56,13 +118,13 @@ class Bootstrap
         }
 
         if ($uriForDetect && $uriForDetect !== '/') {
-            if ($escapedSlug && preg_match('#^(.*?/' . $escapedSlug . ')/public(?:/index\.php)?(?:/|$)#', $uriForDetect, $matches)) {
+            if ($escapedSlug && preg_match('#^(.*?/' . $escapedSlug . ')/public(?:/index\.php)?(?:/|$)#i', $uriForDetect, $matches)) {
                 $detectedPrefix = rtrim($matches[1], '/');
-            } elseif (preg_match('#^(.*?)/public(?:/index\.php)?(?:/|$)#', $uriForDetect, $matches)) {
+            } elseif (preg_match('#^(.*?)/public(?:/index\.php)?(?:/|$)#i', $uriForDetect, $matches)) {
                 $detectedPrefix = rtrim($matches[1], '/');
             }
 
-            if ($detectedPrefix === null && $escapedSlug && preg_match('#^(.*/' . $escapedSlug . ')(?:/|$)#', $uriForDetect, $matches)) {
+            if ($detectedPrefix === null && $escapedSlug && preg_match('#^(.*/' . $escapedSlug . ')(?:/|$)#i', $uriForDetect, $matches)) {
                 $detectedPrefix = rtrim($matches[1], '/');
             }
         }
@@ -87,24 +149,37 @@ class Bootstrap
             }
         }
 
+        $configDir = __DIR__ . '/../../config';
+        $generatedConfigDir = $configDir . '/generated';
+
         if ($base === '') {
             if ($detectedPrefix) {
                 $base = $detectedPrefix;
                 Config::set('app.base_path', $base);
-                $_SESSION['flashes']['warn'][] = Lang::get('app.alerts.bootstrap.auto_detect_base_path', [
-                    'base' => $base,
-                ]);
-                $_SESSION['__auto_base_path'] = $base;
+
+                if (empty($_SESSION['__auto_base_written']) && self::persistBasePathOverride($generatedConfigDir, $base)) {
+                    unset($_SESSION['__auto_base_path']);
+                } else {
+                    $shownBase = (string) ($_SESSION['__auto_base_path_notice'] ?? '');
+                    if ($shownBase !== $base) {
+                        self::pushWarnFlash(Lang::get('app.alerts.bootstrap.auto_detect_base_path', [
+                            'base' => $base,
+                        ]));
+                        $_SESSION['__auto_base_path_notice'] = $base;
+                    }
+                    $_SESSION['__auto_base_path'] = $base;
+                }
             }
         } elseif ($detectedPrefix && $detectedPrefix !== $base) {
-            $_SESSION['flashes']['warn'][] = Lang::get('app.alerts.bootstrap.base_path_mismatch', [
+            self::pushWarnFlash(Lang::get('app.alerts.bootstrap.base_path_mismatch', [
                 'detected' => $detectedPrefix,
                 'configured' => $base,
-            ]);
+            ]));
         }
 
         $reqUriRaw = $_SERVER['REQUEST_URI'] ?? '/';
         $reqPath = strtok($reqUriRaw, '?');
+        $rawQuery = parse_url($reqUriRaw, PHP_URL_QUERY);
 
         if ($base !== '') {
             $normalizedBase = $base . '/';
@@ -135,10 +210,14 @@ class Bootstrap
 
             if ($redirectTarget && !headers_sent()) {
                 if (empty($_SESSION['__normalized_flash'])) {
-                    $_SESSION['flashes']['warn'][] = Lang::get('app.alerts.bootstrap.normalized_path', [
+                    self::pushWarnFlash(Lang::get('app.alerts.bootstrap.normalized_path', [
                         'target' => $normalizedBase,
-                    ]);
+                    ]));
                     $_SESSION['__normalized_flash'] = 1;
+                }
+
+                if ($rawQuery) {
+                    $redirectTarget .= '?' . $rawQuery;
                 }
 
                 header('Location: ' . $redirectTarget, true, 302);
@@ -146,8 +225,6 @@ class Bootstrap
                 return;
             }
         }
-
-        $rawQuery = parse_url($reqUriRaw, PHP_URL_QUERY);
 
         if ($base !== '' && str_starts_with($reqPath, $base . '/')) {
             $newPath = substr($reqPath, strlen($base));
@@ -176,11 +253,9 @@ class Bootstrap
             return;
         }
 
-    $configDir = __DIR__ . '/../../config';
-    $generatedConfigDir = $configDir . '/generated';
-    $installLock = $generatedConfigDir . '/install.lock';
+        $installLock = $generatedConfigDir . '/install.lock';
 
-    $installed = is_file($installLock) && Config::get('auth.admin.username');
+        $installed = is_file($installLock) && Config::get('auth.admin.username');
         $logicalReq = $_SERVER['REQUEST_URI'] ?? '/';
         $pathOnly = strtok($logicalReq, '?');
 
@@ -199,28 +274,11 @@ class Bootstrap
                 $baseUnsetInConfig = Config::get('app.base_path', '') === '';
 
                 if ($autoBase && $autoBaseNotWritten && $baseUnsetInConfig) {
-                    if (!is_dir($generatedConfigDir)) {
-                        @mkdir($generatedConfigDir, 0775, true);
-                    }
-
-                    $cfgFile = $generatedConfigDir . '/app.php';
-
-                    $appConfig = Config::get('app', []);
-                    if (!is_array($appConfig)) {
-                        $appConfig = [];
-                    }
-                    $appConfig['base_path'] = $autoBase;
-
-                    $content = "<?php\nreturn " . var_export($appConfig, true) . ";\n";
-
-                    $writable = (is_dir($generatedConfigDir) && is_writable($generatedConfigDir)) || (is_file($cfgFile) && is_writable($cfgFile));
-
-                    if ($writable && self::atomicWrite($cfgFile, $content)) {
-                        $_SESSION['flashes']['warn'][] = Lang::get('app.alerts.bootstrap.auto_write_base_path', [
+                    if (self::persistBasePathOverride($generatedConfigDir, $autoBase)) {
+                        self::pushWarnFlash(Lang::get('app.alerts.bootstrap.auto_write_base_path', [
                             'base' => $autoBase,
-                        ]);
+                        ]));
                         unset($_SESSION['__auto_base_path']);
-                        $_SESSION['__auto_base_written'] = 1;
                     }
                 }
             } catch (\Throwable $e) {
@@ -228,20 +286,26 @@ class Bootstrap
             }
         }
 
-        ErrorHandler::register();
+        // Global server switch via query param (used by the server switch dropdown).
+        // Only allow switching for authenticated panel sessions.
+        if (isset($_GET['server']) && $_GET['server'] !== '') {
+            $rawServer = $_GET['server'];
 
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
+            // Accept non-negative integer server ids (including 0).
+            if (is_string($rawServer) && preg_match('/^\d+$/', $rawServer)) {
+                $sid = (int) $rawServer;
 
-        $requestedLocale = isset($_GET['lang']) ? (string) $_GET['lang'] : null;
-        if ($requestedLocale !== null && $requestedLocale !== '') {
-            Lang::setLocale($requestedLocale);
-            $_SESSION['panel_locale'] = Lang::locale();
-        } elseif (!empty($_SESSION['panel_locale'])) {
-            Lang::setLocale((string) $_SESSION['panel_locale']);
+                try {
+                    if (\Acme\Panel\Support\Auth::check() && \Acme\Panel\Support\ServerList::valid($sid)) {
+                        if (\Acme\Panel\Support\ServerContext::currentId() !== $sid) {
+                            \Acme\Panel\Support\ServerContext::set($sid);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore server switch failures to avoid breaking requests.
+                }
+            }
         }
-        Config::set('app.locale_active', Lang::locale());
 
         $helpers = dirname(__DIR__, 2) . '/bootstrap/helpers.php';
         if (is_file($helpers)) {

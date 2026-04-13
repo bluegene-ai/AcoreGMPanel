@@ -1,0 +1,32 @@
+/* ==== Shared Editor Layout (Item / Creature) ==== */
+.item-edit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:16px;align-items:start;}
+.item-edit-grid details{background:#141b1f;border:1px solid var(--c-border);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;gap:8px;overflow:visible;}
+.item-edit-grid details.flags-section{grid-column:1/-1;}
+.item-edit-grid details[open]{border-color:#345067;}
+.item-edit-grid summary{cursor:pointer;font-weight:600;letter-spacing:.5px;color:var(--c-accent);outline:none;margin:-8px -12px 4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.06);}
+.item-edit-grid .field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px;}
+.item-edit-grid label{display:flex;flex-direction:column;font-size:12px;gap:4px;}
+.item-edit-grid textarea{background:#121a21;border:1px solid var(--c-border);color:var(--c-text);padding:8px;border-radius:6px;font-size:13px;}
+.flags-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.flag-item{display:flex;flex-direction:column;gap:4px;padding:4px 6px;background:#11171d;border:1px solid var(--c-border);border-radius:6px;}
+.flag-input-row{display:flex;align-items:center;gap:6px;}
+.flag-label{font-size:12px;font-weight:600;color:var(--c-accent);}
+.item-edit-span-2{grid-column:1/-1;}
+input[data-dirty],textarea[data-dirty]{outline:1px solid #ffb347;box-shadow:0 0 0 2px rgba(255,179,71,0.25);}
+body.compact .item-edit-grid{gap:10px;}
+body.compact .item-edit-grid details{padding:6px 10px;}
+body.compact .item-edit-grid summary{padding:6px 10px;margin:-6px -10px 4px;}
+body.compact .item-edit-grid .field-grid{gap:6px;}
+body.compact input[type=text],body.compact input[type=number],body.compact select{padding:5px 8px;font-size:13px;}
+body.compact .btn{padding:6px 10px;}
+
+/* Creature edit reuses the shared editor shell with a few focused tweaks. */
+form#form-creature-edit .field-grid label[data-field-wrapper]{display:flex;}
+.creature-toolbar .toolbar-actions .btn{white-space:nowrap;}
+#creature-section-nav button.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent);}
+#creature-section-nav button{transition:background .18s,border-color .18s,color .18s;}
+
+@media (max-width:1100px){
+  .item-edit-grid{grid-template-columns:1fr;}
+  .item-edit-span-2{grid-column:auto;}
+}

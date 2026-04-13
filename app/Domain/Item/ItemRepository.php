@@ -311,7 +311,7 @@ class ItemRepository extends MultiServerRepository
                 'server' => $this->serverId,
             ];
             if(!array_key_exists('ip',$payload)){
-                $payload['ip'] = $_SERVER['REMOTE_ADDR'] ?? '';
+                $payload['ip'] = \Acme\Panel\Support\ClientIp::resolve($_SERVER);
             }
             $payload = array_filter($payload, static fn($v)=>$v!==null);
             $json = json_encode($payload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);

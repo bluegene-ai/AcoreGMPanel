@@ -125,14 +125,14 @@ export function initBitmaskFlags(opts={}){
       ensureNodes();
       buildOptions();
       modal.classList.add('active');
-      document.body.style.overflow='hidden';
+      document.body.classList.add('modal-open');
       const titleEl=document.getElementById('bitmask-modal-title');
       if(titleEl) titleEl.textContent=translate('modal.title','Edit :target',{ target: id });
       refreshCurrent();
       modal.querySelector('.modal-panel')?.focus();
     }
   }
-  function closeMask(){ if(dynamic){ if(window.Modal) Modal.hide('bitmask'); } else { modal.classList.remove('active'); document.body.style.overflow=''; } currentTarget=null; }
+  function closeMask(){ if(dynamic){ if(window.Modal) Modal.hide('bitmask'); } else { modal.classList.remove('active'); document.body.classList.remove('modal-open'); } currentTarget=null; }
   function wireDynamic(){ const host=document.getElementById('modal-bitmask'); if(!host || host.__wired) return; host.__wired=true; ensureNodes();
     filterInput?.addEventListener('input',buildOptions);
     host.querySelectorAll('[data-mask-op]').forEach(btn=> btn.addEventListener('click',()=>{ const op=btn.getAttribute('data-mask-op'); if(op==='all'){ tempMask=0; Object.keys(dictRef).forEach(bit=> tempMask|=parseInt(bit)); } else if(op==='none'){ tempMask=0; } else if(op==='invert'){ let full=0; Object.keys(dictRef).forEach(bit=> full|=parseInt(bit)); tempMask=(~tempMask)&full; } buildOptions(); refreshCurrent(); }));

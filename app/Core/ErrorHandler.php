@@ -24,9 +24,28 @@ class ErrorHandler
 
     public static function handleException(Throwable $e): void
     {
+        try {
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $path = (string)(parse_url($uri, PHP_URL_PATH) ?? $uri);
+            $line = date('Y-m-d H:i:s')
+                . ' [exception] '
+                . json_encode([
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'path' => $path,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            \Acme\Panel\Support\LogPath::appendLine('error.log', $line, true, 0775);
+        } catch (\Throwable $ignore) {
+            // swallow
+        }
+
         http_response_code(500);
         $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
-        $wantsJson = str_contains($accept,'application/json') || (($_GET['__api'] ?? '')==='1');
+        $pathOnly = (string)(parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');
+        $isApiPath = $pathOnly !== '' && str_contains($pathOnly, '/api/');
+        $xhr = (string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+        $wantsJson = $isApiPath || $xhr || str_contains($accept,'application/json') || (($_GET['__api'] ?? '')==='1');
         if($wantsJson){
             header('Content-Type: application/json; charset=utf-8');
             if(Config::get('app.debug', false)){

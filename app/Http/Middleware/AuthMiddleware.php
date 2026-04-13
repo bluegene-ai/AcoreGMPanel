@@ -10,7 +10,7 @@
 
 namespace Acme\Panel\Http\Middleware;
 
-use Acme\Panel\Core\{Request,Response,Url};
+use Acme\Panel\Core\{Lang,Request,Response};
 use Acme\Panel\Support\Auth;
 
 class AuthMiddleware
@@ -21,8 +21,14 @@ class AuthMiddleware
             return $next($request);
         }
         if(!Auth::check()){
-            $login = Url::to('/account/login');
-            return new Response('<script>location.href="'.htmlspecialchars($login,ENT_QUOTES,'UTF-8').'";</script>',302,['Location'=>$login]);
+            if ($request->expectsJsonResponse()) {
+                return Response::json([
+                    'success' => false,
+                    'message' => Lang::get('app.auth.errors.not_logged_in'),
+                ], 401);
+            }
+
+            return Response::redirect('/account/login');
         }
         return $next($request);
     }

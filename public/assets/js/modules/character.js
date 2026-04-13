@@ -150,9 +150,8 @@
   function flash(msg, ok){
     if(!feedback) return;
     feedback.textContent = msg || (ok ? 'OK' : 'Error');
-    feedback.classList.remove('panel-flash--success','panel-flash--danger');
+    feedback.classList.remove('panel-flash--success','panel-flash--danger','char-feedback--hidden');
     feedback.classList.add('panel-flash--inline','is-visible', ok ? 'panel-flash--success' : 'panel-flash--danger');
-    feedback.style.display = 'block';
   }
 
   // Teleport presets (character/show)
@@ -190,6 +189,7 @@
         e.preventDefault();
         const endpoint = form.dataset.endpoint;
         if(!endpoint) return;
+        if(form.dataset.confirm && !confirm(form.dataset.confirm)) return;
 
         const data = new FormData(form);
         if(!data.get('_csrf') && window.__CSRF_TOKEN){
@@ -200,7 +200,7 @@
           const res = await fetch(endpoint, {
             method: 'POST',
             body: data,
-            headers: { 'X-CSRF-TOKEN': data.get('_csrf') || '' }
+            headers: { 'X-CSRF-TOKEN': data.get('_csrf') || '', 'Accept': 'application/json' }
           });
           const json = await res.json().catch(() => ({ success: false, message: 'Invalid response' }));
           flash(json.message || (json.success ? 'OK' : 'Failed'), !!json.success);
@@ -210,6 +210,32 @@
       });
     });
   }
+
+  // Boost form: if template selected, target level is derived from template
+  (function bindBoostTemplateToggle(){
+    const form = document.getElementById('char-boost-form');
+    if(!form) return;
+    const tpl = document.getElementById('char-boost-template');
+    const lvl = document.getElementById('char-boost-target-level');
+    if(!tpl || !lvl) return;
+
+    const apply = () => {
+      const opt = tpl.selectedOptions && tpl.selectedOptions[0];
+      const templateId = parseInt(tpl.value || '0', 10) || 0;
+      if(templateId > 0){
+        const t = opt ? (parseInt(opt.getAttribute('data-target-level') || '0', 10) || 0) : 0;
+        lvl.value = t ? String(t) : '';
+        lvl.setAttribute('disabled', 'disabled');
+        lvl.hidden = true;
+      } else {
+        lvl.removeAttribute('disabled');
+        lvl.hidden = false;
+      }
+    };
+
+    tpl.addEventListener('change', apply);
+    apply();
+  })();
 
   document.querySelectorAll('.js-table-filter').forEach(input => {
     const targetSel = input.getAttribute('data-target');
@@ -225,7 +251,7 @@
       const cols = table.tHead ? table.tHead.rows[0].cells.length : 1;
       const td = document.createElement('td');
       td.colSpan = cols;
-      td.style.textAlign = 'center';
+      td.className = 'char-empty-cell';
       td.textContent = emptyLabel;
       noneRow.appendChild(td);
       tbody.appendChild(noneRow);
@@ -240,21 +266,21 @@
       Array.from(tbody.rows).forEach(row => {
         if(row.classList.contains('js-filter-none')) return;
         if(row.classList.contains('js-empty-row')){
-          row.style.display = q ? 'none' : '';
+          row.hidden = !!q;
           return;
         }
         const text = (row.innerText || '').toLowerCase();
         const match = !q || text.includes(q);
-        row.style.display = match ? '' : 'none';
+        row.hidden = !match;
         if(match) visible++;
       });
 
       if(q){
-        noneRow.style.display = visible === 0 ? '' : 'none';
-        if(emptyRow) emptyRow.style.display = 'none';
+        noneRow.hidden = visible !== 0;
+        if(emptyRow) emptyRow.hidden = true;
       } else {
-        noneRow.style.display = 'none';
-        if(emptyRow) emptyRow.style.display = visible === 0 ? '' : 'none';
+        noneRow.hidden = true;
+        if(emptyRow) emptyRow.hidden = visible !== 0;
       }
     };
 

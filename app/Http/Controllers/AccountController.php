@@ -30,12 +30,14 @@ namespace Acme\Panel\Http\Controllers;
 use Acme\Panel\Core\{Controller,Request,Response,Lang};
 use Acme\Panel\Support\{Auth,Audit,Csrf,IpLocationService};
 use Acme\Panel\Support\SoapService;
+use Acme\Panel\Domain\Account\AccountMutationHydrator;
 use Acme\Panel\Domain\Account\AccountRepository;
-use Acme\Panel\Support\{LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{ClientIp,LogPath,ServerContext,ServerList};
 
 class AccountController extends Controller
 {
     private ?AccountRepository $repo = null;
+    private ?AccountMutationHydrator $mutations = null;
 
     private function repo(): AccountRepository
     {
@@ -46,105 +48,172 @@ class AccountController extends Controller
         return $this->repo;
     }
 
+    private function mutations(): AccountMutationHydrator
+    {
+        if ($this->mutations === null) {
+            $this->mutations = new AccountMutationHydrator();
+        }
+
+        return $this->mutations;
+    }
+
 
 
 
 
     private function maybeSwitchServer(Request $request): void
     {
-        $reqServer = $request->input('server', null);
-        if($reqServer !== null){
-            $sid = (int)$reqServer;
-            if(ServerContext::currentId() !== $sid && ServerList::valid($sid)){
-                ServerContext::set($sid);
-                if ($this->repo !== null) {
-                    $this->repo->rebind($sid);
-                }
-            }
-        }
+        $this->switchServerAndRebind($request, $this->repo);
+    }
+
+    private function requireAccountListCapability(): void
+    {
+        $this->requireCapability('accounts.list');
+    }
+
+    private function requireAccountIpCapability(): void
+    {
+        $this->requireCapability('accounts.ip');
+    }
+
+    private function requireAccountCharactersCapability(): void
+    {
+        $this->requireCapability('accounts.characters');
+    }
+
+    private function requireAccountCreateCapability(): void
+    {
+        $this->requireCapability('accounts.create');
+    }
+
+    private function requireAccountUpdateCapability(): void
+    {
+        $this->requireCapability('accounts.update');
+    }
+
+    private function requireAccountPasswordCapability(): void
+    {
+        $this->requireCapability('accounts.password');
+    }
+
+    private function requireAccountGmCapability(): void
+    {
+        $this->requireCapability('accounts.gm');
+    }
+
+    private function requireAccountBanCapability(): void
+    {
+        $this->requireCapability('accounts.ban');
+    }
+
+    private function requireAccountKickCapability(): void
+    {
+        $this->requireCapability('accounts.kick');
+    }
+
+    private function requireAccountDeleteCapability(): void
+    {
+        $this->requireCapability('accounts.delete');
     }
 
     public function index(Request $request): Response
     {
-    if(!Auth::check()) return $this->view('auth.login',[ 'title'=>Lang::get('app.auth.login_title'), 'error'=>null ]);
+        if(!Auth::check()) return $this->loginPage();
+        $this->requireAccountListCapability();
         $this->maybeSwitchServer($request);
-        $type = $request->input('search_type','username');
-        $value = $request->input('search_value','');
-        $online = $request->input('online','any');
-        $ban = $request->input('ban','any');
-        $excludeUsername = trim((string)$request->input('exclude_username',''));
-        $sort = (string)$request->input('sort','');
-        $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
-        if(!in_array($sort,$allowedSort,true)){
-            $sort = '';
-        }
-        $loadAll = ((int)$request->input('load_all', 0) === 1);
-        $filters = [
-            'online' => in_array($online,['online','offline'],true)?$online:'any',
-            'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
-            'exclude_username' => $excludeUsername,
-        ];
-        $page = (int)$request->input('page',1); $per=20;
-        $pager = $this->repo()->search($type,$value,$page,$per,$filters,$loadAll,$sort);
-    return $this->view('account.index',[ 'title'=>Lang::get('app.account.page_title'),'pager'=>$pager,'search_type'=>$type,'search_value'=>$value,'filter_online'=>$filters['online'],'filter_ban'=>$filters['ban'], 'exclude_username'=>$excludeUsername, 'load_all'=>$loadAll, 'sort'=>$sort ]);
+        $state = $this->prepareAccountListState($request);
+        $pager = $this->repo()->search(
+            $state['search_type'],
+            $state['search_value'],
+            $state['page'],
+            $state['per_page'],
+            $state['filters'],
+            $state['load_all'],
+            $state['sort']
+        );
+        return $this->pageView('account.index', $this->listViewData($pager, $state['filters'], [
+            'search_type' => $state['search_type'],
+            'search_value' => $state['search_value'],
+            'filter_online' => $state['filters']['online'],
+            'filter_ban' => $state['filters']['ban'],
+            'exclude_username' => $state['filters']['exclude_username'],
+            'load_all' => $state['load_all'],
+            'sort' => $state['sort'],
+        ], false), [
+            'capabilities' => [
+                'list' => 'accounts.list',
+                'characters' => 'accounts.characters',
+                'create' => 'accounts.create',
+                'update' => 'accounts.update',
+                'password' => 'accounts.password',
+                'gm' => 'accounts.gm',
+                'ban' => 'accounts.ban',
+                'ip' => 'accounts.ip',
+                'kick' => 'accounts.kick',
+                'delete' => 'accounts.delete',
+            ],
+        ]);
     }
 
     public function login(Request $request): Response
     {
         if($request->method==='POST'){
             $u=$request->input('username'); $p=$request->input('password');
-            if(Auth::attempt((string)$u,(string)$p)) {
-                Audit::log('auth','login',$u);
-                $base = rtrim(\Acme\Panel\Core\Config::get('app.base_path',''),'/');
-                $to = ($base?:'') . '/account';
-                return new Response('<script>location.href="'.htmlspecialchars($to,ENT_QUOTES).'";</script>');
+            $attempt = Auth::attempt((string)$u,(string)$p,$request->ip());
+            if(($attempt['success'] ?? false) === true) {
+                Audit::log('auth','login',(string) $u,['ip' => $request->ip()]);
+                return $this->redirect('/account');
             }
-            return $this->view('auth.login',[ 'title'=>Lang::get('app.auth.login_title'),'error'=>Lang::get('app.auth.error_invalid') ]);
+
+            $error = Lang::get('app.auth.error_invalid');
+            if (($attempt['reason'] ?? '') === 'throttled') {
+                $error = Lang::get('app.auth.error_throttled', ['seconds' => (int) ($attempt['retry_after'] ?? 0)]);
+            }
+
+            return $this->loginPage($error);
         }
-        return $this->view('auth.login',[ 'title'=>Lang::get('app.auth.login_title'),'error'=>null ]);
+        return $this->loginPage();
     }
 
     public function logout(Request $r): Response
     {
         Auth::logout();
-        $base = rtrim(\Acme\Panel\Core\Config::get('app.base_path',''),'/');
-        $to = ($base?:'') . '/account/login';
-        return new Response('<script>location.href="'.htmlspecialchars($to,ENT_QUOTES).'";</script>');
+        return $this->redirect('/account/login');
     }
 
     public function apiList(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountListCapability();
         $this->maybeSwitchServer($request);
-        $online = $request->input('online','any');
-        $ban = $request->input('ban','any');
-        $excludeUsername = trim((string)$request->input('exclude_username',''));
-        $sort = (string)$request->input('sort','');
-        $allowedSort = ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'];
-        if(!in_array($sort,$allowedSort,true)){
-            $sort = '';
-        }
-        $loadAll = ((int)$request->input('load_all', 0) === 1);
-        $filters = [
-            'online' => in_array($online,['online','offline'],true)?$online:'any',
-            'ban' => in_array($ban,['banned','unbanned'],true)?$ban:'any',
-            'exclude_username' => $excludeUsername,
-        ];
-        $pager=$this->repo()->search($request->input('search_type','username'),$request->input('search_value',''),(int)$request->input('page',1),20,$filters,$loadAll,$sort);
+        $state = $this->prepareAccountListState($request);
+        $pager = $this->repo()->search(
+            $state['search_type'],
+            $state['search_value'],
+            $state['page'],
+            $state['per_page'],
+            $state['filters'],
+            $state['load_all'],
+            $state['sort']
+        );
         return $this->json(['success'=>true,'page'=>$pager->page,'pages'=>$pager->pages,'total'=>$pager->total,'items'=>$pager->items]);
     }
 
     public function apiDelete(Request $request): Response
     {
-        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountDeleteCapability();
         $this->maybeSwitchServer($request);
 
-        $id = (int)$request->input('id',0);
-        $context = ['id'=>$id,'ip'=>$request->ip()];
-        if($id<=0){
-            $this->logAccountAction('delete','validate_fail',$context+['reason'=>'missing_id']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->delete([
+            'id' => $request->input('id', 0),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountAction('delete', 'validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
+        $id = (int) $hydrated['payload']['id'];
 
         try {
             $result = $this->repo()->deleteAccountCascade($id);
@@ -163,36 +232,36 @@ class AccountController extends Controller
 
     public function apiBulk(Request $request): Response
     {
-        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $action = strtolower(trim((string)$request->input('action','')));
+        switch ($action) {
+            case 'delete':
+                $this->requireAccountDeleteCapability();
+                break;
+            case 'ban':
+            case 'unban':
+                $this->requireAccountBanCapability();
+                break;
+            default:
+                $this->requireLogin();
+                break;
+        }
         $this->maybeSwitchServer($request);
 
-        $action = strtolower(trim((string)$request->input('action','')));
-        $allowed = ['delete','ban','unban'];
-        if(!in_array($action,$allowed,true)){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        $hydrated = $this->mutations()->bulk([
+            'action' => $action,
+            'ids' => $request->input('ids', []),
+            'hours' => $request->input('hours', 0),
+            'reason' => $request->input('reason', ''),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid']) {
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
 
-        $raw = $request->input('ids',[]);
-        $ids = [];
-        if(is_array($raw)){
-            foreach($raw as $v){ $iv = (int)$v; if($iv>0) $ids[]=$iv; }
-        } else {
-            $parts = preg_split('/\s*,\s*/', (string)$raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-            foreach($parts as $p){ $iv=(int)$p; if($iv>0) $ids[]=$iv; }
-        }
-        $ids = array_values(array_unique($ids));
-        if(!$ids){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
-        }
-        if(count($ids) > 200){
-            $ids = array_slice($ids, 0, 200);
-        }
-
-        $hours = (int)$request->input('hours',0);
-        $reason = trim((string)$request->input('reason',''));
-        if($action==='ban' && $reason===''){
-            $reason = Lang::get('app.account.api.defaults.no_reason');
-        }
+        $action = (string) $hydrated['payload']['action'];
+        $ids = $hydrated['payload']['ids'];
+        $hours = (int) $hydrated['payload']['hours'];
+        $reason = (string) $hydrated['payload']['reason'];
 
         $okCount = 0;
         $fail = [];
@@ -240,14 +309,19 @@ class AccountController extends Controller
 
     public function apiUpdateEmail(Request $request): Response
     {
-        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountUpdateCapability();
         $this->maybeSwitchServer($request);
 
-        $id = (int)$request->input('id',0);
-        $email = trim((string)$request->input('email',''));
-        if($id<=0){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->updateEmail([
+            'id' => $request->input('id', 0),
+            'email' => $request->input('email', ''),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid']) {
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
+        $id = (int) $hydrated['payload']['id'];
+        $email = (string) $hydrated['payload']['email'];
 
         try {
             $res = $this->repo()->updateEmail($id, $email);
@@ -265,15 +339,21 @@ class AccountController extends Controller
 
     public function apiUpdateUsername(Request $request): Response
     {
-        if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountUpdateCapability();
         $this->maybeSwitchServer($request);
 
-        $id = (int)$request->input('id',0);
-        $newUsername = trim((string)$request->input('username',''));
-        $password = (string)$request->input('password','');
-        if($id<=0){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->updateUsername([
+            'id' => $request->input('id', 0),
+            'username' => $request->input('username', ''),
+            'password' => $request->input('password', ''),
+            'ip' => $request->ip(),
+        ]);
+        if (!$hydrated['valid']) {
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
+        $id = (int) $hydrated['payload']['id'];
+        $newUsername = (string) $hydrated['payload']['username'];
+        $password = (string) $hydrated['payload']['password'];
 
         try {
             $res = $this->repo()->updateUsername($id, $newUsername, $password);
@@ -291,34 +371,30 @@ class AccountController extends Controller
 
     public function apiCreate(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountCreateCapability();
         $this->maybeSwitchServer($request);
 
         $repo = $this->repo();
 
-        $username = trim((string)$request->input('username',''));
-        $password = (string)$request->input('password','');
-        $confirm = (string)$request->input('password_confirm','');
-        $email = trim((string)$request->input('email',''));
-        $gmlevel = (int)$request->input('gmlevel',0);
-        $context = [
-            'username'=>$username,
-            'email'=>$email,
-            'gmlevel'=>$gmlevel,
-            'server'=>ServerContext::currentId(),
-            'ip'=>$request->ip(),
-        ];
-
-    if($username===''){ $this->logAccountCreate('validate_fail',$context+['reason'=>'empty_username']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.create.errors.username_required')],422); }
-    if(strlen($username)>32){ $this->logAccountCreate('validate_fail',$context+['reason'=>'username_too_long']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.create.errors.username_length')],422); }
-        if($password===''){ $this->logAccountCreate('validate_fail',$context+['reason'=>'empty_password']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.password.error_empty')],422); }
-        if(strlen($password)<8){ $this->logAccountCreate('validate_fail',$context+['reason'=>'password_too_short']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.api.validation.password_min')],422); }
-        if($password!==$confirm){ $this->logAccountCreate('validate_fail',$context+['reason'=>'password_mismatch']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.password.error_mismatch')],422); }
-        if($email!==''){
-            if(strlen($email)>128){ $this->logAccountCreate('validate_fail',$context+['reason'=>'email_too_long']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.create.errors.email_length')],422); }
-            if(!filter_var($email, FILTER_VALIDATE_EMAIL)){ $this->logAccountCreate('validate_fail',$context+['reason'=>'email_invalid']); return $this->json(['success'=>false,'message'=>Lang::get('app.account.create.errors.email_invalid')],422); }
+        $hydrated = $this->mutations()->create([
+            'username' => $request->input('username', ''),
+            'password' => $request->input('password', ''),
+            'password_confirm' => $request->input('password_confirm', ''),
+            'email' => $request->input('email', ''),
+            'gmlevel' => $request->input('gmlevel', 0),
+            'server' => ServerContext::currentId(),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountCreate('validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
-        if($gmlevel<0||$gmlevel>3) $gmlevel = 0;
+
+        $username = (string) $hydrated['payload']['username'];
+        $password = (string) $hydrated['payload']['password'];
+        $email = (string) $hydrated['payload']['email'];
+        $gmlevel = (int) $hydrated['payload']['gmlevel'];
 
         try {
             $id = $repo->createAccount($username,$password,$email);
@@ -348,39 +424,36 @@ class AccountController extends Controller
 
     public function apiAccountsByIp(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountIpCapability();
         $this->maybeSwitchServer($request);
-        $ip = trim((string)$request->input('ip',''));
-    if($ip==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_ip')],422);
-        $excludeId = (int)$request->input('exclude',0);
-        $limit = (int)$request->input('limit',50);
-        if($limit<=0) $limit = 50; if($limit>200) $limit=200;
+        $state = $this->prepareAccountIpLookupState($request);
+        if($state['ip']==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_ip')],422);
         try {
-            $items = $this->repo()->accountsByLastIp($ip, $excludeId, $limit);
+            $items = $this->repo()->accountsByLastIp($state['ip'], $state['exclude_id'], $state['limit']);
         } catch(\Throwable $e){
             return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.query_failed',['message'=>$e->getMessage()])],500);
         }
-        return $this->json(['success'=>true,'ip'=>$ip,'items'=>$items]);
+        return $this->json(['success'=>true,'ip'=>$state['ip'],'items'=>$items]);
     }
 
     public function apiIpLocation(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountIpCapability();
         $this->maybeSwitchServer($request);
-        $ip = trim((string)$request->input('ip',''));
-    if($ip==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_ip')],422);
+        $state = $this->prepareAccountIpLookupState($request);
+        if($state['ip']==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_ip')],422);
         $service = new IpLocationService();
-        $result = $service->lookup($ip);
+        $result = $service->lookup($state['ip']);
         if(!$result['success']){
             return $this->json([
                 'success' => false,
                 'message' => $result['message'] ?? Lang::get('app.account.ip_lookup.failed'),
-                'ip' => $ip,
+                'ip' => $state['ip'],
             ]);
         }
         return $this->json([
             'success' => true,
-            'ip' => $ip,
+            'ip' => $state['ip'],
             'location' => $result['text'] ?? Lang::get('app.account.ip_lookup.unknown'),
             'cached' => $result['cached'] ?? false,
             'provider' => $result['provider'] ?? 'ip-api',
@@ -392,28 +465,28 @@ class AccountController extends Controller
 
     public function apiCharacters(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountCharactersCapability();
         $this->maybeSwitchServer($request);
-    $id=(int)$request->input('id',0); if($id<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
-        $serverId = ServerContext::currentId();
+        $state = $this->prepareAccountCharacterLookupState($request);
+        if($state['id']<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
         try {
-            $chars=$this->repo()->listCharacters($id);
+            $payload = $this->repo()->accountCharactersPayload($state['id']);
         } catch(\Throwable $e){
             return $this->json(['success'=>false,'message'=>Lang::get('app.account.api.errors.query_characters_failed',['message'=>$e->getMessage()])],500);
         }
-        $ban=$this->repo()->banStatus($id);
-        return $this->json(['success'=>true,'items'=>$chars,'ban'=>$ban]);
+        return $this->json(['success'=>true,'items'=>$payload['items'],'ban'=>$payload['ban']]);
     }
 
 
 
     public function apiCharactersStatus(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountCharactersCapability();
         $this->maybeSwitchServer($request);
-    $id=(int)$request->input('id',0); if($id<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $state = $this->prepareAccountCharacterLookupState($request);
+        if($state['id']<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
         try {
-            $chars=$this->repo()->listCharacters($id);
+            $chars=$this->repo()->listCharacters($state['id']);
             $map=[]; foreach($chars as $c){ $map[(int)$c['guid']]=['online'=> (bool)$c['online']]; }
             return $this->json(['success'=>true,'statuses'=>$map,'count'=>count($map)]);
     } catch(\Throwable $e){ return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.query_failed',['message'=>$e->getMessage()])],500); }
@@ -421,19 +494,24 @@ class AccountController extends Controller
 
     public function apiSetGm(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountGmCapability();
         $this->maybeSwitchServer($request);
-        $id=(int)$request->input('id',0); $gm=(int)$request->input('gm',0); $realm=(int)$request->input('realm',-1);
-        $context = ['id'=>$id,'gm'=>$gm,'realm'=>$realm,'ip'=>$request->ip()];
-        if($id<=0){
-            $this->logAccountAction('set_gm','validate_fail',$context+['reason'=>'missing_id']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->setGm([
+            'id' => $request->input('id', 0),
+            'gm' => $request->input('gm', 0),
+            'realm' => $request->input('realm', -1),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountAction('set_gm', 'validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
-        if($gm<0||$gm>6){
-            $this->logAccountAction('set_gm','validate_fail',$context+['reason'=>'gm_out_of_range']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.account.api.validation.gm_range')],422);
-        }
-    $ok=$this->repo()->setGmLevel($id,$gm,$realm);
+
+        $id = (int) $hydrated['payload']['id'];
+        $gm = (int) $hydrated['payload']['gm'];
+        $realm = (int) $hydrated['payload']['realm'];
+        $ok=$this->repo()->setGmLevel($id,$gm,$realm);
         if($ok){
             $this->logAccountAction('set_gm','success',$context);
             Audit::log('account','set_gm',"id=$id gm=$gm realm=$realm");
@@ -445,17 +523,24 @@ class AccountController extends Controller
 
     public function apiBan(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountBanCapability();
         $this->maybeSwitchServer($request);
-        $id=(int)$request->input('id',0); $hours=(int)$request->input('hours',0); $reason=(string)$request->input('reason','');
-        $context = ['id'=>$id,'hours'=>$hours,'reason'=>$reason,'ip'=>$request->ip()];
-        if($id<=0){
-            $this->logAccountAction('ban','validate_fail',$context+['reason_code'=>'missing_id']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->ban([
+            'id' => $request->input('id', 0),
+            'hours' => $request->input('hours', 0),
+            'reason' => $request->input('reason', ''),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountAction('ban', 'validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
-    if($reason==='') $reason=Lang::get('app.account.api.defaults.no_reason');
-        $context['reason']=$reason;
-    $ok=$this->repo()->ban($id,$reason,$hours);
+
+        $id = (int) $hydrated['payload']['id'];
+        $hours = (int) $hydrated['payload']['hours'];
+        $reason = (string) $hydrated['payload']['reason'];
+        $ok=$this->repo()->ban($id,$reason,$hours);
         if($ok){
             $this->logAccountAction('ban','success',$context);
             Audit::log('account','ban',"id=$id hours=$hours reason=$reason");
@@ -467,14 +552,19 @@ class AccountController extends Controller
 
     public function apiUnban(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountBanCapability();
         $this->maybeSwitchServer($request);
-        $id=(int)$request->input('id',0);
-        $context = ['id'=>$id,'ip'=>$request->ip()];
-        if($id<=0){
-            $this->logAccountAction('unban','validate_fail',$context+['reason'=>'missing_id']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
+        $hydrated = $this->mutations()->unban([
+            'id' => $request->input('id', 0),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountAction('unban', 'validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
+
+        $id = (int) $hydrated['payload']['id'];
         try {
             $cnt=$this->repo()->unban($id);
         } catch(\Throwable $e){
@@ -492,18 +582,23 @@ class AccountController extends Controller
 
     public function apiChangePassword(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountPasswordCapability();
         $this->maybeSwitchServer($request);
-        $id=(int)$request->input('id',0); $user=(string)$request->input('username',''); $pass=(string)$request->input('password','');
-        $context = ['id'=>$id,'username'=>$user,'ip'=>$request->ip()];
-        if($id<=0 || $user==='' || $pass===''){
-            $this->logAccountAction('change_password','validate_fail',$context+['reason'=>'missing_params']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
+        $hydrated = $this->mutations()->changePassword([
+            'id' => $request->input('id', 0),
+            'username' => $request->input('username', ''),
+            'password' => $request->input('password', ''),
+            'ip' => $request->ip(),
+        ]);
+        $context = $hydrated['context'];
+        if (!$hydrated['valid']) {
+            $this->logAccountAction('change_password', 'validate_fail', $context + ['reason' => $hydrated['reason']]);
+            return $this->json(['success' => false, 'message' => $hydrated['message']], $hydrated['status']);
         }
-        if(strlen($pass)<8){
-            $this->logAccountAction('change_password','validate_fail',$context+['reason'=>'password_too_short']);
-            return $this->json(['success'=>false,'message'=>Lang::get('app.account.api.validation.password_min')],422);
-        }
+
+        $id = (int) $hydrated['payload']['id'];
+        $user = (string) $hydrated['payload']['username'];
+        $pass = (string) $hydrated['payload']['password'];
         try {
             $ok=$this->repo()->changePassword($id,$user,$pass);
         } catch(\Throwable $e){
@@ -521,7 +616,7 @@ class AccountController extends Controller
 
     public function apiKick(Request $request): Response
     {
-    if(!Auth::check()) return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
+        $this->requireAccountKickCapability();
         $this->maybeSwitchServer($request);
     $player=(string)$request->input('player',''); if($player==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_player')],422);
         $soap = new SoapService();
@@ -534,7 +629,7 @@ class AccountController extends Controller
     {
         try {
             if(!array_key_exists('ip',$context)){
-                $context['ip'] = $_SERVER['REMOTE_ADDR'] ?? '';
+                $context['ip'] = ClientIp::resolve($_SERVER);
             }
             $base = [
                 'admin' => $_SESSION['panel_user'] ?? null,
@@ -549,6 +644,53 @@ class AccountController extends Controller
     private function logAccountCreate(string $stage, array $context = []): void
     {
         $this->logAccountAction('create',$stage,$context);
+    }
+
+    private function loginPage(?string $error = null): Response
+    {
+        return $this->pageView('auth.login', [
+            'error' => $error,
+        ]);
+    }
+
+    private function prepareAccountListState(Request $request): array
+    {
+        $filters = [
+            'online' => $this->normalizedEnum($request, 'online', ['any', 'online', 'offline'], 'any'),
+            'ban' => $this->normalizedEnum($request, 'ban', ['any', 'banned', 'unbanned'], 'any'),
+            'exclude_username' => $this->normalizedString($request, 'exclude_username'),
+        ];
+
+        return [
+            'search_type' => $this->normalizedEnum($request, 'search_type', ['username', 'id'], 'username'),
+            'search_value' => (string) $request->input('search_value', ''),
+            'filters' => $filters,
+            'sort' => $this->normalizedEnum(
+                $request,
+                'sort',
+                ['', 'id_asc','id_desc','online_asc','online_desc','last_login_asc','last_login_desc'],
+                ''
+            ),
+            'load_all' => $this->normalizedBoolFlag($request, 'load_all'),
+            'page' => $this->normalizedPage($request),
+            'per_page' => 20,
+        ];
+    }
+
+    private function prepareAccountIpLookupState(Request $request): array
+    {
+        return [
+            'ip' => $this->normalizedString($request, 'ip'),
+            'exclude_id' => max(0, (int) $request->input('exclude', 0)),
+            'limit' => $this->boundedInt($request, 'limit', 50, 1, 200),
+        ];
+    }
+
+    private function prepareAccountCharacterLookupState(Request $request): array
+    {
+        return [
+            'id' => max(0, (int) $request->input('id', 0)),
+        ];
     }
 }
 

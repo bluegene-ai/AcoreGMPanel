@@ -10,6 +10,8 @@
 
 namespace Acme\Panel\Core;
 
+use Acme\Panel\Support\ViewContext;
+
 class View
 {
     public static string $basePath = __DIR__ . '/../../resources/views';
@@ -18,7 +20,7 @@ class View
     {
         $file = self::$basePath . '/' . str_replace('.','/',$name) . '.php';
         if(!is_file($file)) return 'View not found: '.$name;
-        extract($data, EXTR_OVERWRITE);
+        extract($data + ViewContext::templateData(), EXTR_OVERWRITE);
         ob_start();
         include $file;
         return ob_get_clean();

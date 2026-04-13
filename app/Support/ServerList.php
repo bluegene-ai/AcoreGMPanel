@@ -26,7 +26,7 @@ class ServerList
     public static function options(): array
     {
         $out=[]; foreach(ServerContext::list() as $id=>$cfg){ $out[]=[ 'id'=>$id, 'label'=>$cfg['name'] ?? __('app.server.default_option', ['id'=>$id]) ]; }
-        if(!$out) { $out[]=['id'=>0,'label'=>__('app.support.server_list.default')]; }
+        if(!$out) { $out[]=['id'=>0,'label'=>__('support.server_list.default')]; }
         return $out;
     }
 

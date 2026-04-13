@@ -28,14 +28,9 @@ class BagQueryController extends Controller
     public function index(Request $request): Response
     {
         $this->requireLogin();
-        $reqServer=$request->input('server',null);
-        if($reqServer!==null){
-            $sid=(int)$reqServer;
-            if(ServerContext::currentId()!==$sid && ServerList::valid($sid)){
-                ServerContext::set($sid);
-                $this->repo=new BagQueryRepository();
-            }
-        }
+        $this->switchServerAndRefresh($request, function (): void {
+            $this->repo = new BagQueryRepository();
+        });
 
         $prefillType=null; $prefillValue=null; $autoSearch=false;
         $valueParam=trim((string)$request->input('value',''));
@@ -53,15 +48,13 @@ class BagQueryController extends Controller
             }
         }
 
-        return $this->view('bag_query.index',[
-            'title'=>Lang::get('app.bag_query.page_title'),
-            'current_server'=>ServerContext::currentId(),
+        return $this->pageView('bag_query.index', $this->serverViewData([
             'prefill'=>[
                 'type'=>$prefillType,
                 'value'=>$prefillValue,
                 'auto'=>$autoSearch,
             ],
-        ]);
+        ]));
     }
 
     public function legacyRedirect(): Response
@@ -72,27 +65,24 @@ class BagQueryController extends Controller
     public function apiCharacters(Request $request): Response
     {
         $this->requireLogin();
-        $type=$request->input('type','character_name');
-        if(!in_array($type,['character_name','username'],true)) $type='character_name';
-        $value=(string)$request->input('value','');
-        $limit=max(1,min(200,(int)$request->input('limit',100)));
-        $list=$this->repo->searchCharacters($type,$value,$limit);
-        Audit::log('bag_query','search','characters',[ 'type'=>$type,'value'=>mb_substr($value,0,40),'returned'=>count($list) ]);
+        $state = $this->prepareBagCharacterSearchState($request);
+        $list=$this->repo->searchCharacters($state['type'],$state['value'],$state['limit']);
+        Audit::log('bag_query','search','characters',[ 'type'=>$state['type'],'value'=>mb_substr($state['value'],0,40),'returned'=>count($list) ]);
         return $this->json(['success'=>true,'data'=>$list]);
     }
 
     public function apiItems(Request $request): Response
     {
         $this->requireLogin();
-        $guid=(int)$request->input('guid',0);
-        if($guid<=0){
+        $state = $this->prepareBagItemState($request);
+        if($state['guid']<=0){
             return $this->json([
                 'success'=>false,
                 'message'=>Lang::get('app.bag_query.api.errors.invalid_guid'),
             ]);
         }
-        $items=$this->repo->characterItems($guid);
-        Audit::log('bag_query','view_items',(string)$guid,['count'=>count($items)]);
+        $items=$this->repo->characterItems($state['guid']);
+        Audit::log('bag_query','view_items',(string)$state['guid'],['count'=>count($items)]);
         return $this->json(['success'=>true,'data'=>$items]);
     }
 
@@ -119,6 +109,22 @@ class BagQueryController extends Controller
             'message'=>$res['message']??null,
         ]);
         return $this->json($res);
+    }
+
+    private function prepareBagCharacterSearchState(Request $request): array
+    {
+        return [
+            'type' => $this->normalizedEnum($request, 'type', ['character_name', 'username'], 'character_name'),
+            'value' => $this->normalizedString($request, 'value'),
+            'limit' => $this->boundedInt($request, 'limit', 100, 1, 200),
+        ];
+    }
+
+    private function prepareBagItemState(Request $request): array
+    {
+        return [
+            'guid' => max(0, (int) $request->input('guid', 0)),
+        ];
     }
 }
 

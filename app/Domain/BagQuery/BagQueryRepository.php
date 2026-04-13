@@ -251,7 +251,7 @@ class BagQueryRepository extends MultiServerRepository
                 'server'=>$this->serverId,
             ];
             if(!array_key_exists('ip',$data)){
-                $data['ip']=$_SERVER['REMOTE_ADDR'] ?? '';
+                $data['ip']=\Acme\Panel\Support\ClientIp::resolve($_SERVER);
             }
             $data=array_filter($data,static fn($v)=>$v!==null);
             $json=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);

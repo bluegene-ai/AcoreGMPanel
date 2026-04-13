@@ -4,10 +4,7 @@
  * Purpose: Provides functionality for the resources/views/bag_query module.
  */
 
- $module='bag_query'; include __DIR__.'/../layouts/base_top.php'; ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.bag_query.page_title')) ?></h1>
-<?php
-
+include dirname(__DIR__) . '/components/page_header.php';
 ?>
 <div class="bag-query-toolbar bag-query-card">
   <form id="bagSearchForm" class="bag-query-form">
@@ -64,17 +61,13 @@
   $prefillJson = json_encode($prefillPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $autoSearch = !empty($prefill['auto']);
 ?>
-<script>
-window.__BAG_QUERY_CTX = {
-  csrf: window.__CSRF_TOKEN,
-  prefill: <?= $prefillJson ?: 'null' ?>,
-  autoSearch: <?= $autoSearch ? 'true':'false' ?>,
-  labels: {
-    view: <?= json_encode(__('app.js.modules.bag_query.actions.view', [], 'View'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-    delete: <?= json_encode(__('app.js.modules.bag_query.actions.delete', [], 'Delete'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-    processing: <?= json_encode(__('app.js.modules.bag_query.actions.processing', [], 'Processing...'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
-  }
-};
-</script>
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>
+<script type="application/json" data-panel-json data-global="__BAG_QUERY_CTX"><?= json_encode([
+  'prefill' => $prefillPayload,
+  'autoSearch' => $autoSearch,
+  'labels' => [
+    'view' => __('app.js.modules.bag_query.actions.view', [], 'View'),
+    'delete' => __('app.js.modules.bag_query.actions.delete', [], 'Delete'),
+    'processing' => __('app.js.modules.bag_query.actions.processing', [], 'Processing...'),
+  ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 

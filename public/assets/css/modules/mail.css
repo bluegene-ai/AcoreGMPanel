@@ -1,0 +1,46 @@
+/* Mail bulk bar layout refinements */
+.mail-bulk-bar .bulk-stats .muted{color:#8b96a1;font-size:12px;}
+.mail-bulk-bar .bulk-stats{white-space:nowrap;}
+.mail-bulk-bar .bulk-left .btn{min-width:90px;}
+.mark-btn-active{background:#1f8b4d!important;border-color:#1f8b4d!important;color:#fff!important;box-shadow:0 0 0 1px rgba(16,180,99,.35);}
+.mark-btn-active:hover{opacity:.95;box-shadow:0 0 0 1px rgba(16,180,99,.55);}
+.mark-btn-disabled{background:#1b2a22!important;color:#8ca695!important;border-color:#1b2a22!important;cursor:not-allowed!important;opacity:.7;pointer-events:none;}
+.mark-btn-disabled:hover{opacity:.7;}
+
+/* =============================================
+	Mail Detail Modal (migrated from inline style)
+	Namespace: #modal-mail-detail
+	============================================= */
+#modal-mail-detail{position:fixed;inset:0;display:none;z-index:300;background:rgba(0,0,0,.55);padding:40px 20px;overflow:auto;}
+#modal-mail-detail.active{display:flex;align-items:flex-start;justify-content:center;}
+#modal-mail-detail .modal-panel{width:840px;max-width:100%;background:#141b1f;border:1px solid #2c3945;border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.55);animation:popIn .18s ease;}
+@keyframes popIn{from{transform:translateY(12px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+#modal-mail-detail header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #24303a;}
+#modal-mail-detail header h3{margin:0;font-size:18px;font-weight:600;}
+#modal-mail-detail .modal-body{padding:16px 20px 6px;}
+#modal-mail-detail .mail-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px;}
+#modal-mail-detail .mail-meta .kv{background:#18222a;padding:8px 10px;border:1px solid #22303a;border-radius:4px;font-size:12px;line-height:1.4;}
+#modal-mail-detail .mail-meta .kv label{display:block;color:#6aa3d8;font-size:11px;margin-bottom:2px;}
+#modal-mail-detail .subject-box{background:#10161a;border:1px solid #1d2a33;padding:10px 12px;border-radius:4px;font-size:13px;margin-bottom:10px;}
+#modal-mail-detail .body-box{background:#10161a;border:1px solid #1d2a33;padding:12px 14px;border-radius:4px;font-size:13px;white-space:pre-wrap;max-height:300px;overflow:auto;margin-bottom:12px;}
+#modal-mail-detail .attachments-wrap{background:#10161a;border:1px solid #1d2a33;padding:10px 12px;border-radius:4px;}
+#modal-mail-detail .attachments-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+#modal-mail-detail .attachments-list a{background:#1e2d3a;color:#9ecbff;padding:4px 9px;border-radius:4px;font-size:12px;text-decoration:none;line-height:1.1;}
+#modal-mail-detail .attachments-list a:hover{background:#274459;color:#cfe6ff;}
+#modal-mail-detail footer{padding:12px 18px;border-top:1px solid #24303a;text-align:right;}
+#modal-mail-detail .mail-detail-loading{font-size:14px;padding:40px 10px;text-align:center;color:#7d8b95;}
+#modal-mail-detail .status-badge{display:inline-block;background:#20313d;color:#7bc2ff;font-size:11px;padding:2px 6px;border-radius:12px;margin-left:8px;}
+
+.mail-toolbar{display:flex;align-items:center;gap:12px;margin:12px 0;flex-wrap:wrap;}
+.mail-toolbar .toolbar-group{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.mail-toolbar__stats{display:flex;gap:18px;align-items:center;}
+.mail-log-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.mail-log-select{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8fa3b4;}
+.mail-log-select span{font-size:12px;color:#9bb0c0;}
+.mail-log-box{max-height:420px;overflow:auto;background:#10161d;color:#94ffc7;padding:10px 12px;border:1px solid #23313c;border-radius:6px;font-family:"Consolas","Menlo","Courier New",monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;}
+.mail-filter-form__subject{width:160px;}
+.mail-filter-form__expiring{width:90px;}
+.mail-filter-form__limit{width:80px;}
+.mail-table__select-col{width:28px;}
+.mail-modal-hidden{display:none;}
+.mail-detail-content--hidden{display:none;}

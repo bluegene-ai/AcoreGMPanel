@@ -25,7 +25,7 @@ class Audit
             $stmt->execute([
                 ':ts'=>time(), ':admin'=>$_SESSION['panel_user'], ':module'=>$module, ':action'=>$action, ':target'=>$target,
                 ':detail'=> $detail? json_encode($detail, JSON_UNESCAPED_UNICODE):null,
-                ':ip'=> $_SERVER['REMOTE_ADDR'] ?? ''
+                ':ip'=> ClientIp::resolve($_SERVER)
             ]);
         } catch(Throwable $e){  }
     }

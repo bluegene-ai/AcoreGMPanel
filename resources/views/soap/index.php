@@ -4,11 +4,17 @@
  * Purpose: Provides functionality for the resources/views/soap module.
  */
 
- $module='soap_wizard'; include __DIR__.'/../layouts/base_top.php'; ?>
-<h1 class="page-title"><?= htmlspecialchars(__('app.soap.page_title')) ?></h1>
-<p class="muted" style="margin-top:-6px;margin-bottom:18px;font-size:13px;">
-  <?= htmlspecialchars(__('app.soap.intro')) ?>
-</p>
+?>
+<?php
+  $soapCapabilities = $__pageCapabilities ?? [
+    'catalog' => $__can('soap.catalog'),
+    'execute' => $__can('soap.execute'),
+  ];
+  $__pageCapabilities = $soapCapabilities;
+  $capabilityNotice = $soapCapabilities['execute'] ? null : __('app.common.capabilities.page_limited');
+?>
+<?php include __DIR__.'/../components/page_header.php'; ?>
+<?php include __DIR__.'/../components/capability_notice.php'; ?>
 
 <div class="soap-wizard">
   <aside class="soap-wizard__sidebar">
@@ -20,7 +26,7 @@
     <div class="soap-wizard__commands" id="soapCommandList"></div>
   </aside>
   <section class="soap-wizard__content">
-    <div id="soapActionFlash" class="panel-flash" style="display:none"></div>
+    <div id="soapActionFlash" class="panel-flash soap-flash-hidden"></div>
     <div id="soapCommandSummary" class="soap-wizard__summary">
   <h2><?= htmlspecialchars(__('app.soap.summary.title')) ?></h2>
   <p class="muted"><?= htmlspecialchars(__('app.soap.summary.hint')) ?></p>
@@ -48,7 +54,9 @@
         </div>
         <div class="soap-form__actions">
           <button type="button" class="btn neutral" id="soapCopyBtn"><?= htmlspecialchars(__('app.soap.actions.copy')) ?></button>
+          <?php if($soapCapabilities['execute']): ?>
           <button type="submit" class="btn primary" id="soapExecuteBtn" disabled><?= htmlspecialchars(__('app.soap.actions.execute')) ?></button>
+          <?php endif; ?>
         </div>
       </form>
 
@@ -63,9 +71,6 @@
   </section>
 </div>
 
-<script>
-window.SOAP_WIZARD_DATA = <?= json_encode($catalog, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
-window.SOAP_WIZARD_DEFAULT_SERVER = <?= (int)($current_server ?? 0) ?>;
-</script>
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>
+<script type="application/json" data-panel-json data-global="SOAP_WIZARD_DATA"><?= json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script type="application/json" data-panel-json data-global="SOAP_WIZARD_DEFAULT_SERVER"><?= json_encode((int)($current_server ?? 0)) ?></script>
 

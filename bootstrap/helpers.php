@@ -84,6 +84,24 @@ if (!function_exists('flash_pull_all')) {
     }
 }
 
+if (!function_exists('flash_pull_type')) {
+    function flash_pull_type(string $type): array
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $items = $_SESSION['flashes'][$type] ?? [];
+        unset($_SESSION['flashes'][$type]);
+
+        if (empty($_SESSION['flashes']) || !is_array($_SESSION['flashes'])) {
+            unset($_SESSION['flashes']);
+        }
+
+        return is_array($items) ? $items : [];
+    }
+}
+
 if (!function_exists('__')) {
     function __(string $key, array $replace = [], ?string $default = null): string
     {

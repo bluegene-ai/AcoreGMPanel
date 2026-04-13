@@ -20,6 +20,8 @@ use Acme\Panel\Core\Lang;
 
 class IpLocationService
 {
+    private static array $requestCache = [];
+
     private string $driver;
     private string $mmdbPath;
     private string $locale;
@@ -40,28 +42,58 @@ class IpLocationService
     {
         $ip = trim($ip);
         if ($ip === '') {
-            return ['success' => false, 'message' => Lang::get('app.support.ip_location.errors.empty')];
+            return ['success' => false, 'message' => Lang::get('support.ip_location.errors.empty')];
         }
         if ($this->isPrivate($ip)) {
-            return ['success' => true, 'text' => Lang::get('app.support.ip_location.labels.private'), 'cached' => true, 'provider' => 'private'];
+            return ['success' => true, 'text' => Lang::get('support.ip_location.labels.private'), 'cached' => true, 'provider' => 'private'];
         }
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-            return ['success' => false, 'message' => Lang::get('app.support.ip_location.errors.invalid')];
+            return ['success' => false, 'message' => Lang::get('support.ip_location.errors.invalid')];
+        }
+
+        $cacheKey = $this->cacheKey($ip);
+        if (isset(self::$requestCache[$cacheKey])) {
+            return self::$requestCache[$cacheKey] + ['cached' => true];
+        }
+
+        $cached = TransientCache::get('ip_location', $cacheKey);
+        if (is_array($cached)) {
+            self::$requestCache[$cacheKey] = $cached;
+            return $cached + ['cached' => true];
         }
 
         $result = $this->lookupMmdb($ip);
         if ($result !== null) {
+            $this->rememberLookup($cacheKey, $result);
             return $result;
         }
 
         // Non-fatal fallback: keep UI usable even if mmdb is not configured.
-        return [
+        $result = [
             'success' => true,
-            'text' => Lang::get('app.support.ip_location.labels.unknown'),
+            'text' => Lang::get('support.ip_location.labels.unknown'),
             'cached' => true,
             'provider' => 'mmdb',
-            'message' => Lang::get('app.support.ip_location.errors.mmdb_unavailable'),
+            'message' => Lang::get('support.ip_location.errors.mmdb_unavailable'),
         ];
+        $this->rememberLookup($cacheKey, $result);
+
+        return $result;
+    }
+
+    private function rememberLookup(string $cacheKey, array $result): void
+    {
+        self::$requestCache[$cacheKey] = $result;
+
+        if (($result['success'] ?? false) !== true)
+            return;
+
+        TransientCache::set('ip_location', $cacheKey, $result, 300);
+    }
+
+    private function cacheKey(string $ip): string
+    {
+        return md5($this->driver . '|' . $this->locale . '|' . $this->mmdbPath . '|' . $ip);
     }
 
     private function lookupMmdb(string $ip): ?array
@@ -78,19 +110,19 @@ class IpLocationService
         if (!class_exists('MaxMind\\Db\\Reader')) {
             return [
                 'success' => true,
-                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'text' => Lang::get('support.ip_location.labels.unknown'),
                 'cached' => true,
                 'provider' => 'mmdb',
-                'message' => Lang::get('app.support.ip_location.errors.mmdb_reader_missing'),
+                'message' => Lang::get('support.ip_location.errors.mmdb_reader_missing'),
             ];
         }
         if (!is_file($this->mmdbPath)) {
             return [
                 'success' => true,
-                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'text' => Lang::get('support.ip_location.labels.unknown'),
                 'cached' => true,
                 'provider' => 'mmdb',
-                'message' => Lang::get('app.support.ip_location.errors.mmdb_file_missing'),
+                'message' => Lang::get('support.ip_location.errors.mmdb_file_missing'),
             ];
         }
 
@@ -103,7 +135,7 @@ class IpLocationService
             if (!is_array($record)) {
                 return [
                     'success' => true,
-                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'text' => Lang::get('support.ip_location.labels.unknown'),
                     'cached' => false,
                     'provider' => 'mmdb',
                 ];
@@ -119,10 +151,10 @@ class IpLocationService
         } catch (\Throwable $e) {
             return [
                 'success' => true,
-                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'text' => Lang::get('support.ip_location.labels.unknown'),
                 'cached' => true,
                 'provider' => 'mmdb',
-                'message' => Lang::get('app.support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
+                'message' => Lang::get('support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
             ];
         }
     }
@@ -132,10 +164,10 @@ class IpLocationService
         if (!is_file($this->mmdbPath)) {
             return [
                 'success' => true,
-                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'text' => Lang::get('support.ip_location.labels.unknown'),
                 'cached' => true,
                 'provider' => 'mmdb',
-                'message' => Lang::get('app.support.ip_location.errors.mmdb_file_missing'),
+                'message' => Lang::get('support.ip_location.errors.mmdb_file_missing'),
             ];
         }
         try {
@@ -145,17 +177,17 @@ class IpLocationService
             if (!$this->mmdbHandle) {
                 return [
                     'success' => true,
-                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'text' => Lang::get('support.ip_location.labels.unknown'),
                     'cached' => true,
                     'provider' => 'mmdb',
-                    'message' => Lang::get('app.support.ip_location.errors.mmdb_open_failed'),
+                    'message' => Lang::get('support.ip_location.errors.mmdb_open_failed'),
                 ];
             }
             $record = @maxminddb_get($this->mmdbHandle, $ip);
             if (!is_array($record)) {
                 return [
                     'success' => true,
-                    'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                    'text' => Lang::get('support.ip_location.labels.unknown'),
                     'cached' => false,
                     'provider' => 'mmdb',
                 ];
@@ -171,10 +203,10 @@ class IpLocationService
         } catch (\Throwable $e) {
             return [
                 'success' => true,
-                'text' => Lang::get('app.support.ip_location.labels.unknown'),
+                'text' => Lang::get('support.ip_location.labels.unknown'),
                 'cached' => true,
                 'provider' => 'mmdb',
-                'message' => Lang::get('app.support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
+                'message' => Lang::get('support.ip_location.errors.failed_reason', ['message' => $e->getMessage()]),
             ];
         }
     }
@@ -218,7 +250,7 @@ class IpLocationService
                     $parts[] = $p;
                 }
             }
-            return count($parts) ? implode(' ', $parts) : Lang::get('app.support.ip_location.labels.unknown');
+            return count($parts) ? implode(' ', $parts) : Lang::get('support.ip_location.labels.unknown');
         }
 
         // Format 2: Common CN-only IP DB schema (province/city/districts/isp/net).
@@ -239,7 +271,7 @@ class IpLocationService
             if ($net !== '') $parts[] = $net;
         }
 
-        return count($parts) ? implode(' ', $parts) : Lang::get('app.support.ip_location.labels.unknown');
+        return count($parts) ? implode(' ', $parts) : Lang::get('support.ip_location.labels.unknown');
     }
 
     private function isPrivate(string $ip): bool

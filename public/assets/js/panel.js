@@ -1,7 +1,64 @@
 // Global Panel helper (dynamic base path + fetch wrappers)
 (function(){
   if(window.Panel) return; // idempotent
-  const BASE = (window.APP_BASE||'').replace(/\/$/,'');
+
+  function parsePanelJsonScripts(){
+    document.querySelectorAll('script[data-panel-json]').forEach((node)=>{
+      if(node.__panelJsonApplied) return;
+      node.__panelJsonApplied = true;
+      const target = node.dataset.global;
+      if(!target) return;
+      const raw = (node.textContent || '').trim();
+      if(!raw) return;
+      try {
+        const value = JSON.parse(raw);
+        window[target] = node.dataset.freeze === 'true' && value && typeof value === 'object'
+          ? Object.freeze(value)
+          : value;
+      } catch (error) {
+        console.warn('Failed to parse panel JSON payload for', target, error);
+      }
+    });
+  }
+
+  function resolveBasePath(){
+    const bodyBase = document.body?.dataset?.appBase;
+    const htmlBase = document.documentElement?.dataset?.appBase;
+    const globalBase = typeof window.APP_BASE === 'string' ? window.APP_BASE : '';
+    return (globalBase || bodyBase || htmlBase || '').replace(/\/$/, '');
+  }
+
+  function resolveCsrfToken(){
+    if(typeof window.__CSRF_TOKEN === 'string' && window.__CSRF_TOKEN.trim() !== ''){
+      return window.__CSRF_TOKEN.trim();
+    }
+    const jsonNode = document.querySelector('script[data-panel-json][data-global="__CSRF_TOKEN"]');
+    if(jsonNode){
+      const raw = (jsonNode.textContent || '').trim();
+      if(raw){
+        try {
+          const value = JSON.parse(raw);
+          if(typeof value === 'string' && value.trim() !== ''){
+            window.__CSRF_TOKEN = value.trim();
+            return window.__CSRF_TOKEN;
+          }
+        } catch (error) {
+          console.warn('Failed to resolve CSRF token payload', error);
+        }
+      }
+    }
+    const field = document.querySelector('input[name="_csrf"], input[name="_token"]');
+    const value = field && typeof field.value === 'string' ? field.value.trim() : '';
+    if(value !== ''){
+      window.__CSRF_TOKEN = value;
+      return value;
+    }
+    return '';
+  }
+
+  parsePanelJsonScripts();
+
+  const BASE = resolveBasePath();
   const localeStore = { common: {}, modules: {} };
 
   function looksLikeI18nKey(value){
@@ -155,6 +212,43 @@
     return BASE + path; // BASE may be ''
   }
 
+  function parseApiText(text){
+    if(typeof text !== 'string') return null;
+    const attempts = [];
+    const trimmed = text.trim();
+    if(text !== '') attempts.push(text);
+    if(trimmed !== '' && trimmed !== text) attempts.push(trimmed);
+
+    const objectStart = trimmed.indexOf('{');
+    const objectEnd = trimmed.lastIndexOf('}');
+    if(objectStart !== -1 && objectEnd > objectStart){
+      attempts.push(trimmed.slice(objectStart, objectEnd + 1));
+    }
+
+    const arrayStart = trimmed.indexOf('[');
+    const arrayEnd = trimmed.lastIndexOf(']');
+    if(arrayStart !== -1 && arrayEnd > arrayStart){
+      attempts.push(trimmed.slice(arrayStart, arrayEnd + 1));
+    }
+
+    for(const attempt of attempts){
+      try {
+        return JSON.parse(attempt);
+      } catch (error) {
+      }
+    }
+
+    return null;
+  }
+
+  async function parseApiResponse(resp){
+    const fallbackMsg = getLocale(['common','errors','invalid_json'], 'Invalid JSON');
+    const text = await resp.text();
+    const parsed = parseApiText(text);
+    if(parsed !== null) return parsed;
+    return { success:false, message:fallbackMsg, raw:text, status:resp.status };
+  }
+
   async function api(path, options){
     const url = buildUrl(path);
     options = options || {};
@@ -195,21 +289,14 @@
     }
     if(body) init.body = body;
   
-    if(window.__CSRF_TOKEN && body instanceof FormData){
-      if(!body.has('_token')) body.append('_token', window.__CSRF_TOKEN);
-      if(!body.has('_csrf')) body.append('_csrf', window.__CSRF_TOKEN);
-      init.headers['X-CSRF-TOKEN'] = window.__CSRF_TOKEN;
+    const csrfToken = resolveCsrfToken();
+    if(csrfToken && body instanceof FormData){
+      if(!body.has('_token')) body.append('_token', csrfToken);
+      if(!body.has('_csrf')) body.append('_csrf', csrfToken);
+      init.headers['X-CSRF-TOKEN'] = csrfToken;
     }
     const resp = await fetch(url, init);
-    const ctype = resp.headers.get('Content-Type')||'';
-    if(ctype.includes('application/json')){
-      return await resp.json();
-    }
-    const txt = await resp.text();
-    try { return JSON.parse(txt); } catch(e){
-      const fallbackMsg = getLocale(['common','errors','invalid_json'], 'Invalid JSON');
-      return { success:false, message:fallbackMsg, raw:txt, status:resp.status };
-    }
+    return await parseApiResponse(resp);
   }
 
   api.get = function(path, params){
@@ -239,7 +326,7 @@
       if(!el) return;
       clearTimer(el);
       el.classList.remove('panel-flash--success','panel-flash--error','panel-flash--info','is-visible');
-      el.style.display = 'none';
+      el.hidden = true;
       el.textContent = '';
     }
 
@@ -257,7 +344,7 @@
       const text = message==null? '' : message;
       if(allowHtml){ el.innerHTML = text; }
       else { el.textContent = String(text); }
-      el.style.display = '';
+      el.hidden = false;
       el.classList.add('is-visible');
       const duration = typeof options.duration === 'number' ? options.duration : 5000;
       if(duration > 0){
@@ -300,18 +387,89 @@
     setLocale(window.PANEL_LOCALE);
   }
 
+  (function initSharedUi(){
+    function applyMetrics(){
+      const metrics = window.PANEL_METRICS;
+      if(!metrics || typeof metrics !== 'object') return;
+      const el = document.getElementById('sidebar-metrics');
+      if(!el) return;
+      const span = el.querySelector('span');
+      const text = metrics.text || '';
+      const title = metrics.title || '';
+      if(span) span.textContent = text;
+      else el.textContent = text;
+      if(title) el.setAttribute('title', title);
+    }
+
+    function bindLanguageSwitch(){
+      const select = document.getElementById('panelLanguageSelect');
+      if(!select || select.__panelBound) return;
+      select.__panelBound = true;
+      select.addEventListener('change', function(){
+        const url = new URL(window.location.href);
+        url.searchParams.set('lang', this.value);
+        window.location.href = url.toString();
+      });
+    }
+
+    function bindServerSwitch(){
+      document.querySelectorAll('[data-panel-server-switch]').forEach((select)=>{
+        if(select.__panelBound) return;
+        select.__panelBound = true;
+        select.addEventListener('change', ()=>{
+          const url = new URL(window.location.href);
+          url.searchParams.delete('page');
+          url.searchParams.set('server', select.value);
+          window.location.href = url.toString();
+        });
+      });
+    }
+
+    function loadPageModule(){
+      const moduleName = typeof window.PANEL_PAGE_SCRIPT_MODULE === 'string'
+        ? window.PANEL_PAGE_SCRIPT_MODULE
+        : '';
+      const scriptSrc = typeof window.PANEL_PAGE_SCRIPT_SRC === 'string'
+        ? window.PANEL_PAGE_SCRIPT_SRC
+        : '';
+      if(!moduleName && !scriptSrc) return;
+      window.__PANEL_MODULES_LOADED = window.__PANEL_MODULES_LOADED || {};
+      if(window.__PANEL_MODULES_LOADED[moduleName]) return;
+      window.__PANEL_MODULES_LOADED[moduleName] = true;
+
+      const script = document.createElement('script');
+      script.src = scriptSrc || PanelContext.url('/assets/js/modules/' + moduleName + '.js');
+      document.body.appendChild(script);
+    }
+
+    applyMetrics();
+    bindLanguageSwitch();
+    bindServerSwitch();
+    loadPageModule();
+  })();
+
   (function(){
     if(window.GameMetaColorize) return;
-    const classColors = { 1:'C69B6D',2:'F48CBA',3:'AAD372',4:'FFF468',5:'FFFFFF',6:'C41E3A',7:'0070DD',8:'3FC7EB',9:'8788EE',10:'00FF96',11:'FF7C0A',12:'A330C9' };
-    const qualityColors = { 0:'9D9D9D',1:'FFFFFF',2:'1EFF00',3:'0070DD',4:'A335EE',5:'FF8000',6:'E6CC80',7:'00CCFF' };
+    function replacePrefixedClass(el, prefix, value){
+      if(!el) return;
+      Array.from(el.classList).forEach((className)=>{
+        if(className.indexOf(prefix) === 0){
+          el.classList.remove(className);
+        }
+      });
+      if(value !== '' && value !== null && value !== undefined){
+        el.classList.add(prefix + value);
+      }
+    }
+
     function apply(){
       document.querySelectorAll('[data-class-id]').forEach(el=>{
         const id = parseInt(el.getAttribute('data-class-id'),10);
-        if(classColors[id]) el.style.color = '#' + classColors[id];
+        replacePrefixedClass(el, 'game-class-color-', Number.isNaN(id) ? '' : String(id));
       });
       document.querySelectorAll('[data-item-quality]').forEach(el=>{
         const q = parseInt(el.getAttribute('data-item-quality'),10);
-        if(qualityColors[q]) el.style.color = '#' + qualityColors[q];
+        replacePrefixedClass(el, 'item-quality-q', Number.isNaN(q) ? '' : String(q));
       });
     }
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply); else apply();
@@ -322,6 +480,23 @@
   (function(){
     if(window.Modal) return;
     const registry = new Map();
+    const widthClassMap = {
+      '760px': 'modal-panel--760',
+      '820px': 'modal-panel--820'
+    };
+
+    function applyWidthClass(panel, width){
+      if(!panel) return;
+      Object.values(widthClassMap).forEach((className)=> panel.classList.remove(className));
+      const widthClass = widthClassMap[String(width || '').trim()] || '';
+      if(widthClass) panel.classList.add(widthClass);
+    }
+
+    function syncBodyModalState(){
+      const hasActiveModal = !!document.querySelector('.modal-backdrop.active');
+      document.body.classList.toggle('modal-open', hasActiveModal);
+    }
+
     function ensure(id){
       if(registry.has(id)) return registry.get(id);
       let el = document.getElementById('modal-' + id);
@@ -356,6 +531,7 @@
     function show(opts){
       const { id, title, content, footer, width } = opts;
       const ref = ensure(id);
+      const panel = ref.el.querySelector('[data-role="panel"]');
       if(title !== undefined) ref.titleEl.textContent = title;
       if(content !== undefined) ref.bodyEl.innerHTML = content;
       if(footer !== undefined) ref.footerEl.innerHTML = footer;
@@ -364,16 +540,16 @@
         ref.footerEl.innerHTML = '<button class="btn" data-close>'+closeLabel+'</button>';
         ref.footerEl.querySelector('[data-close]').addEventListener('click', ()=> hide(id));
       }
-      if(width){ ref.el.querySelector('[data-role="panel"]').style.maxWidth = width; }
+      applyWidthClass(panel, width);
       ref.el.classList.add('active');
-      document.body.style.overflow = 'hidden';
+      syncBodyModalState();
       return ref;
     }
     function hide(id){
       const ref = registry.get(id);
       if(!ref) return;
       ref.el.classList.remove('active');
-      document.body.style.overflow = '';
+      syncBodyModalState();
     }
     function hideAll(){ registry.forEach((_, key)=> hide(key)); }
     function updateContent(id, html){ const ref = ensure(id); ref.bodyEl.innerHTML = html; }
@@ -390,28 +566,29 @@
       init = init || {};
       if(!('credentials' in init)) init.credentials = 'same-origin';
       const method = (init.method || 'GET').toUpperCase();
-      if(method !== 'GET' && method !== 'HEAD' && window.__CSRF_TOKEN){
+      const csrfToken = resolveCsrfToken();
+      if(method !== 'GET' && method !== 'HEAD' && csrfToken){
         if(init.body instanceof FormData){
-          if(!init.body.has('_csrf')) init.body.append('_csrf', window.__CSRF_TOKEN);
-          if(!init.body.has('_token')) init.body.append('_token', window.__CSRF_TOKEN);
+          if(!init.body.has('_csrf')) init.body.append('_csrf', csrfToken);
+          if(!init.body.has('_token')) init.body.append('_token', csrfToken);
         } else if(init.body instanceof URLSearchParams){
-          if(!init.body.has('_csrf')) init.body.append('_csrf', window.__CSRF_TOKEN);
-          if(!init.body.has('_token')) init.body.append('_token', window.__CSRF_TOKEN);
+          if(!init.body.has('_csrf')) init.body.append('_csrf', csrfToken);
+          if(!init.body.has('_token')) init.body.append('_token', csrfToken);
         } else if(typeof init.body === 'string' && (init.headers||{})['Content-Type'] === 'application/json'){
           try {
             const obj = JSON.parse(init.body);
-            if(!obj._csrf && !obj._token){ obj._csrf = window.__CSRF_TOKEN; obj._token = window.__CSRF_TOKEN; }
+            if(!obj._csrf && !obj._token){ obj._csrf = csrfToken; obj._token = csrfToken; }
             init.body = JSON.stringify(obj);
           }catch(e){ /* ignore parse error */ }
         } else if(init.body && typeof init.body === 'object'){ // plain object => convert
           const fd = new FormData();
             Object.entries(init.body).forEach(([k,v])=>fd.append(k,v));
-            if(!fd.has('_csrf')) fd.append('_csrf', window.__CSRF_TOKEN);
-            if(!fd.has('_token')) fd.append('_token', window.__CSRF_TOKEN);
+            if(!fd.has('_csrf')) fd.append('_csrf', csrfToken);
+            if(!fd.has('_token')) fd.append('_token', csrfToken);
             init.body = fd;
         }
         init.headers = init.headers || {};
-        if(!('X-CSRF-TOKEN' in init.headers)) init.headers['X-CSRF-TOKEN'] = window.__CSRF_TOKEN;
+        if(!('X-CSRF-TOKEN' in init.headers)) init.headers['X-CSRF-TOKEN'] = csrfToken;
       }
       return _origFetch.call(this,input,init);
     };

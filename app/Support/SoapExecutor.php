@@ -46,11 +46,11 @@ class SoapExecutor
         $start = microtime(true);
 
         if($command===''){
-            return $this->result(false,$command,$serverId,$start,'input.empty',Lang::get('app.support.soap_executor.errors.empty_command')); }
+            return $this->result(false,$command,$serverId,$start,'input.empty',Lang::get('support.soap_executor.errors.empty_command')); }
         if($this->whitelistEnforced){
             $first = strtolower(strtok($command,' '));
             if(!$first || !isset($this->whitelistPrefixes[$first])){
-                return $this->result(false,$command,$serverId,$start,'cmd.disallowed',Lang::get('app.support.soap_executor.errors.not_whitelisted'));
+                return $this->result(false,$command,$serverId,$start,'cmd.disallowed',Lang::get('support.soap_executor.errors.not_whitelisted'));
             }
         }
 
@@ -101,7 +101,7 @@ class SoapExecutor
                         ]
                     ]);
                     $resp = @file_get_contents("http://{$host}:{$port}/", false, $ctx);
-                    if($resp===false){ $lastError='net.unreachable'; throw new \RuntimeException(Lang::get('app.support.soap_executor.errors.request_failed')); }
+                    if($resp===false){ $lastError='net.unreachable'; throw new \RuntimeException(Lang::get('support.soap_executor.errors.request_failed')); }
                     if(preg_match('#<return>(<!\[CDATA\[)?(.*?)(\]\]>)?</return>#s',$resp,$m)){ $output=trim($m[2]); }
                     else { $output=trim(strip_tags($resp)); }
                     $res=$this->result(true,$command,$serverId,$start,'ok',null,['output'=>$output,'retried'=>$attempt-1]);
@@ -125,7 +125,7 @@ class SoapExecutor
             }
         }
 
-    $res = $this->result(false,$command,$serverId,$start,$lastError?:'internal.error',Lang::get('app.support.soap_executor.errors.unknown'));
+    $res = $this->result(false,$command,$serverId,$start,$lastError?:'internal.error',Lang::get('support.soap_executor.errors.unknown'));
         if($doAudit){ $this->audit($res); }
         return $res;
     }

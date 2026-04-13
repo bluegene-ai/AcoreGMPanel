@@ -298,7 +298,7 @@ final class GameMaps
 
     public static function raceName(int $id): string
     {
-        $races = Lang::getArray('app.game_meta.races', []);
+        $races = Lang::getArray('game.races', []);
         if (isset($races[$id]) && is_string($races[$id]) && $races[$id] !== '') {
             return $races[$id];
         }
@@ -309,7 +309,7 @@ final class GameMaps
 
     public static function className(int $id): string
     {
-        $classes = Lang::getArray('app.game_meta.classes', []);
+        $classes = Lang::getArray('game.classes', []);
         if (isset($classes[$id]) && is_string($classes[$id]) && $classes[$id] !== '') {
             return $classes[$id];
         }
@@ -334,7 +334,7 @@ final class GameMaps
             return null;
         }
 
-        $maps = Lang::getArray('app.game_meta.maps', []);
+        $maps = Lang::getArray('game.maps', []);
         if (isset($maps[$mapId]) && is_string($maps[$mapId]) && $maps[$mapId] !== '') {
             return $maps[$mapId];
         }
@@ -361,7 +361,7 @@ final class GameMaps
 
     public static function qualityName(int $q): string
     {
-        $qualities = Lang::getArray('app.game_meta.qualities', []);
+        $qualities = Lang::getArray('game.qualities', []);
         if (isset($qualities[$q]) && is_string($qualities[$q]) && $qualities[$q] !== '') {
             return $qualities[$q];
         }

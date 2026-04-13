@@ -113,21 +113,24 @@
 
   function openModal(id){
     const el=resolveModal(id); if(!el) return;
-    el.style.display='block';
+    el.classList.remove('creature-modal-hidden');
     el.classList.add('active');
-    document.body.style.overflow='hidden';
+    document.body.classList.add('modal-open');
   }
 
   function hideModal(id){
     const el=resolveModal(id); if(!el) return;
-    el.style.display='none';
     el.classList.remove('active');
-    if(!document.querySelector('.modal-backdrop.active')){ document.body.style.overflow=''; }
+    el.classList.add('creature-modal-hidden');
+    if(!document.querySelector('.modal-backdrop.active')){ document.body.classList.remove('modal-open'); }
   }
 
   function hideAllModals(){
-    document.querySelectorAll('.modal-backdrop.active').forEach(m=>{ m.style.display='none'; m.classList.remove('active'); });
-    document.body.style.overflow='';
+    document.querySelectorAll('.modal-backdrop.active').forEach(m=>{
+      m.classList.add('creature-modal-hidden');
+      m.classList.remove('active');
+    });
+    document.body.classList.remove('modal-open');
   }
 
   document.addEventListener('click',e=>{
@@ -196,6 +199,43 @@
   if(logRefreshBtn){ logRefreshBtn.addEventListener('click',()=>refreshCreatureLogs(logTypeSel?.value)); }
   if(logTypeSel){ logTypeSel.addEventListener('change',()=>refreshCreatureLogs(logTypeSel.value)); }
 
+  (function bindNpcflagFilters(){
+    const hidden=qs('#filter_npcflag_bits');
+    const applyBtn=qs('#npcflagApplyBtn');
+    const clearBtn=qs('#npcflagClearBtn');
+    const filterForm=qs('form.creature-filter-form');
+    if(!hidden||!applyBtn||!clearBtn||!filterForm) return;
+    const collect=()=>{
+      const bits=qsa('.npcflag-bit:checked', filterForm).map((cb)=>cb.value).filter((value)=>value!=='');
+      hidden.value=bits.join(',');
+    };
+    applyBtn.addEventListener('click',()=>{ collect(); filterForm.submit(); });
+    clearBtn.addEventListener('click',()=>{
+      qsa('.npcflag-bit:checked', filterForm).forEach((cb)=>{ cb.checked=false; });
+      hidden.value='';
+      filterForm.submit();
+    });
+  })();
+
+  (function bindFilterReset(){
+    const reset=qs('#btn-filter-reset');
+    if(!reset||reset.__bound) return;
+    reset.__bound=true;
+    reset.addEventListener('click',()=>{
+      const filterForm=reset.closest('form');
+      if(!filterForm) return;
+      const defaults={ search_type:'name', search_value:'', filter_minlevel:'', filter_maxlevel:'', limit:'50', filter_npcflag_bits:'' };
+      Object.keys(defaults).forEach((key)=>{
+        const el=filterForm.querySelector('[name="'+key+'"]');
+        if(el) el.value=defaults[key];
+      });
+      qsa('.npcflag-bit:checked', filterForm).forEach((cb)=>{ cb.checked=false; });
+      const hidden=filterForm.querySelector('#filter_npcflag_bits');
+      if(hidden) hidden.value='';
+      filterForm.submit();
+    });
+  })();
+
   document.addEventListener('click',async e=>{
     const del=e.target.closest('button.action-delete');
     if(!del) return;
@@ -245,7 +285,7 @@
       fields.forEach(input=>{
         const wrap=input.closest('[data-field-wrapper]');
         if(!wrap) return;
-        wrap.style.display = diffToggle.checked ? (input.classList.contains('field-modified')?'flex':'none') : 'flex';
+        wrap.hidden = !!diffToggle.checked && !input.classList.contains('field-modified');
       });
     }
     qsa(groupSelector).forEach(det=>{
@@ -315,7 +355,7 @@
 
   function renderExecStructured(kind,res,elapsedMs,executedSql){
     if(!sqlExecBox) return;
-    sqlExecBox.style.display='block';
+    sqlExecBox.classList.remove('creature-hidden');
     const ok=res?.success;
     const statusKey=ok
       ? (kind==='save'?'exec.status.save_success':'exec.status.run_success')
@@ -325,22 +365,22 @@
       : (kind==='save'?'Save failed':'Execution failed'));
     const jsonStr=JSON.stringify(res,null,2);
     const truncatedSql=executedSql && executedSql.length>240 ? executedSql.slice(0,240)+' ...' : executedSql || '';
-    let html='<div class="result-head" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">';
-    html+=`<strong style="color:#89c2ff">${translate('exec.result_heading','Execution result')}</strong>`;
-    html+=`<span class="badge" style="background:${ok?'#1f8b4d':'#c74242'}">${statusText}</span>`;
-    if(elapsedMs!==undefined) html+=`<span style="font-size:11px;color:#6a7b86;">${elapsedMs}ms</span>`;
-    if(res && typeof res.affected!=='undefined') html+=`<span class="muted" style="font-size:11px;">${translate('exec.rows_affected','Rows: :count',{count:res.affected})}</span>`;
-    if(truncatedSql) html+=`<span class="muted" style="font-size:11px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${executedSql.replace(/"/g,'&quot;')}">${translate('exec.sql_prefix','SQL: :sql',{sql:truncatedSql.replace(/</g,'&lt;')})}</span>`;
+    let html='<div class="result-head creature-exec-result__head">';
+    html+=`<strong class="creature-exec-result__title">${translate('exec.result_heading','Execution result')}</strong>`;
+    html+=`<span class="badge creature-exec-result__badge ${ok?'creature-exec-result__badge--success':'creature-exec-result__badge--error'}">${statusText}</span>`;
+    if(elapsedMs!==undefined) html+=`<span class="creature-exec-result__meta">${elapsedMs}ms</span>`;
+    if(res && typeof res.affected!=='undefined') html+=`<span class="muted creature-exec-result__meta">${translate('exec.rows_affected','Rows: :count',{count:res.affected})}</span>`;
+    if(truncatedSql) html+=`<span class="muted creature-exec-result__sql" title="${executedSql.replace(/"/g,'&quot;')}">${translate('exec.sql_prefix','SQL: :sql',{sql:truncatedSql.replace(/</g,'&lt;')})}</span>`;
     html+='</div>';
     if(res?.message){
       const cls=ok?'panel-flash--success':'panel-flash--error';
-      html+=`<div class="panel-flash panel-flash--inline ${cls} is-visible" style="margin-bottom:6px">${res.message}</div>`;
+      html+=`<div class="panel-flash panel-flash--inline ${cls} is-visible creature-exec-result__message">${res.message}</div>`;
     }
     if(res?.after){
-      html+=`<div style="font-weight:bold;color:#8fa8b7;margin:4px 0 2px;">${translate('exec.sample_row_heading','Sample row')}</div>`;
-      html+=`<pre class="mono" style="max-height:160px;overflow:auto;background:#0c1318;padding:8px 10px;border-radius:4px;margin:0">${JSON.stringify(res.after,null,2)}</pre>`;
+      html+=`<div class="creature-exec-result__sample-title">${translate('exec.sample_row_heading','Sample row')}</div>`;
+      html+=`<pre class="mono creature-exec-result__sample">${JSON.stringify(res.after,null,2)}</pre>`;
     }
-    html+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">';
+    html+='<div class="creature-exec-result__actions">';
     html+=`<button type="button" class="btn btn-sm outline" data-exec-act="clear">${translate('exec.actions.clear','Clear')}</button>`;
     html+=`<button type="button" class="btn btn-sm" data-exec-act="hide">${translate('exec.actions.hide','Hide')}</button>`;
     html+=`<button type="button" class="btn btn-sm outline" data-exec-act="copy-json">${translate('exec.actions.copy_json','Copy JSON')}</button>`;
@@ -350,8 +390,8 @@
     sqlExecBox.querySelectorAll('[data-exec-act]').forEach(btn=>{
       btn.addEventListener('click',()=>{
         const act=btn.getAttribute('data-exec-act');
-        if(act==='clear'){ sqlExecBox.innerHTML=''; sqlExecBox.style.display='none'; }
-        else if(act==='hide'){ sqlExecBox.style.display='none'; }
+        if(act==='clear'){ sqlExecBox.innerHTML=''; sqlExecBox.classList.add('creature-hidden'); }
+        else if(act==='hide'){ sqlExecBox.classList.add('creature-hidden'); }
         else if(act==='copy-json'){ navigator.clipboard.writeText(jsonStr).then(()=>creatureNotify(translate('exec.copy_json_success','JSON copied'),'success')).catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error')); }
         else if(act==='copy-sql' && executedSql){ navigator.clipboard.writeText(executedSql).then(()=>creatureNotify(translate('exec.copy_sql_success','SQL copied'),'success')).catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error')); }
       });
@@ -464,7 +504,7 @@
           const diffSummary=translate('verify.diff_summary','Detected :count mismatches',{count:diff});
           sugg.innerHTML=`<div class="panel-flash panel-flash--inline panel-flash--error is-visible">${diffSummary}</div><pre id="verifySQLPre" class="mono code-block">${sql}</pre>`;
           if(copyBtn){
-            copyBtn.style.display='inline-block';
+            copyBtn.classList.remove('creature-hidden');
             const copyLabel=translate('verify.copy_update','Copy UPDATE statement');
             const copiedLabel=translate('verify.copied','Copied');
             copyBtn.textContent=copyLabel;
@@ -477,7 +517,7 @@
           }
         } else {
           sugg.innerHTML=`<div class="panel-flash panel-flash--inline panel-flash--success is-visible">${translate('verify.row_match','Row matches database')}</div>`;
-          if(copyBtn){ copyBtn.style.display='none'; copyBtn.onclick=null; }
+          if(copyBtn){ copyBtn.classList.add('creature-hidden'); copyBtn.onclick=null; }
         }
         openModal('#modal-verify');
       }
@@ -666,21 +706,20 @@
     function ensureModal(){
       if(modal) return;
       modal=document.createElement('div');
-      modal.className='modal-backdrop';
-      modal.style.display='none';
-      modal.innerHTML=`<div class="modal-panel large" style="max-width:640px">
-        <header style="display:flex;justify-content:space-between;align-items:center"><h3>${translate('bitmask.modal_title','Bitmask selection')}</h3><button class="modal-close" data-close>&times;</button></header>
+      modal.className='modal-backdrop creature-modal-hidden';
+      modal.innerHTML=`<div class="modal-panel large creature-bitmask-modal__panel">
+        <header class="creature-bitmask-modal__header"><h3>${translate('bitmask.modal_title','Bitmask selection')}</h3><button class="modal-close" data-close>&times;</button></header>
         <div class="modal-body">
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <div class="creature-bitmask-modal__toolbar">
             <strong id="bitmaskFieldName"></strong>
-            <input type="text" id="bitmaskSearch" placeholder="${translate('bitmask.search_placeholder','Search...')}" style="flex:1;padding:4px 6px">
+            <input type="text" id="bitmaskSearch" class="creature-bitmask-modal__search" placeholder="${translate('bitmask.search_placeholder','Search...')}">
             <button class="btn-sm btn outline" id="bitmaskSelectAll" type="button">${translate('bitmask.select_all','Select all')}</button>
             <button class="btn-sm btn outline" id="bitmaskClear" type="button">${translate('bitmask.clear','Clear')}</button>
           </div>
-          <div id="bitmaskBits" class="bitmask-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;max-height:340px;overflow:auto;border:1px solid var(--c-border,#28323c);padding:6px;border-radius:4px"></div>
-          <div style="margin-top:10px;font-size:12px" class="muted">${translate('bitmask.tips','Tip: checking will update the value immediately. Use search to filter descriptions.')}</div>
+          <div id="bitmaskBits" class="bitmask-grid creature-bitmask-modal__grid"></div>
+          <div class="muted creature-bitmask-modal__tips">${translate('bitmask.tips','Tip: checking will update the value immediately. Use search to filter descriptions.')}</div>
         </div>
-        <footer style="text-align:right;margin-top:10px"><button class="btn outline" data-close>${translate('bitmask.close','Close')}</button></footer>
+        <footer class="creature-bitmask-modal__footer"><button class="btn outline" data-close>${translate('bitmask.close','Close')}</button></footer>
       </div>`;
       document.body.appendChild(modal);
       bitsBox=qs('#bitmaskBits',modal);
@@ -697,7 +736,7 @@
       const kw=(searchBox.value||'').toLowerCase();
       bitsBox.querySelectorAll('.bitmask-bit').forEach(div=>{
         const txt=div.getAttribute('data-text');
-        div.style.display = (!kw || txt.includes(kw)) ? 'flex' : 'none';
+        div.hidden = !!kw && !txt.includes(kw);
       });
     }
 
@@ -714,10 +753,9 @@
         const idx=parseInt(bit,10);
         const checked=(current & (1<<idx))!==0;
         const label=document.createElement('label');
-        label.className='bitmask-bit';
-        label.style.cssText='display:flex;gap:4px;align-items:center;padding:2px 4px;border-radius:3px;background:var(--c-bg-alt,#1b252c);';
+        label.className='bitmask-bit creature-bitmask-modal__option';
         label.setAttribute('data-text',String(map[bit]).toLowerCase());
-        label.innerHTML=`<input type="checkbox" data-bit="${idx}" ${checked?'checked':''}><span style="font-size:12px"><strong>${idx}</strong> ${map[bit]}</span>`;
+        label.innerHTML=`<input type="checkbox" data-bit="${idx}" ${checked?'checked':''}><span class="creature-bitmask-modal__option-text"><strong>${idx}</strong> ${map[bit]}</span>`;
         bitsBox.appendChild(label);
       });
       searchBox.value='';
@@ -739,8 +777,7 @@
       const btn=document.createElement('button');
       btn.type='button';
       btn.textContent=translate('bitmask.trigger','Bits');
-      btn.className='btn-sm btn outline';
-      btn.style.marginLeft='4px';
+      btn.className='btn-sm btn outline creature-bitmask-trigger';
       input.insertAdjacentElement('afterend',btn);
       btn.addEventListener('click',()=>openForInput(input));
       input.addEventListener('dblclick',()=>openForInput(input));

@@ -4,11 +4,25 @@
  * Purpose: Provides functionality for the resources/views/mass_mail module.
  */
 
- $module='mass_mail'; include __DIR__.'/../layouts/base_top.php'; ?>
-<h1 class="page-title"><?= __('app.mass_mail.index.page_title') ?></h1>
-<?php ?>
+?>
+<?php
+  $massMailCapabilities = $__pageCapabilities ?? [
+    'compose' => $__can('mass_mail.compose'),
+    'announce' => $__can('mass_mail.announce'),
+    'send' => $__can('mass_mail.send'),
+    'logs' => $__can('mass_mail.logs'),
+    'boost' => $__can('mass_mail.boost'),
+  ];
+  $__pageCapabilities = $massMailCapabilities;
+  $capabilityNotice = $__canAll(['mass_mail.announce', 'mass_mail.send', 'mass_mail.logs', 'mass_mail.boost'])
+    ? null
+    : __('app.common.capabilities.page_limited');
+?>
+<?php include __DIR__.'/../components/page_header.php'; ?>
+<?php include __DIR__.'/../components/capability_notice.php'; ?>
 
 <div class="massmail-layout">
+  <?php if($massMailCapabilities['announce']): ?>
   <section class="massmail-card massmail-card--announce">
     <h3 class="massmail-card__title"><?= __('app.mass_mail.index.sections.announce.title') ?></h3>
     <form id="massAnnounceForm" class="massmail-form" novalidate>
@@ -24,34 +38,48 @@
     </form>
     <p class="massmail-hint muted small"><?= __('app.mass_mail.index.sections.announce.hint') ?></p>
   </section>
+  <?php else: ?>
+  <section class="massmail-card massmail-card--announce"><div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.mass_mail.index.sections.announce.title')])) ?></div></section>
+  <?php endif; ?>
 
+  <?php if($massMailCapabilities['boost']): ?>
   <section class="massmail-card massmail-card--boost">
     <h3 class="massmail-card__title"><?= __('app.mass_mail.index.sections.boost.title') ?></h3>
     <form id="massBoostForm" class="massmail-form" novalidate>
       <div class="massmail-form-grid">
         <div class="massmail-field">
           <label for="boostCharacter"><?= __('app.mass_mail.index.sections.boost.character_label') ?></label>
-          <input type="text" id="boostCharacter" name="character" placeholder="<?= htmlspecialchars(__('app.mass_mail.index.sections.boost.character_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" required>
+          <input type="text" id="boostCharacter" name="character_name" placeholder="<?= htmlspecialchars(__('app.mass_mail.index.sections.boost.character_placeholder'), ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" required>
         </div>
         <div class="massmail-field">
-          <label for="boostLevel"><?= __('app.mass_mail.index.sections.boost.level_label') ?></label>
-          <select id="boostLevel" name="level" required>
-            <option value="60"><?= __('app.mass_mail.index.sections.boost.level_options.60') ?></option>
-            <option value="70"><?= __('app.mass_mail.index.sections.boost.level_options.70') ?></option>
-            <option value="80"><?= __('app.mass_mail.index.sections.boost.level_options.80') ?></option>
+          <label for="boostTemplate"><?= htmlspecialchars(__('app.character.actions.boost_template_placeholder')) ?></label>
+          <select id="boostTemplate" name="template_id">
+            <option value=""><?= htmlspecialchars(__('app.character.actions.boost_template_placeholder')) ?></option>
+            <?php foreach(($boost_templates ?? []) as $tpl): ?>
+              <option value="<?= (int)($tpl['id'] ?? 0) ?>" data-target-level="<?= (int)($tpl['target_level'] ?? 0) ?>">
+                <?= htmlspecialchars((string)($tpl['name'] ?? '')) ?> (Lv<?= (int)($tpl['target_level'] ?? 0) ?>)
+              </option>
+            <?php endforeach; ?>
           </select>
         </div>
-        <div class="massmail-field full-span">
-          <label for="boostSummary"><?= __('app.mass_mail.index.sections.boost.summary_label') ?></label>
-          <textarea id="boostSummary" class="massmail-summary" rows="3" readonly><?= htmlspecialchars(__('app.mass_mail.index.sections.boost.summary_prefill'), ENT_QUOTES, 'UTF-8') ?></textarea>
+        <div class="massmail-field">
+          <label for="boostTargetLevel"><?= __('app.mass_mail.index.sections.boost.level_label') ?></label>
+          <input type="number" id="boostTargetLevel" name="target_level" min="1" max="255" placeholder="<?= htmlspecialchars(__('app.character.actions.boost_target_level_placeholder'), ENT_QUOTES, 'UTF-8') ?>">
         </div>
       </div>
       <div class="massmail-actions">
         <button type="submit" class="btn success" id="btnBoostExecute"><?= __('app.mass_mail.index.sections.boost.submit') ?></button>
       </div>
+      <p class="massmail-hint muted small massmail-hint--spaced">
+        <?= htmlspecialchars(__('app.character_boost.templates.hint.realm', ['id' => (int)($realm_id ?? 1)])) ?>
+      </p>
     </form>
   </section>
+  <?php else: ?>
+  <section class="massmail-card massmail-card--boost"><div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.mass_mail.index.sections.boost.title')])) ?></div></section>
+  <?php endif; ?>
 
+  <?php if($massMailCapabilities['send']): ?>
   <section class="massmail-card massmail-card--send">
     <h3 class="massmail-card__title"><?= __('app.mass_mail.index.sections.send.title') ?></h3>
     <form id="massSendForm" class="massmail-form" novalidate>
@@ -115,8 +143,12 @@
       <p class="massmail-hint muted small"><?= __('app.mass_mail.index.sections.send.hint') ?></p>
     </form>
   </section>
+  <?php else: ?>
+  <section class="massmail-card massmail-card--send"><div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.mass_mail.index.sections.send.title')])) ?></div></section>
+  <?php endif; ?>
 </div>
 
+<?php if($massMailCapabilities['logs']): ?>
 <section class="massmail-card massmail-card--logs">
   <div class="massmail-logs__header">
     <h3 class="massmail-card__title m-0"><?= __('app.mass_mail.index.sections.logs.title') ?></h3>
@@ -135,13 +167,13 @@
   <div class="massmail-logs__table">
     <table class="table" id="massMailLogTable">
       <thead><tr>
-        <th style="width:140px"><?= __('app.mass_mail.index.sections.logs.table.headers.time') ?></th>
-        <th style="width:70px"><?= __('app.mass_mail.index.sections.logs.table.headers.type') ?></th>
+        <th class="massmail-logs__col-time"><?= __('app.mass_mail.index.sections.logs.table.headers.time') ?></th>
+        <th class="massmail-logs__col-type"><?= __('app.mass_mail.index.sections.logs.table.headers.type') ?></th>
         <th><?= __('app.mass_mail.index.sections.logs.table.headers.details') ?></th>
-        <th style="width:70px"><?= __('app.mass_mail.index.sections.logs.table.headers.targets') ?></th>
-        <th style="width:90px"><?= __('app.mass_mail.index.sections.logs.table.headers.success_fail') ?></th>
-        <th style="width:60px"><?= __('app.mass_mail.index.sections.logs.table.headers.status') ?></th>
-        <th style="width:160px"><?= __('app.mass_mail.index.sections.logs.table.headers.recipients') ?></th>
+        <th class="massmail-logs__col-targets"><?= __('app.mass_mail.index.sections.logs.table.headers.targets') ?></th>
+        <th class="massmail-logs__col-result"><?= __('app.mass_mail.index.sections.logs.table.headers.success_fail') ?></th>
+        <th class="massmail-logs__col-status"><?= __('app.mass_mail.index.sections.logs.table.headers.status') ?></th>
+        <th class="massmail-logs__col-recipients"><?= __('app.mass_mail.index.sections.logs.table.headers.recipients') ?></th>
       </tr></thead>
       <tbody>
         <?php foreach(($logs??[]) as $lg): $ok=(int)$lg['success']===1; ?>
@@ -184,6 +216,9 @@
     </table>
   </div>
 </section>
+<?php else: ?>
+<section class="massmail-card massmail-card--logs"><div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.mass_mail.index.sections.logs.title')])) ?></div></section>
+<?php endif; ?>
 
 <!-- Risk confirmation modal -->
 <div id="mmConfirmModal" class="modal-backdrop">
@@ -204,4 +239,3 @@
   </div>
 </div>
 
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>

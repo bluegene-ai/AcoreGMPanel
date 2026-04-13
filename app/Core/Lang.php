@@ -21,6 +21,8 @@ declare(strict_types=1);
 
 namespace Acme\Panel\Core;
 
+use Acme\Panel\Support\ModuleAssets;
+
 final class Lang
 {
     private static string $locale = 'en';
@@ -162,33 +164,18 @@ final class Lang
             return null;
         }
         $data = require $path;
-        if (is_array($data) && $file === 'app') {
-            $data = self::normalizeAppSections($locale, $data);
-        }
         self::$cache[$cacheKey] = is_array($data) ? $data : null;
         self::$cacheMtime[$cacheKey] = $mtime;
         return self::$cache[$cacheKey];
     }
 
-    private static function normalizeAppSections(string $locale, array $data): array
-    {
-        if (!isset($data['smartai']) || !is_array($data['smartai'])) {
-            return $data;
-        }
-
-        $migratable = ['realm', 'setup', 'mass_mail', 'mail', 'item_owner', 'logs', 'quest', 'audit'];
-        foreach ($migratable as $section) {
-            if (!isset($data[$section]) && isset($data['smartai'][$section]) && is_array($data['smartai'][$section])) {
-                $data[$section] = $data['smartai'][$section];
-                unset($data['smartai'][$section]);
-            }
-        }
-
-        return $data;
-    }
-
     private static function splitKey(string $key): array
     {
+        $route = ModuleAssets::languageRoute($key);
+        if ($route !== null) {
+            return [$route['file'], $route['path']];
+        }
+
         $parts = explode('.', $key);
         if (count($parts) <= 1) {
             return [$parts[0] ?? 'app', []];

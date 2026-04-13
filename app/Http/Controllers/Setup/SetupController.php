@@ -9,6 +9,7 @@ use Acme\Panel\Core\Lang;
 use Acme\Panel\Core\Request;
 use Acme\Panel\Core\Response;
 use Acme\Panel\Support\Csrf;
+use Acme\Panel\Support\SetupPageData;
 use PDO;
 use SoapClient;
 use SoapFault;
@@ -102,7 +103,7 @@ class SetupController
             $locales = [Lang::locale()];
         }
 
-        return $this->view('setup/env', [
+        return $this->stepView(self::STEP_ENV, 'setup.env', [
             'checks' => $checks,
             'allOk' => (bool) $allOk,
             'locales' => $locales,
@@ -113,8 +114,9 @@ class SetupController
     private function stepMode(): Response
     {
         $state = &$_SESSION['setup'];
+        $state['mode'] = $this->normalizeMode((string) ($state['mode'] ?? 'single'));
 
-        if (!empty($state['mode']) && $state['mode'] !== 'single' && !empty($state['auth']['database'])) {
+        if ($this->isSharedAuthRealmMode($state['mode']) && !empty($state['auth']['database'])) {
             $needSync = false;
             if (empty($state['realms'])) {
                 $needSync = true;
@@ -129,71 +131,133 @@ class SetupController
             }
         }
 
-        return $this->view('setup/mode', ['state' => $state]);
+        return $this->stepView(self::STEP_MODE, 'setup.mode', ['state' => $state]);
     }
 
     private function stepTest(): Response
     {
-        $this->syncRealmNames();
         $state = $_SESSION['setup'] ?? [];
+        $mode = $this->normalizeMode((string) ($state['mode'] ?? 'single'));
+        if ($this->isSharedAuthRealmMode($mode)) {
+            $this->syncRealmNames();
+            $state = $_SESSION['setup'] ?? [];
+        }
+
         if (empty($state['mode'])) {
             return Response::redirect('/setup?step=2');
         }
 
-        $results = [];
+        $authResult = null;
+        $realmGroups = [];
         $allOk = true;
 
-        if (isset($state['auth'])) {
-            [$ok, $msg] = $this->testPdo($state['auth']);
-            $results[] = ['name' => 'Auth DB', 'ok' => $ok, 'msg' => $msg];
-            $allOk = $allOk && $ok;
-        }
-
-        $mode = $state['mode'] ?? 'single';
-        if ($mode === 'single') {
-            foreach (['characters' => 'Characters DB', 'world' => 'World DB'] as $k => $label) {
-                if (isset($state[$k])) {
-                    [$ok, $msg] = $this->testPdo($state[$k]);
-                    $results[] = ['name' => $label, 'ok' => $ok, 'msg' => $msg];
-                    $allOk = $allOk && $ok;
-                }
+        if ($this->isSharedAuthRealmMode($mode)) {
+            if (isset($state['auth'])) {
+                [$ok, $msg] = $this->testPdo($state['auth']);
+                $authResult = [
+                    'name' => 'Auth DB',
+                    'label' => $this->databaseResultLabel('Auth DB', $state['auth']),
+                    'ok' => $ok,
+                    'msg' => $msg,
+                ];
+                $allOk = $allOk && $ok;
             }
-        } else {
-            if (!empty($state['realms']) && is_array($state['realms'])) {
-                foreach ($state['realms'] as $idx => $realm) {
-                    foreach (['characters' => 'Characters', 'world' => 'World'] as $rk => $rLabel) {
-                        if (!empty($realm[$rk])) {
-                            [$ok, $msg] = $this->testPdo($realm[$rk]);
-                            $results[] = [
-                                'name' => 'Realm#' . ($idx + 1) . ' ' . $rLabel,
-                                'ok' => $ok,
-                                'msg' => $msg,
-                            ];
-                            $allOk = $allOk && $ok;
-                        }
-                    }
-                    if (!empty($realm['soap'])) {
-                        [$ok, $msg] = $this->testSoap($realm['soap']);
-                        $results[] = ['name' => 'Realm#' . ($idx + 1) . ' SOAP', 'ok' => $ok, 'msg' => $msg];
+
+            foreach (($state['realms'] ?? []) as $idx => $realm) {
+                $labelPrefix = $this->realmResultLabel($realm, $idx, 'Realm');
+                $groupResults = [];
+                $soapWarning = null;
+                $groupOk = true;
+
+                foreach (['characters' => 'Characters', 'world' => 'World'] as $rk => $rLabel) {
+                    if (!empty($realm[$rk])) {
+                        [$ok, $msg] = $this->testPdo($realm[$rk]);
+                        $groupResults[] = [
+                            'name' => $labelPrefix . ' ' . $rLabel,
+                            'label' => $this->databaseResultLabel($rLabel, $realm[$rk]),
+                            'ok' => $ok,
+                            'msg' => $msg,
+                            'required' => true,
+                        ];
+                        $groupOk = $groupOk && $ok;
                         $allOk = $allOk && $ok;
                     }
                 }
+                if (!empty($realm['soap'])) {
+                    [$ok, $msg] = $this->testSoap($realm['soap']);
+                    $groupResults[] = [
+                        'name' => $labelPrefix . ' SOAP',
+                        'label' => 'SOAP',
+                        'ok' => $ok,
+                        'msg' => $msg,
+                        'required' => false,
+                    ];
+                    if (!$ok)
+                        $soapWarning = Lang::get('app.setup.test.soap_warning');
+                }
+
+                $realmGroups[] = [
+                    'label' => $labelPrefix,
+                    'ok' => $groupOk,
+                    'soap_warning' => $soapWarning,
+                    'results' => $groupResults,
+                ];
+            }
+        } else {
+            $serverGroups = $this->sessionServerGroups($state);
+            foreach ($serverGroups as $idx => $server) {
+                $labelPrefix = $this->realmResultLabel($server, $idx, 'Server');
+                $groupResults = [];
+                $soapWarning = null;
+                $groupOk = true;
+
+                foreach (['auth' => 'Auth', 'characters' => 'Characters', 'world' => 'World'] as $key => $label) {
+                    if (!empty($server[$key])) {
+                        [$ok, $msg] = $this->testPdo($server[$key]);
+                        $groupResults[] = [
+                            'name' => $labelPrefix . ' ' . $label . ' DB',
+                            'label' => $this->databaseResultLabel($label . ' DB', $server[$key]),
+                            'ok' => $ok,
+                            'msg' => $msg,
+                            'required' => true,
+                        ];
+                        $groupOk = $groupOk && $ok;
+                        $allOk = $allOk && $ok;
+                    }
+                }
+
+                if (!empty($server['soap'])) {
+                    [$ok, $msg] = $this->testSoap($server['soap']);
+                    $groupResults[] = [
+                        'name' => $labelPrefix . ' SOAP',
+                        'label' => 'SOAP',
+                        'ok' => $ok,
+                        'msg' => $msg,
+                        'required' => false,
+                    ];
+                    if (!$ok)
+                        $soapWarning = Lang::get('app.setup.test.soap_warning');
+                }
+
+                $realmGroups[] = [
+                    'label' => $labelPrefix,
+                    'ok' => $groupOk,
+                    'soap_warning' => $soapWarning,
+                    'results' => $groupResults,
+                ];
             }
         }
 
-        $hasRealmSoap = !empty(array_filter($state['realms'] ?? [], static fn ($r) => !empty($r['soap'])));
-        if (!$hasRealmSoap && isset($state['soap'])) {
-            [$ok, $msg] = $this->testSoap($state['soap']);
-            $results[] = ['name' => 'Global SOAP', 'ok' => $ok, 'msg' => $msg];
-            $allOk = $allOk && $ok;
-        }
-
-        return $this->view('setup/test', ['results' => $results, 'allOk' => $allOk]);
+        return $this->stepView(self::STEP_TEST, 'setup.test', [
+            'authResult' => $authResult,
+            'realmGroups' => $realmGroups,
+            'allOk' => $allOk,
+        ]);
     }
 
     private function stepAdmin(): Response
     {
-        return $this->view('setup/admin', ['admin' => $_SESSION['setup']['admin'] ?? []]);
+        return $this->stepView(self::STEP_ADMIN, 'setup.admin', ['admin' => $_SESSION['setup']['admin'] ?? []]);
     }
 
     private function stepFinish(): Response
@@ -236,18 +300,23 @@ class SetupController
             }
         };
 
+        $mode = $this->normalizeMode((string) ($state['mode'] ?? 'single'));
+        $serverGroups = $this->isSharedAuthRealmMode($mode) ? [] : $this->sessionServerGroups($state);
+        $primaryServer = $serverGroups[0] ?? null;
+        $primaryAuth = $primaryServer['auth'] ?? ($state['auth'] ?? []);
+
         $dbArr = [
             'default' => 'auth',
             'connections' => [
-                'auth' => $this->dbExport($state['auth'] ?? []),
+                'auth' => $this->dbExport($primaryAuth),
             ],
         ];
 
-        $mode = $state['mode'] ?? 'single';
-        if ($mode === 'single') {
+        if ($mode === 'single' && count($serverGroups) <= 1) {
             foreach (['world', 'characters'] as $r) {
-                if (isset($state[$r])) {
-                    $dbArr['connections'][$r] = $this->dbExport($state[$r]);
+                $source = $primaryServer[$r] ?? ($state[$r] ?? null);
+                if (is_array($source)) {
+                    $dbArr['connections'][$r] = $this->dbExport($source);
                 }
             }
         }
@@ -262,14 +331,17 @@ class SetupController
             $record('database.php');
         }
 
-        if ($mode !== 'single') {
+        if ($this->isSharedAuthRealmMode($mode) || $mode === 'multi-full' || count($serverGroups) > 1) {
             $servers = [];
-            foreach (($state['realms'] ?? []) as $idx => $realm) {
+            $serverSource = $this->isSharedAuthRealmMode($mode)
+                ? $this->filterConfiguredRealmEntries($state['realms'] ?? [])
+                : $serverGroups;
+            foreach ($serverSource as $idx => $realm) {
                 $servers[$idx] = [
                     'realm_id' => $realm['realm_id'] ?? ($idx + 1),
                     'name' => $realm['name'] ?? Lang::get('app.server.default_option', ['id' => $idx + 1]),
                     'port' => $realm['port'] ?? 0,
-                    'auth' => $this->dbExport($realm['auth'] ?? $state['auth']),
+                    'auth' => $this->dbExport($realm['auth'] ?? $primaryAuth),
                     'characters' => $this->dbExport($realm['characters'] ?? []),
                     'world' => $this->dbExport($realm['world'] ?? []),
                 ];
@@ -286,32 +358,58 @@ class SetupController
             }
         }
 
-        $shouldWriteSoap = isset($state['soap'])
-            || ($mode !== 'single' && $this->hasRealmSoapConfigs($state['realms'] ?? []));
+        $soapRealms = $this->isSharedAuthRealmMode($mode)
+            ? $this->filterConfiguredRealmEntries($state['realms'] ?? [])
+            : $serverGroups;
+        $effectiveSoapMode = ($mode === 'single' && count($serverGroups) <= 1) ? 'single' : $mode;
+        $soapState = $state;
+        if ($this->isSharedAuthRealmMode($mode)) {
+            $soapState['realms'] = $soapRealms;
+        } else {
+            $soapState['realms'] = $serverGroups;
+            if ($primaryServer && !empty($primaryServer['soap'])) {
+                $soapState['soap'] = $primaryServer['soap'];
+            }
+        }
+
+        $shouldWriteSoap = isset($soapState['soap'])
+            || ($effectiveSoapMode !== 'single' && $this->hasRealmSoapConfigs($soapRealms));
         if ($shouldWriteSoap) {
-            $soapConfig = $this->buildSoapConfig($state, $mode);
+            $soapConfig = $this->buildSoapConfig($soapState, $effectiveSoapMode);
             $atomicWrite('soap.php', "<?php\nreturn " . var_export($soapConfig, true) . ";\n");
             if (empty($errors)) {
                 $record('soap.php');
             }
         }
 
-        $atomicWrite('auth.php', "<?php\nreturn " . var_export(['admin' => $state['admin']], true) . ";\n");
+        $admin = $state['admin'];
+        if (empty($admin['capabilities']) || !is_array($admin['capabilities'])) {
+            $admin['capabilities'] = ['*'];
+        }
+        $atomicWrite('auth.php', "<?php\nreturn " . var_export(['admin' => $admin], true) . ";\n");
         if (empty($errors)) {
             $record('auth.php');
         }
 
         $appFile = $cfgDir . '/app.php';
-        if (!is_file($appFile)) {
-            $basePath = rtrim($_SERVER['BASE_PATH'] ?? ($_SERVER['APP_BASE_PATH'] ?? ''), '/');
-            $appArr = [
-                'debug' => false,
-                'base_path' => $basePath ? '/' . $basePath : (defined('APP_BASE_PATH') ? APP_BASE_PATH : ''),
-            ];
-            $atomicWrite('app.php', "<?php\nreturn " . var_export($appArr, true) . ";\n");
-            if (empty($errors)) {
-                $record('app.php');
+        $appArr = [];
+        if (is_file($appFile)) {
+            $loadedApp = require $appFile;
+            if (is_array($loadedApp)) {
+                $appArr = $loadedApp;
             }
+        }
+
+        $basePath = rtrim($_SERVER['BASE_PATH'] ?? ($_SERVER['APP_BASE_PATH'] ?? ''), '/');
+        $resolvedBasePath = $basePath ? '/' . ltrim($basePath, '/') : (defined('APP_BASE_PATH') ? APP_BASE_PATH : '');
+        $existingBasePath = trim((string) ($appArr['base_path'] ?? ''));
+
+        $appArr['debug'] = (bool) ($appArr['debug'] ?? false);
+        $appArr['base_path'] = $existingBasePath !== '' ? $existingBasePath : $resolvedBasePath;
+
+        $atomicWrite('app.php', "<?php\nreturn " . var_export($appArr, true) . ";\n");
+        if (empty($errors)) {
+            $record('app.php');
         }
 
         $atomicWrite('install.lock', date('c'));
@@ -324,7 +422,7 @@ class SetupController
                 @unlink($cfgDir . '/' . $f);
             }
 
-            return $this->view('setup/finish', ['success' => false, 'errors' => $errors]);
+            return $this->stepView(self::STEP_FINISH, 'setup.finish', ['success' => false, 'errors' => $errors]);
         }
 
         unset($_SESSION['setup']);
@@ -357,125 +455,62 @@ class SetupController
 
     private function handleModeSave(Request $req): Response
     {
-        $mode = $req->post['mode'] ?? 'single';
+        $mode = $this->normalizeMode((string) ($req->post['mode'] ?? 'single'));
         $_SESSION['setup']['mode'] = $mode;
 
-        $_SESSION['setup']['auth'] = $this->readDbFromPost($req, 'auth_');
-        $authDefaults = $_SESSION['setup']['auth'];
+        if ($this->isSharedAuthRealmMode($mode)) {
+            $_SESSION['setup']['auth'] = $this->readDbFromPost($req, 'auth_');
+            $authDefaults = $_SESSION['setup']['auth'];
+            $realms = is_array($req->post['realms'] ?? null) ? $req->post['realms'] : [];
+            $normalized = [];
 
-        $previousShared = $_SESSION['setup']['shared'] ?? [];
-        $sharedDbModeInput = (string) ($req->post['shared_db_mode'] ?? ($previousShared['db']['mode'] ?? 'shared'));
-        $sharedDbMode = $sharedDbModeInput === 'custom' ? 'custom' : 'shared';
-
-        $sharedDbCharacters = [
-            'port' => (int) ($req->post['shared_char_port'] ?? ($previousShared['db']['characters']['port'] ?? ($authDefaults['port'] ?? 3306))),
-            'username' => trim((string) ($req->post['shared_char_user'] ?? ($previousShared['db']['characters']['username'] ?? ($authDefaults['username'] ?? '')))),
-            'password' => (string) ($req->post['shared_char_pass'] ?? ($previousShared['db']['characters']['password'] ?? ($authDefaults['password'] ?? ''))),
-        ];
-        $sharedDbWorld = [
-            'port' => (int) ($req->post['shared_world_port'] ?? ($previousShared['db']['world']['port'] ?? $sharedDbCharacters['port'])),
-            'username' => trim((string) ($req->post['shared_world_user'] ?? ($previousShared['db']['world']['username'] ?? $sharedDbCharacters['username']))),
-            'password' => (string) ($req->post['shared_world_pass'] ?? ($previousShared['db']['world']['password'] ?? $sharedDbCharacters['password'])),
-        ];
-
-        $sharedSoapModeInput = (string) ($req->post['shared_soap_mode'] ?? ($previousShared['soap']['mode'] ?? 'shared'));
-        $sharedSoapMode = $sharedSoapModeInput === 'custom' ? 'custom' : 'shared';
-
-        $globalSoap = [
-            'host' => trim((string) ($req->post['soap_host'] ?? ($previousShared['soap']['host'] ?? '127.0.0.1'))),
-            'port' => (int) ($req->post['soap_port'] ?? ($previousShared['soap']['port'] ?? 7878)),
-            'username' => trim((string) ($req->post['soap_user'] ?? ($previousShared['soap']['username'] ?? 'soap_user'))),
-            'password' => (string) ($req->post['soap_pass'] ?? ($previousShared['soap']['password'] ?? 'soap_pass')),
-            'uri' => trim((string) ($req->post['soap_uri'] ?? ($previousShared['soap']['uri'] ?? 'urn:AC'))),
-        ];
-
-        $_SESSION['setup']['shared'] = [
-            'db' => [
-                'mode' => $sharedDbMode,
-                'characters' => $sharedDbCharacters,
-                'world' => $sharedDbWorld,
-            ],
-            'soap' => [
-                'mode' => $sharedSoapMode,
-                'host' => $globalSoap['host'],
-                'port' => $globalSoap['port'],
-                'username' => $globalSoap['username'],
-                'password' => $globalSoap['password'],
-                'uri' => $globalSoap['uri'],
-            ],
-        ];
-
-        if ($mode === 'single') {
-            $_SESSION['setup']['characters'] = $this->readDbFromPost($req, 'char_', 'auth');
-            $_SESSION['setup']['world'] = $this->readDbFromPost($req, 'world_', 'auth');
-        } else {
-            $realms = $req->post['realms'] ?? [];
-            $norm = [];
-
-            foreach ($realms as $r) {
-                $realm = [];
-
-                if ($mode === 'multi-full') {
-                    $realmAuth = $this->normalizeDbArray($r['auth'] ?? []);
-                    if ($realmAuth['database'] !== '') {
-                        if ($realmAuth['username'] === '') {
-                            $realmAuth['username'] = $authDefaults['username'];
-                        }
-                        if ($realmAuth['password'] === '') {
-                            $realmAuth['password'] = $authDefaults['password'];
-                        }
-                        $realm['auth'] = $realmAuth;
-                    }
-                }
-
-                $charactersCfg = $r['characters'] ?? [];
-                if ($mode === 'multi' && $sharedDbMode !== 'custom') {
-                    $charactersCfg['port'] = $sharedDbCharacters['port'];
-                    $charactersCfg['username'] = $sharedDbCharacters['username'];
-                    $charactersCfg['password'] = $sharedDbCharacters['password'];
-                }
-                $realm['characters'] = $this->inheritIfEmpty(
-                    $this->normalizeDbArray($charactersCfg),
-                    $authDefaults
-                );
-
-                $worldCfg = $r['world'] ?? [];
-                if ($mode === 'multi' && $sharedDbMode !== 'custom') {
-                    $worldCfg['port'] = $sharedDbWorld['port'];
-                    $worldCfg['username'] = $sharedDbWorld['username'];
-                    $worldCfg['password'] = $sharedDbWorld['password'];
-                }
-                $realm['world'] = $this->inheritIfEmpty(
-                    $this->normalizeDbArray($worldCfg),
-                    $authDefaults
-                );
-
-                $soapCfg = $r['soap'] ?? [];
-                if ($mode === 'multi' && $sharedSoapMode !== 'custom') {
-                    $soapCfg['host'] = $globalSoap['host'];
-                    $soapCfg['port'] = $globalSoap['port'];
-                    $soapCfg['username'] = $globalSoap['username'];
-                    $soapCfg['password'] = $globalSoap['password'];
-                    $soapCfg['uri'] = $globalSoap['uri'];
-                }
-
-                if (!empty(array_filter($soapCfg, static fn ($v) => $v !== '' && $v !== null))) {
-                    $realm['soap'] = [
-                        'host' => trim((string) ($soapCfg['host'] ?? '')),
-                        'port' => (int) ($soapCfg['port'] ?? $globalSoap['port']),
-                        'username' => trim((string) ($soapCfg['username'] ?? '')),
-                        'password' => (string) ($soapCfg['password'] ?? ''),
-                        'uri' => trim((string) ($soapCfg['uri'] ?? 'urn:AC')),
-                    ];
-                }
-
-                $norm[] = $realm;
+            foreach ($realms as $idx => $realmInput) {
+                $normalized[] = [
+                    'name' => trim((string) ($realmInput['name'] ?? '')),
+                    'realm_id' => (int) ($realmInput['realm_id'] ?? ($idx + 1)),
+                    'port' => (int) ($realmInput['port'] ?? 0),
+                    'characters' => $this->inheritIfEmpty($this->normalizeDbArray($realmInput['characters'] ?? []), $authDefaults),
+                    'world' => $this->inheritIfEmpty($this->normalizeDbArray($realmInput['world'] ?? []), $authDefaults),
+                    'soap' => $this->normalizeSoapConfig($realmInput['soap'] ?? []),
+                ];
             }
 
-            $_SESSION['setup']['realms'] = $norm;
-        }
+            $_SESSION['setup']['realms'] = $normalized;
+            $_SESSION['setup']['selected_realm_ids'] = array_values(array_filter(array_map(
+                static fn (array $realm): int => (int) ($realm['realm_id'] ?? 0),
+                $normalized
+            )));
+            if (!empty($normalized[0]['soap'])) {
+                $_SESSION['setup']['soap'] = $normalized[0]['soap'];
+            }
+            unset($_SESSION['setup']['shared'], $_SESSION['setup']['characters'], $_SESSION['setup']['world']);
+        } else {
+            $groups = is_array($req->post['realms'] ?? null) ? $req->post['realms'] : [];
+            $normalized = [];
 
-        $_SESSION['setup']['soap'] = $globalSoap;
+            foreach ($groups as $idx => $groupInput) {
+                $normalized[] = [
+                    'name' => trim((string) ($groupInput['name'] ?? '')),
+                    'realm_id' => (int) ($groupInput['realm_id'] ?? ($idx + 1)),
+                    'port' => (int) ($groupInput['port'] ?? 0),
+                    'auth' => $this->normalizeDbArray($groupInput['auth'] ?? []),
+                    'characters' => $this->normalizeDbArray($groupInput['characters'] ?? []),
+                    'world' => $this->normalizeDbArray($groupInput['world'] ?? []),
+                    'soap' => $this->normalizeSoapConfig($groupInput['soap'] ?? []),
+                ];
+            }
+
+            $_SESSION['setup']['realms'] = $normalized;
+            $primary = $normalized[0] ?? null;
+            if ($primary !== null) {
+                $_SESSION['setup']['auth'] = $primary['auth'];
+                $_SESSION['setup']['characters'] = $primary['characters'];
+                $_SESSION['setup']['world'] = $primary['world'];
+                $_SESSION['setup']['soap'] = $primary['soap'];
+            }
+            unset($_SESSION['setup']['selected_realm_ids']);
+            unset($_SESSION['setup']['shared']);
+        }
 
         return Response::json([
             'success' => true,
@@ -511,6 +546,7 @@ class SetupController
         $_SESSION['setup']['admin'] = [
             'username' => $user,
             'password_hash' => password_hash($pass, PASSWORD_BCRYPT),
+            'capabilities' => ['*'],
         ];
 
         return Response::json([
@@ -595,6 +631,52 @@ class SetupController
         }
 
         return $child;
+    }
+
+    private function normalizeMode(string $mode): string
+    {
+        return in_array($mode, ['single', 'multi', 'multi-full'], true) ? $mode : 'single';
+    }
+
+    private function isSharedAuthRealmMode(string $mode): bool
+    {
+        return $mode === 'multi';
+    }
+
+    private function sessionServerGroups(array $state): array
+    {
+        if (!empty($state['realms']) && is_array($state['realms'])) {
+            return array_values($state['realms']);
+        }
+
+        if (empty($state['auth']) && empty($state['characters']) && empty($state['world'])) {
+            return [];
+        }
+
+        return [[
+            'name' => '',
+            'realm_id' => 1,
+            'port' => 0,
+            'auth' => $state['auth'] ?? $this->normalizeDbArray([]),
+            'characters' => $state['characters'] ?? $this->normalizeDbArray([]),
+            'world' => $state['world'] ?? $this->normalizeDbArray([]),
+            'soap' => $this->normalizeSoapConfig($state['soap'] ?? []),
+        ]];
+    }
+
+    private function realmResultLabel(array $realm, int $idx, string $fallbackPrefix): string
+    {
+        $name = trim((string) ($realm['name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $realmId = (int) ($realm['realm_id'] ?? 0);
+        if ($realmId > 0) {
+            return $fallbackPrefix . '#' . $realmId;
+        }
+
+        return $fallbackPrefix . '#' . ($idx + 1);
     }
 
     private function testPdo(array $cfg): array
@@ -779,18 +861,32 @@ class SetupController
         return $this->generatedConfigDir() . '/install.lock';
     }
 
-    private function view(string $template, array $vars = []): Response
+    private function stepView(int $step, string $view, array $vars = []): Response
     {
         if (!isset($vars['currentLocale'])) {
             $vars['currentLocale'] = Lang::locale();
         }
 
-        extract($vars, EXTR_SKIP);
-        ob_start();
-        include dirname(__DIR__, 4) . '/resources/views/' . $template . '.php';
-        $html = ob_get_clean();
+        $vars['__layout'] = 'setup';
+        $vars['__setupStep'] = $step;
+        $vars['setupPage'] = SetupPageData::stepData($step);
+        $vars['meta'] = array_replace($this->setupStepMeta($step), is_array($vars['meta'] ?? null) ? $vars['meta'] : []);
 
-        return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
+        return Response::view($view, $vars);
+    }
+
+    private function setupStepMeta(int $step): array
+    {
+        $pageTitle = Lang::get('app.setup.layout.page_title');
+        $stepTitle = Lang::get('app.setup.layout.step_titles.' . $step, [], 'Step ' . $step);
+
+        return [
+            'title' => $stepTitle . ' - ' . $pageTitle,
+            'breadcrumbs' => [
+                ['label' => $pageTitle],
+                ['label' => $stepTitle],
+            ],
+        ];
     }
 
     private function syncRealmNames(): void
@@ -800,7 +896,8 @@ class SetupController
         }
 
         $state = &$_SESSION['setup'];
-        if (empty($state['mode']) || $state['mode'] === 'single') {
+        $mode = $this->normalizeMode((string) ($state['mode'] ?? 'single'));
+        if (!$this->isSharedAuthRealmMode($mode)) {
             return;
         }
         if (empty($state['auth']['database'])) {
@@ -820,22 +917,22 @@ class SetupController
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_TIMEOUT => 5,
             ]);
-            $rows = $pdo->query('SELECT id,name,port FROM realmlist ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT * FROM realmlist ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
             if (!$rows) {
                 return;
             }
 
-            if (empty($state['realms']) || !is_array($state['realms'])) {
-                $state['realms'] = [];
+            $selectedRealmIds = array_values(array_filter(array_map(
+                static fn ($realmId): int => (int) $realmId,
+                is_array($state['selected_realm_ids'] ?? null) ? $state['selected_realm_ids'] : []
+            )));
+            if ($selectedRealmIds !== []) {
+                $rows = array_values(array_filter($rows, static function (array $row) use ($selectedRealmIds): bool {
+                    return in_array((int) ($row['id'] ?? 0), $selectedRealmIds, true);
+                }));
             }
-            foreach ($rows as $idx => $row) {
-                if (!isset($state['realms'][$idx])) {
-                    $state['realms'][$idx] = [];
-                }
-                $state['realms'][$idx]['name'] = $row['name'];
-                $state['realms'][$idx]['realm_id'] = (int) $row['id'];
-                $state['realms'][$idx]['port'] = (int) $row['port'];
-            }
+
+            $state['realms'] = $this->buildSharedRealmEntries($rows, $auth, $state['realms'] ?? []);
         } catch (\Throwable $e) {
             // ignore sync failures during setup
         }
@@ -849,8 +946,8 @@ class SetupController
 
         $source = $req->method === 'POST' ? $req->post : $req->get;
 
-        if (empty($_SESSION['setup']['mode']) && !empty($source['mode']) && $source['mode'] !== 'single') {
-            $_SESSION['setup']['mode'] = $source['mode'];
+        if (!empty($source['mode'])) {
+            $_SESSION['setup']['mode'] = $this->normalizeMode((string) $source['mode']);
         }
 
         $authKeys = ['host', 'port', 'db', 'database', 'user', 'username', 'pass', 'password'];
@@ -878,7 +975,7 @@ class SetupController
                 return Response::json([
                     'success' => false,
                     'message' => Lang::get('app.setup.api.realms.missing_auth_db'),
-                ]);
+                ], 422);
             }
 
             $dsn = sprintf(
@@ -892,25 +989,24 @@ class SetupController
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_TIMEOUT => 5,
             ]);
-            $rows = $pdo->query('SELECT id,name,port FROM realmlist ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $pdo->query('SELECT * FROM realmlist ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
             if (!is_array($rows)) {
                 $rows = [];
             }
 
-            if (empty($_SESSION['setup']['realms']) || !is_array($_SESSION['setup']['realms'])) {
-                $_SESSION['setup']['realms'] = [];
-            }
-            foreach ($rows as $idx => $row) {
-                if (!isset($_SESSION['setup']['realms'][$idx])) {
-                    $_SESSION['setup']['realms'][$idx] = [];
-                }
-                $_SESSION['setup']['realms'][$idx]['name'] = $row['name'];
-                $_SESSION['setup']['realms'][$idx]['realm_id'] = (int) $row['id'];
-                $_SESSION['setup']['realms'][$idx]['port'] = (int) $row['port'];
-            }
+            $_SESSION['setup']['realms'] = $this->buildSharedRealmEntries($rows, $auth, $_SESSION['setup']['realms'] ?? []);
+            $_SESSION['setup']['selected_realm_ids'] = array_values(array_filter(array_map(
+                static fn (array $realm): int => (int) ($realm['realm_id'] ?? 0),
+                $_SESSION['setup']['realms']
+            )));
+
+            $message = empty($_SESSION['setup']['realms'])
+                ? Lang::get('app.setup.mode.messages.verify_empty')
+                : Lang::get('app.setup.mode.messages.verify_success', ['count' => count($_SESSION['setup']['realms'])]);
 
             return Response::json([
                 'success' => true,
+                'message' => $message,
                 'realms' => $_SESSION['setup']['realms'],
             ]);
         } catch (\Throwable $e) {
@@ -919,7 +1015,114 @@ class SetupController
             return Response::json([
                 'success' => false,
                 'message' => Lang::get('app.setup.api.realms.connection_failed', ['error' => $error]),
-            ]);
+            ], 422);
         }
+    }
+
+    private function buildSharedRealmEntries(array $rows, array $auth, array $existingRealms = []): array
+    {
+        $entries = [];
+        foreach ($rows as $idx => $row) {
+            $existing = $this->findExistingRealmEntry($existingRealms, $row, $idx);
+            $realmId = (int) ($row['id'] ?? ($existing['realm_id'] ?? ($idx + 1)));
+            $name = trim((string) ($row['name'] ?? ($existing['name'] ?? 'Realm ' . ($idx + 1))));
+            $port = (int) ($row['port'] ?? ($existing['port'] ?? 0));
+            $entries[] = [
+                'name' => $name,
+                'realm_id' => $realmId,
+                'port' => $port,
+                'characters' => $this->prefillRealmDatabaseConfig('characters', $row, $auth, $existing['characters'] ?? [], $name, $realmId),
+                'world' => $this->prefillRealmDatabaseConfig('world', $row, $auth, $existing['world'] ?? [], $name, $realmId),
+                'soap' => $this->prefillRealmSoapConfig($row, $existing['soap'] ?? [], $auth, $idx),
+            ];
+        }
+
+        return $entries;
+    }
+
+    private function findExistingRealmEntry(array $existingRealms, array $row, int $idx): array
+    {
+        $realmId = (int) ($row['id'] ?? 0);
+        foreach ($existingRealms as $existing) {
+            if ($realmId > 0 && (int) ($existing['realm_id'] ?? 0) === $realmId) {
+                return is_array($existing) ? $existing : [];
+            }
+        }
+
+        return isset($existingRealms[$idx]) && is_array($existingRealms[$idx])
+            ? $existingRealms[$idx]
+            : [];
+    }
+
+    private function prefillRealmDatabaseConfig(
+        string $type,
+        array $row,
+        array $auth,
+        array $existing,
+        string $name,
+        int $realmId
+    ): array {
+        $host = $row[$type . '_host'] ?? ($existing['host'] ?? ($auth['host'] ?? '127.0.0.1'));
+        $port = $row[$type . '_port'] ?? ($existing['port'] ?? ($auth['port'] ?? 3306));
+        $database = $row[$type . '_database']
+            ?? $row[$type . '_db']
+            ?? ($existing['database'] ?? '');
+        $username = $row[$type . '_username']
+            ?? $row[$type . '_user']
+            ?? ($existing['username'] ?? ($auth['username'] ?? ''));
+        $password = $row[$type . '_password']
+            ?? $row[$type . '_pass']
+            ?? ($existing['password'] ?? ($auth['password'] ?? ''));
+
+        return $this->normalizeDbArray([
+            'host' => $host,
+            'port' => $port,
+            'database' => $database,
+            'username' => $username,
+            'password' => $password,
+        ]);
+    }
+
+    private function prefillRealmSoapConfig(array $row, array $existing, array $auth, int $idx): array
+    {
+        return $this->normalizeSoapConfig([
+            'host' => $row['soap_host'] ?? ($existing['host'] ?? ($auth['host'] ?? '127.0.0.1')),
+            'port' => $row['soap_port'] ?? ($existing['port'] ?? (7878 + $idx)),
+            'username' => $row['soap_username'] ?? ($existing['username'] ?? ''),
+            'password' => $row['soap_password'] ?? ($existing['password'] ?? ''),
+            'uri' => $row['soap_uri'] ?? ($existing['uri'] ?? 'urn:AC'),
+        ]);
+    }
+
+    private function filterConfiguredRealmEntries(array $realms): array
+    {
+        $configured = [];
+
+        foreach ($realms as $realm) {
+            if (!$this->isConfiguredRealmEntry($realm)) {
+                continue;
+            }
+
+            $configured[] = $realm;
+        }
+
+        return $configured;
+    }
+
+    private function isConfiguredRealmEntry(array $realm): bool
+    {
+        $charactersDb = trim((string) (($realm['characters']['database'] ?? '')));
+        $worldDb = trim((string) (($realm['world']['database'] ?? '')));
+
+        return $charactersDb !== '' && $worldDb !== '';
+    }
+
+    private function databaseResultLabel(string $label, array $cfg): string
+    {
+        $database = trim((string) ($cfg['database'] ?? ''));
+        if ($database === '')
+            return $label;
+
+        return $label . ' [' . $database . ']';
     }
 }

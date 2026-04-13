@@ -34,26 +34,17 @@ class ItemOwnershipController extends Controller
     public function index(Request $request): Response
     {
         $this->requireLogin();
-        $requestedServer = $request->input('server');
-        if ($requestedServer !== null) {
-            $sid = (int) $requestedServer;
-            if (ServerList::valid($sid) && ServerContext::currentId() !== $sid) {
-                ServerContext::set($sid);
-                $this->repo = new ItemOwnershipRepository($sid);
-            }
-        }
-        return $this->view('item_owner.index', [
-            'title' => Lang::get('app.item_owner.page_title'),
-            'current_server' => ServerContext::currentId(),
-        ]);
+        $this->switchServerAndRefresh($request, function (int $serverId): void {
+            $this->repo = new ItemOwnershipRepository($serverId);
+        });
+        return $this->pageView('item_owner.index', $this->serverViewData());
     }
 
     public function apiSearchItems(Request $request): Response
     {
         $this->requireLogin();
-        $keyword = (string) $request->input('keyword', '');
-        $limit = (int) $request->input('limit', 20);
-        $items = $this->repo->searchItems($keyword, $limit);
+        $state = $this->prepareItemSearchState($request);
+        $items = $this->repo->searchItems($state['keyword'], $state['limit']);
         return $this->json([
             'success' => true,
             'data' => $items,
@@ -63,14 +54,14 @@ class ItemOwnershipController extends Controller
     public function apiOwnership(Request $request): Response
     {
         $this->requireLogin();
-        $entry = (int) $request->input('entry', 0);
-        if ($entry <= 0) {
+        $state = $this->prepareOwnershipState($request);
+        if ($state['entry'] <= 0) {
             return $this->json([
                 'success' => false,
                 'message' => Lang::get('app.item_owner.api.errors.invalid_entry'),
             ]);
         }
-        $data = $this->repo->fetchOwnership($entry);
+        $data = $this->repo->fetchOwnership($state['entry']);
         if (!$data['item']) {
             return $this->json([
                 'success' => false,
@@ -104,6 +95,21 @@ class ItemOwnershipController extends Controller
             'success' => false,
             'message' => Lang::get('app.item_owner.api.errors.unknown_action'),
         ]);
+    }
+
+    private function prepareItemSearchState(Request $request): array
+    {
+        return [
+            'keyword' => $this->normalizedString($request, 'keyword'),
+            'limit' => $this->boundedInt($request, 'limit', 20, 1, 200),
+        ];
+    }
+
+    private function prepareOwnershipState(Request $request): array
+    {
+        return [
+            'entry' => max(0, (int) $request->input('entry', 0)),
+        ];
     }
 }
 

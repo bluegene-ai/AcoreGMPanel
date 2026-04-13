@@ -127,8 +127,8 @@ const ItemSubclasses = (function(){
   return { load, prime, namesOf, nameOf };
 })();
 
-function openModal(id){ const el=qs(id); if(el){ el.classList.add('active'); document.body.style.overflow='hidden'; } }
-function closeModals(){ qsa('.modal-backdrop.active').forEach(m=>m.classList.remove('active')); document.body.style.overflow=''; }
+function openModal(id){ const el=qs(id); if(el){ el.classList.add('active'); document.body.classList.add('modal-open'); } }
+function closeModals(){ qsa('.modal-backdrop.active').forEach(m=>m.classList.remove('active')); document.body.classList.remove('modal-open'); }
 document.addEventListener('click',e=>{
   const closeBtn = e.target.closest('[data-close]');
   if(closeBtn){ closeModals(); return; }
@@ -140,6 +140,20 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModals(); }});
 
 function initList(){
+  const reset=document.getElementById('btn-filter-reset');
+  if(reset && !reset.__bound){
+    reset.__bound=true;
+    reset.addEventListener('click',()=>{
+      const form=reset.closest('form');
+      if(!form) return;
+      const defaults={ search_type:'name', search_value:'', filter_quality:'-1', filter_class:'-1', filter_subclass:'-1' };
+      Object.keys(defaults).forEach((name)=>{
+        const el=form.querySelector('[name="'+name+'"]');
+        if(el) el.value=defaults[name];
+      });
+      form.submit();
+    });
+  }
   const newBtn=qs('#btn-new-item'); if(newBtn){ newBtn.addEventListener('click',()=>openModal('#modal-new-item')); }
   const createBtn=qs('#btn-create-item'); if(createBtn){ createBtn.addEventListener('click',async ()=>{
     const id=Number(qs('#newItemId').value||0); const copy=qs('#copyItemId').value.trim();
@@ -220,6 +234,9 @@ function collectChanges(form){
 
 function initEdit(){
   const form=qs('#itemEditForm'); if(!form) return;
+  const editConfig = window.ITEM_EDIT_CONFIG || {};
+  const sectionStateKey = 'itemEdit:sections:v1';
+  const compactKey = 'itemEdit:compact';
 
   const initialClassSel = qs('#edit-class-select');
   const initialSubSel = qs('#edit-subclass-select');
@@ -259,6 +276,92 @@ function initEdit(){
   qsa('input[name],select[name],textarea[name]',form).forEach(inp=>{ if(inp.disabled) return; const name=inp.name; if(!name) return; const initVal=initial[name]; const now=currentValue(inp); if(now!==initVal){ diff[name]=now; count++; }});
     return {diff,count};
   }
+  async function ensureBitmaskFlags(){
+    if(typeof window.initBitmaskFlags === 'function'){
+      window.initBitmaskFlags();
+      return;
+    }
+    try{
+      const mod = await import(Panel.url('/assets/js/modules/bitmask_flags.js'));
+      if(mod && typeof mod.initBitmaskFlags === 'function') mod.initBitmaskFlags();
+    }catch(_error){
+      // ignore optional helper load failure
+    }
+  }
+  function initQualityPreview(){
+    const sel=qs('#edit-quality-select');
+    const preview=qs('#quality-preview');
+    if(!sel||!preview||!window.APP_ENUMS) return;
+    const codes=APP_ENUMS.qualityCodes || {};
+    const names=APP_ENUMS.qualities || {};
+    const fallback=editConfig.quality_unknown || 'Unknown';
+    const applyPreview=()=>{
+      const q=parseInt(sel.value,10)||0;
+      const code=codes[q]||'unknown';
+      preview.className='quality-badge quality-preview item-quality-'+code;
+      preview.textContent=names[q]||fallback;
+    };
+    sel.addEventListener('change', applyPreview);
+    applyPreview();
+  }
+  function initSectionUi(){
+    const details=qsa('#itemEditForm > details');
+    const fallbackTemplate=editConfig.group_fallback || 'Group :index';
+    details.forEach((d,i)=>{
+      if(!d.id) d.id='sec-'+i;
+      if(!d.dataset.title){
+        const sum=d.querySelector('summary');
+        d.dataset.title=sum?sum.textContent.trim():fallbackTemplate.replace(':index', String(i+1));
+      }
+    });
+    try{
+      const saved=JSON.parse(localStorage.getItem(sectionStateKey)||'{}');
+      details.forEach((d)=>{ if(saved[d.id]===false) d.open=false; });
+    }catch(_error){
+      // ignore invalid cache
+    }
+    details.forEach((d)=> d.addEventListener('toggle',()=>{
+      const current={};
+      details.forEach((node)=>{ current[node.id]=node.open; });
+      localStorage.setItem(sectionStateKey,JSON.stringify(current));
+    }));
+    const nav=qs('#item-section-nav');
+    if(nav){
+      nav.innerHTML='';
+      details.forEach((d)=>{
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='btn-sm btn outline';
+        button.textContent=d.dataset.title || d.id;
+        button.addEventListener('click',()=>{
+          d.scrollIntoView({behavior:'smooth',block:'start'});
+          d.open=true;
+        });
+        nav.appendChild(button);
+      });
+    }
+  }
+  function initCompactMode(){
+    const compactBtn=qs('#btn-compact-toggle');
+    function applyCompact(flag){
+      document.body.classList.toggle('compact',flag);
+      localStorage.setItem(compactKey,flag?'1':'0');
+      if(compactBtn){
+        const label = flag ? compactBtn.dataset.labelNormal : compactBtn.dataset.labelCompact;
+        if(label) compactBtn.textContent = label;
+      }
+    }
+    if(localStorage.getItem(compactKey)==='1') applyCompact(true);
+    compactBtn?.addEventListener('click',()=> applyCompact(!document.body.classList.contains('compact')));
+  }
+  function bindBeforeUnload(){
+    window.addEventListener('beforeunload',(event)=>{
+      if(gatherDiff().count > 0){
+        event.preventDefault();
+        event.returnValue='';
+      }
+    });
+  }
   function buildUpdateSQL(entry,diff, opts={}){
     const {all=false} = opts;
 
@@ -297,6 +400,11 @@ function initEdit(){
     }
     return 'UPDATE `item_template`\n  SET '+cols.join(',\n      ')+'\nWHERE `entry`='+entry+';'+(comment?'\n'+comment:'');
   }
+  ensureBitmaskFlags();
+  initQualityPreview();
+  initSectionUi();
+  initCompactMode();
+  bindBeforeUnload();
   takeSnapshot();
   form.addEventListener('input', markDirty);
   form.addEventListener('change', markDirty);
@@ -322,8 +430,14 @@ function initEdit(){
     if(!/^UPDATE\s+`?item_template`?/i.test(sql.split('\n')[0])){ itemNotify(translate('exec.only_item_template_update','Only UPDATE on item_template is allowed'),'error'); return; }
     if(!confirm(translate('exec.confirm_run_diff','Run the current SQL?'))) return;
     const box=qs('#itemDiffSqlExecResult'); const status=qs('#sqlExecStatus'); const summary=qs('#sqlExecSummary'); const msgs=qs('#sqlExecMessages'); const timing=qs('#sqlExecTiming'); const sampleWrap=qs('#sqlExecSampleWrapper'); const sampleBox=qs('#sqlExecSample');
-    function show(){ if(box) box.style.display='block'; }
-    function setStatus(ok){ if(!status) return; status.style.display='inline-block'; status.textContent= ok? translate('exec.status.success','Success'):translate('exec.status.failed','Failed'); status.style.background= ok? '#1f5f2e':'#5f1f28'; status.style.color= ok? '#7dffb0':'#ff9ca9'; }
+    function show(){ if(box) box.classList.add('item-sql-section__exec-result--visible'); }
+    function setStatus(ok){
+      if(!status) return;
+      status.classList.add('item-sql-section__status--visible');
+      status.classList.toggle('item-sql-section__status--success', !!ok);
+      status.classList.toggle('item-sql-section__status--error', !ok);
+      status.textContent= ok? translate('exec.status.success','Success'):translate('exec.status.failed','Failed');
+    }
     try{
       const start=performance.now();
       const res=await Panel.api.post('/item/api/exec-sql',{sql});
@@ -333,8 +447,8 @@ function initEdit(){
       const rowsLabel=translate('exec.summary.rows_label','Rows affected:');
       const failureFallback=translate('exec.default_error','Execution failed');
       summary && (summary.innerHTML = res.success ?
-        `<span style="color:#7dffb0">${escapeHtml(rowsLabel)} <strong>${rowsCount}</strong></span>` :
-        `<span style="color:#ff9ca9">${escapeHtml(res.message||failureFallback)}</span>`);
+        `<span class="item-sql-section__summary-ok">${escapeHtml(rowsLabel)} <strong>${rowsCount}</strong></span>` :
+        `<span class="item-sql-section__summary-error">${escapeHtml(res.message||failureFallback)}</span>`);
 
       const messages=[]; const warningPrefix=translate('exec.warning_prefix','WARNING:'); const errorPrefix=translate('exec.error_prefix','ERROR:');
       if(res.warning){ messages.push(`${warningPrefix} ${res.warning}`); }
@@ -347,11 +461,11 @@ function initEdit(){
       if(sampleWrap && sampleBox){
         if(res.sample || res.row || res.snapshot){
           const sampleObj = res.sample || res.row || res.snapshot;
-          sampleWrap.style.display='block';
+          sampleWrap.classList.add('item-sql-section__sample-wrapper--visible');
           sampleBox.textContent = JSON.stringify(sampleObj,null,2);
-        } else { sampleWrap.style.display='none'; }
+        } else { sampleWrap.classList.remove('item-sql-section__sample-wrapper--visible'); }
       }
-      if(res.success){ itemNotify(translate('exec.run_success','Execution succeeded'),'success'); takeSnapshot(); updateDiffPreview(); }
+      if(res.success){ itemNotify(translate('exec.run_success','Execution succeeded'),'success'); takeSnapshot(); updateDiffPreview(); document.dispatchEvent(new CustomEvent('itemEditSaved')); }
       else {
         const reason = res.message || translate('exec.default_error','Execution failed');
         itemNotify(translate('exec.run_failed_with_reason','Execution failed: :reason',{reason}),'error',{duration:5000});
@@ -359,14 +473,14 @@ function initEdit(){
 
       (function ensureButtons(){
         const clearBtn=qs('#btn-clear-exec-result'); const hideBtn=qs('#btn-hide-exec-result'); const copyBtn=qs('#btn-copy-exec-json');
-        if(clearBtn && !clearBtn.__bound){ clearBtn.addEventListener('click',()=>{ summary.innerHTML=''; msgs.textContent=''; sampleWrap && (sampleWrap.style.display='none'); status.style.display='none'; timing.textContent=''; }); clearBtn.__bound=true; }
-        if(hideBtn && !hideBtn.__bound){ hideBtn.addEventListener('click',()=>{ box.style.display='none'; }); hideBtn.__bound=true; }
+        if(clearBtn && !clearBtn.__bound){ clearBtn.addEventListener('click',()=>{ summary.innerHTML=''; msgs.textContent=''; sampleWrap && sampleWrap.classList.remove('item-sql-section__sample-wrapper--visible'); status.classList.remove('item-sql-section__status--visible','item-sql-section__status--success','item-sql-section__status--error'); timing.textContent=''; }); clearBtn.__bound=true; }
+        if(hideBtn && !hideBtn.__bound){ hideBtn.addEventListener('click',()=>{ box.classList.remove('item-sql-section__exec-result--visible'); }); hideBtn.__bound=true; }
         if(copyBtn && !copyBtn.__bound){ copyBtn.addEventListener('click',()=>{ navigator.clipboard.writeText(JSON.stringify(res,null,2)); itemNotify(translate('exec.copy_json_success','Copied JSON'),'success'); }); copyBtn.__bound=true; }
       })();
     }catch(e){
       const reason = e?.message || e;
       itemNotify(translate('errors.request_failed_reason','Request failed: :reason',{reason}),'error',{duration:5000});
-      if(summary){ summary.innerHTML=`<span style="color:#ff9ca9">${escapeHtml(translate('exec.request_exception','Request exception: :reason',{reason}))}</span>`; }
+      if(summary){ summary.innerHTML=`<span class="item-sql-section__summary-error">${escapeHtml(translate('exec.request_exception','Request exception: :reason',{reason}))}</span>`; }
       show(); setStatus(false);
     }
   }); }

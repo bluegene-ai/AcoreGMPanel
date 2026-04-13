@@ -1,0 +1,45 @@
+<?php
+
+return [
+  'classes' => [
+    1 => 'Warrior',
+    2 => 'Paladin',
+    3 => 'Hunter',
+    4 => 'Rogue',
+    5 => 'Priest',
+    6 => 'Death Knight',
+    7 => 'Shaman',
+    8 => 'Mage',
+    9 => 'Warlock',
+    10 => 'Monk',
+    11 => 'Druid',
+    12 => 'Demon Hunter',
+  ],
+  'races' => [
+    1 => 'Human',
+    2 => 'Orc',
+    3 => 'Dwarf',
+    4 => 'Night Elf',
+    5 => 'Undead',
+    6 => 'Tauren',
+    7 => 'Gnome',
+    8 => 'Troll',
+    10 => 'Blood Elf',
+    11 => 'Draenei',
+  ],
+  'qualities' => [
+    0 => 'Poor',
+    1 => 'Common',
+    2 => 'Uncommon',
+    3 => 'Rare',
+    4 => 'Epic',
+    5 => 'Legendary',
+    6 => 'Artifact',
+    7 => 'Heirloom',
+  ],
+  'fallbacks' => [
+    'class' => 'Unknown #:id',
+    'race' => 'Unknown #:id',
+    'quality' => 'Quality #:id',
+  ],
+];

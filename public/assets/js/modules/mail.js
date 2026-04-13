@@ -61,6 +61,10 @@
   const moduleTranslator = typeof panelLocale.createModuleTranslator === 'function'
     ? panelLocale.createModuleTranslator('mail')
     : null;
+  const capabilities = window.PANEL_CAPABILITIES || {};
+  const can = key => capabilities[key] !== false;
+  const hasBulkActions = can('mark_read') || can('delete');
+  const columnCount = () => hasBulkActions ? 10 : 9;
 
   function translate(path, fallback, replacements){
     const defaultValue = fallback ?? `modules.mail.${path}`;
@@ -181,6 +185,7 @@
   }
 
   function updateBulkState(){
+    if(!hasBulkActions) return;
     const ids = selectedIds();
     ['bulkMarkReadBtn','bulkDeleteBtn'].forEach(id=>{
       const btn = qs('#' + id);
@@ -229,7 +234,7 @@
     const payload = buildPayload(overrides);
     if(tbody){
       const loadingText = escapeHtml(translate('table.loading', 'Loading…'));
-      tbody.innerHTML = `<tr><td colspan="10" class="text-center muted">${loadingText}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center muted">${loadingText}</td></tr>`;
     }
     try{
       const res = await apiPost('/mail/api/list', payload);
@@ -242,14 +247,14 @@
       } else {
         if(tbody){
           const failedText = escapeHtml(translateStatus('load_failed', 'Failed to load list'));
-          tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">${failedText}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center text-danger">${failedText}</td></tr>`;
         }
         mailNotify(res?.message || translateStatus('load_failed', 'Failed to load list'), 'error');
       }
     } catch(err){
       if(tbody){
         const failedText = escapeHtml(translateStatus('load_failed', 'Failed to load list'));
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger">${failedText}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center text-danger">${failedText}</td></tr>`;
       }
       const errorText = `${translateStatus('load_failed', 'Failed to load list')}: ${err?.message || err}`;
       mailNotify(errorText, 'error', { duration: 6000 });
@@ -260,7 +265,7 @@
     if(!tbody) return;
     if(!rows || !rows.length){
       const emptyText = escapeHtml(translate('table.empty', 'No records'));
-      tbody.innerHTML = `<tr><td colspan="10" class="text-center muted">${emptyText}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center muted">${emptyText}</td></tr>`;
       return;
     }
     const now = nowSeconds();
@@ -284,9 +289,19 @@
       const viewLabel = escapeHtml(translate('actions.view', 'View'));
       const markReadLabel = escapeHtml(translate('actions.mark_read', 'Mark as read'));
       const deleteLabel = escapeHtml(translate('actions.delete', 'Delete'));
+      const selectCell = hasBulkActions
+        ? `<td><input type="checkbox" class="mail-select" value="${id}"></td>`
+        : '';
+      const actionParts = [];
+      if(can('view')) actionParts.push(`<button class="btn-sm btn action-view" data-id="${id}">${viewLabel}</button>`);
+      if(can('mark_read')) actionParts.push(`<button class="btn-sm btn action-mark-read ${unreadClass}" data-id="${id}" ${unreadDisabled}>${markReadLabel}</button>`);
+      if(can('delete')) actionParts.push(`<button class="btn-sm btn danger action-delete" data-id="${id}">${deleteLabel}</button>`);
+      if(actionParts.length === 0){
+        actionParts.push(`<span class="muted small">${escapeHtml(translate('readonly.no_actions', 'No actions available'))}</span>`);
+      }
       return [
         `<tr data-mail-id="${id}" class="${classes}">`,
-        `<td><input type="checkbox" class="mail-select" value="${id}"></td>`,
+        selectCell,
         `<td>${id}</td>`,
         `<td>${sender}</td>`,
         `<td>${receiver}</td>`,
@@ -295,11 +310,7 @@
         `<td>${hasItems ? `<span class="badge">${attachmentsYes}</span>` : ''}</td>`,
         `<td>${escapeHtml(remain)}</td>`,
         `<td>${formatStatus(unread)}</td>`,
-        `<td class="nowrap">` +
-          `<button class="btn-sm btn action-view" data-id="${id}">${viewLabel}</button>` +
-          `<button class="btn-sm btn action-mark-read ${unreadClass}" data-id="${id}" ${unreadDisabled}>${markReadLabel}</button>` +
-          `<button class="btn-sm btn danger action-delete" data-id="${id}">${deleteLabel}</button>` +
-        `</td>`,
+        `<td class="nowrap">${actionParts.join('')}</td>`,
         `</tr>`
       ].join('');
     }).join('');
@@ -316,7 +327,7 @@
     state.limit = limit;
     let nav = qs('.pagination-bar');
     if(pages <= 1){
-      if(nav) nav.style.display = 'none';
+      if(nav) nav.hidden = true;
       return;
     }
     if(!nav){
@@ -328,7 +339,7 @@
         document.body.appendChild(nav);
       }
     }
-    nav.style.display = '';
+    nav.hidden = false;
     const ul = document.createElement('ul');
     ul.className = 'pagination-list';
     const windowSize = 3;
@@ -376,7 +387,7 @@
 
   function bindSorting(){
     qsa('th.sortable', table?.tHead || table).forEach(th=>{
-      th.style.cursor = 'pointer';
+      th.classList.add('mail-table__sortable');
       th.addEventListener('click', ()=>{
         const col = th.getAttribute('data-sort');
         if(!col) return;
@@ -571,9 +582,9 @@
     const wrap = qs('#mailDetailBody');
     if(!wrap) return;
     const loading = wrap.querySelector('.mail-detail-loading');
-    if(loading) loading.style.display = '';
+    if(loading) loading.hidden = false;
     const content = wrap.querySelector('.mail-detail-content');
-    if(content) content.style.display = 'none';
+    if(content) content.classList.add('mail-detail-content--hidden');
     const idBadge = qs('#mdMailId');
     if(idBadge){
       idBadge.textContent = '';
@@ -591,9 +602,9 @@
     const wrap = qs('#mailDetailBody');
     if(!wrap) return;
     const loading = wrap.querySelector('.mail-detail-loading');
-    if(loading) loading.style.display = 'none';
+    if(loading) loading.hidden = true;
     const content = wrap.querySelector('.mail-detail-content');
-    if(content) content.style.display = '';
+    if(content) content.classList.remove('mail-detail-content--hidden');
 
     const idBadge = qs('#mdMailId');
     if(idBadge){
@@ -647,6 +658,7 @@
   }
 
   async function openDetail(id){
+    if(!can('view')) return;
     if(!id) return;
     openModal('#modal-mail-detail');
     clearDetail();
@@ -666,6 +678,7 @@
   }
 
   async function loadStats(){
+    if(!can('stats')) return;
     try{
       const res = await apiPost('/mail/api/stats', {});
       if(res && res.success){
@@ -736,9 +749,9 @@
   function openModal(ref){
     const el = resolveModal(ref);
     if(!el) return null;
-    el.style.display = 'block';
+    el.classList.remove('mail-modal-hidden');
     requestAnimationFrame(()=> el.classList.add('active'));
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
     return el;
   }
 
@@ -746,16 +759,16 @@
     const el = resolveModal(ref);
     if(!el) return;
     el.classList.remove('active');
-    el.style.display = 'none';
-    if(!document.querySelector('.modal-backdrop.active')) document.body.style.overflow = '';
+    el.classList.add('mail-modal-hidden');
+    if(!document.querySelector('.modal-backdrop.active')) document.body.classList.remove('modal-open');
   }
 
   function hideAllModals(){
     document.querySelectorAll('.modal-backdrop.active').forEach(el=>{
       el.classList.remove('active');
-      el.style.display = 'none';
+      el.classList.add('mail-modal-hidden');
     });
-    document.body.style.overflow = '';
+    document.body.classList.remove('modal-open');
   }
 
   if(!window.__mailModalBound){
@@ -781,7 +794,7 @@
     enhanceInitialPagination();
     applySortIndicators();
     updateBulkState();
-    loadStats();
+    if(can('stats')) loadStats();
   }
 
   if(document.readyState === 'loading'){

@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 use Acme\Panel\Core\Router;
 use Acme\Panel\Http\Controllers\AccountController;
+use Acme\Panel\Http\Controllers\Aegis\AegisController;
 use Acme\Panel\Http\Controllers\AuditController;
 use Acme\Panel\Http\Controllers\BagQuery\BagQueryController;
 use Acme\Panel\Http\Controllers\Character\CharacterController;
@@ -23,6 +24,9 @@ use Acme\Panel\Http\Controllers\RealmController;
 use Acme\Panel\Http\Controllers\Setup\SetupController;
 use Acme\Panel\Http\Controllers\SmartAi\SmartAiWizardController;
 use Acme\Panel\Http\Controllers\Soap\SoapWizardController;
+use Acme\Panel\Http\Controllers\CharacterBoost\PublicCharacterBoostController;
+use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostRedeemCodeAdminController;
+use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostTemplateAdminController;
 use Acme\Panel\Http\Middleware\AuthMiddleware;
 use Acme\Panel\Http\Middleware\CsrfMiddleware;
 
@@ -33,6 +37,13 @@ return static function (Router $router): void {
 
     $router->get('/', [HomeController::class, 'index']);
 
+    // Public character boost redeem (no login)
+    $router->get('/public/character-boost', [PublicCharacterBoostController::class, 'index']);
+    $router->get('/public/character-boost/options', [PublicCharacterBoostController::class, 'options']);
+    $router->group([CsrfMiddleware::class], static function (Router $router): void {
+        $router->post('/public/character-boost/redeem', [PublicCharacterBoostController::class, 'redeem']);
+    });
+
     $router->match(['GET', 'POST'], '/account/login', [AccountController::class, 'login']);
     $router->get('/account/logout', [AccountController::class, 'logout']);
 
@@ -40,6 +51,12 @@ return static function (Router $router): void {
 
     $router->group([AuthMiddleware::class], static function (Router $router): void {
         $router->get('/account', [AccountController::class, 'index']);
+        $router->get('/aegis', [AegisController::class, 'index']);
+        $router->get('/aegis/api/overview', [AegisController::class, 'apiOverview']);
+        $router->get('/aegis/api/offenses', [AegisController::class, 'apiOffenses']);
+        $router->get('/aegis/api/events', [AegisController::class, 'apiEvents']);
+        $router->get('/aegis/api/player', [AegisController::class, 'apiPlayer']);
+        $router->get('/aegis/api/log', [AegisController::class, 'apiLog']);
         $router->get('/account/api/list', [AccountController::class, 'apiList']);
         $router->get('/account/api/ip-accounts', [AccountController::class, 'apiAccountsByIp']);
         $router->get('/account/api/ip-location', [AccountController::class, 'apiIpLocation']);
@@ -54,6 +71,7 @@ return static function (Router $router): void {
 
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/account/api/create', [AccountController::class, 'apiCreate']);
+            $router->post('/aegis/api/action', [AegisController::class, 'apiAction']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
             $router->post('/soap/api/execute', [SoapWizardController::class, 'apiExecute']);
             $router->post('/smart-ai/api/preview', [SmartAiWizardController::class, 'apiPreview']);
@@ -78,8 +96,22 @@ return static function (Router $router): void {
             $router->post('/character/api/reset-spells', [CharacterController::class, 'apiResetSpells']);
             $router->post('/character/api/reset-cooldowns', [CharacterController::class, 'apiResetCooldowns']);
             $router->post('/character/api/rename-flag', [CharacterController::class, 'apiRenameFlag']);
+            $router->post('/character/api/boost', [CharacterController::class, 'apiBoost']);
             $router->post('/character/api/delete', [CharacterController::class, 'apiDelete']);
+
+            $router->post('/character-boost/api/redeem-codes/generate', [CharacterBoostRedeemCodeAdminController::class, 'apiGenerate']);
+            $router->post('/character-boost/api/redeem-codes/stats', [CharacterBoostRedeemCodeAdminController::class, 'apiStats']);
+            $router->post('/character-boost/api/redeem-codes/list', [CharacterBoostRedeemCodeAdminController::class, 'apiList']);
+            $router->post('/character-boost/api/redeem-codes/delete-unused', [CharacterBoostRedeemCodeAdminController::class, 'apiDeleteUnused']);
+            $router->post('/character-boost/api/redeem-codes/purge-unused', [CharacterBoostRedeemCodeAdminController::class, 'apiPurgeUnused']);
+
+            $router->post('/character-boost/api/templates/save', [CharacterBoostTemplateAdminController::class, 'apiSave']);
+            $router->post('/character-boost/api/templates/delete', [CharacterBoostTemplateAdminController::class, 'apiDelete']);
         });
+
+        $router->get('/character-boost/templates', [CharacterBoostTemplateAdminController::class, 'index']);
+        $router->get('/character-boost/templates/edit', [CharacterBoostTemplateAdminController::class, 'edit']);
+        $router->get('/character-boost/redeem-codes', [CharacterBoostRedeemCodeAdminController::class, 'index']);
 
         $router->get('/bag', [BagQueryController::class, 'index']);
         $router->get('/bag-query', [BagQueryController::class, 'legacyRedirect']);
@@ -102,6 +134,7 @@ return static function (Router $router): void {
             $router->post('/creature/api/delete', [CreatureController::class, 'apiDelete']);
             $router->post('/creature/api/save', [CreatureController::class, 'apiSave']);
             $router->post('/creature/api/exec-sql', [CreatureController::class, 'apiExecSql']);
+            $router->post('/creature/api/logs', [CreatureController::class, 'apiLogs']);
             $router->post('/creature/api/fetch-row', [CreatureController::class, 'apiFetchRow']);
             $router->post('/creature/api/add-model', [CreatureController::class, 'apiAddModel']);
             $router->post('/creature/api/edit-model', [CreatureController::class, 'apiEditModel']);

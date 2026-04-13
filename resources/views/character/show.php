@@ -4,11 +4,18 @@
  * Purpose: Character detail view.
  */
 
- $module='character'; include __DIR__.'/../layouts/base_top.php';
+include dirname(__DIR__) . '/components/page_header.php';
 ?>
-<h1 class="page-title"><?= htmlspecialchars($title ?? __('app.character.show.title_default')) ?></h1>
 <?php $charBase = \Acme\Panel\Core\Url::to('/character'); ?>
-<p><a class="btn" href="<?= htmlspecialchars($charBase) ?>">&larr; <?= htmlspecialchars(__('app.character.show.back')) ?></a></p>
+<?php
+$characterShowCapabilities = is_array($__pageCapabilities ?? null)
+  ? $__pageCapabilities
+  : [
+    'boost' => $__can('boost.apply'),
+    'boost_templates' => $__can('boost.templates'),
+    'boost_codes' => $__can('boost.codes'),
+  ];
+?>
 
 <?php if(!empty($error)): ?>
   <div class="panel-flash panel-flash--danger panel-flash--inline is-visible"><?= htmlspecialchars($error) ?></div>
@@ -31,6 +38,14 @@
       <div class="char-summary-grid">
         <div>
           <h3 class="char-section-header"><?= htmlspecialchars(__('app.character.show.summary.title')) ?></h3>
+          <div class="char-summary-links">
+            <?php if(!empty($characterShowCapabilities['boost_templates'])): ?>
+              <a href="<?= url('/character-boost/templates') ?>" class="link"><?= htmlspecialchars(__('app.character.actions.boost_manage_templates')) ?></a>
+            <?php endif; ?>
+            <?php if(!empty($characterShowCapabilities['boost_codes'])): ?>
+              <a href="<?= url('/character-boost/redeem-codes') ?>" class="link"><?= htmlspecialchars(__('app.character.actions.boost_manage_codes')) ?></a>
+            <?php endif; ?>
+          </div>
           <table class="table table--compact">
             <tbody>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.guid')) ?></th><td><?= (int)$summary['guid'] ?></td></tr>
@@ -95,6 +110,29 @@
                   </div>
                 </form>
               </div>
+
+              <?php if(!empty($characterShowCapabilities['boost'])): ?>
+                <form id="char-boost-form" class="js-char-action char-action-form" data-endpoint="<?= htmlspecialchars($charBase.'/api/boost') ?>">
+                  <?= \Acme\Panel\Support\Csrf::field(); ?>
+                  <input type="hidden" name="guid" value="<?= (int)$summary['guid'] ?>">
+                  <label class="char-action-label"><?= htmlspecialchars(__('app.character.actions.boost_label')) ?></label>
+                  <div class="input-group">
+                    <select id="char-boost-template" name="template_id" class="char-input--narrow">
+                      <option value=""><?= htmlspecialchars(__('app.character.actions.boost_template_placeholder')) ?></option>
+                      <?php foreach(($boost_templates ?? []) as $tpl): ?>
+                        <option value="<?= (int)($tpl['id'] ?? 0) ?>" data-target-level="<?= (int)($tpl['target_level'] ?? 0) ?>">
+                          <?= htmlspecialchars((string)($tpl['name'] ?? '')) ?> (Lv<?= (int)($tpl['target_level'] ?? 0) ?>)
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                    <input id="char-boost-target-level" class="char-input--narrow" type="number" name="target_level" min="1" max="255" value="" placeholder="<?= htmlspecialchars(__('app.character.actions.boost_target_level_placeholder')) ?>">
+                    <button class="btn btn-sm warn" type="submit"><?= htmlspecialchars(__('app.character.actions.boost_submit')) ?></button>
+                  </div>
+                  <div class="char-action-hint">
+                    <?= htmlspecialchars(__('app.character.actions.boost_hint')) ?>
+                  </div>
+                </form>
+              <?php endif; ?>
             </div>
 
             <!-- Group: Moderation -->
@@ -116,7 +154,7 @@
                   <input type="hidden" name="guid" value="<?= (int)$summary['guid'] ?>">
                   <button class="btn btn-sm success" type="submit"><?= htmlspecialchars(__('app.character.actions.unban')) ?></button>
                 </form>
-                <form class="js-char-action" data-endpoint="<?= htmlspecialchars($charBase.'/api/delete') ?>" onsubmit="return confirm('<?= htmlspecialchars(__('app.character.actions.confirm_delete')) ?>');">
+                <form class="js-char-action" data-endpoint="<?= htmlspecialchars($charBase.'/api/delete') ?>" data-confirm="<?= htmlspecialchars(__('app.character.actions.confirm_delete')) ?>">
                   <?= \Acme\Panel\Support\Csrf::field(); ?>
                   <input type="hidden" name="guid" value="<?= (int)$summary['guid'] ?>">
                   <button class="btn btn-sm danger" type="submit"><?= htmlspecialchars(__('app.character.actions.delete')) ?></button>
@@ -523,4 +561,3 @@
   </div>
 
 <?php endif; ?>
-<?php include __DIR__.'/../layouts/base_bottom.php'; ?>

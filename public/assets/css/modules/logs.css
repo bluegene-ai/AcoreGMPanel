@@ -1,0 +1,24 @@
+/* ==== Logs Manager ==== */
+.logs-page-intro{margin-top:-8px;margin-bottom:18px;}
+.logs-form{display:flex;flex-wrap:wrap;gap:12px;background:#0d1621;border:1px solid rgba(94,168,255,.15);padding:16px;border-radius:12px;margin-bottom:14px;align-items:flex-end;}
+.logs-field{display:flex;flex-direction:column;color:#d5e8ff;font-size:13px;gap:6px;min-width:180px;}
+.logs-field select,.logs-field input{background:#060f18;border:1px solid rgba(94,168,255,.25);border-radius:8px;color:#e4f1ff;padding:8px 10px;font-size:13px;}
+.logs-field--compact{min-width:120px;}
+.logs-actions{display:flex;gap:10px;align-items:center;}
+.logs-summary{margin:12px 0;color:#8fb4e6;font-size:13px;}
+.logs-output{display:grid;gap:14px;}
+.logs-table-wrap{overflow:auto;border:1px solid rgba(94,168,255,.18);border-radius:12px;background:#08121c;max-height:420px;}
+.logs-table{width:100%;border-collapse:collapse;min-width:640px;}
+.logs-col-time{width:160px;}
+.logs-col-server{width:90px;}
+.logs-col-actor{width:120px;}
+.logs-table th,.logs-table td{padding:10px 12px;border-bottom:1px solid rgba(94,168,255,.12);font-size:13px;color:#dbe8ff;text-align:left;}
+.logs-table th{background:#0f1b28;font-weight:600;color:#e7f4ff;position:sticky;top:0;z-index:1;}
+.logs-table tbody tr:nth-child(even){background:rgba(12,26,39,.45);}
+.logs-table tbody tr:hover{background:rgba(50,118,188,.18);}
+.logs-table tbody tr.logs-row-active{background:rgba(50,118,188,.18)!important;box-shadow:inset 0 0 0 1px rgba(94,168,255,.18);}
+.logs-raw{background:#0d1824;border:1px solid rgba(94,168,255,.12);border-radius:12px;padding:12px 14px;color:#c6defc;}
+.logs-raw summary{cursor:pointer;font-weight:600;color:#8fb4e6;}
+.logs-raw__box{margin-top:10px;background:#050b13;border-radius:10px;padding:12px;font-family:'Fira Code','Consolas',monospace;font-size:12px;line-height:1.5;color:#cfe7ff;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word;border:1px solid rgba(94,168,255,.18);}
+.text-center{text-align:center!important;}
+.text-danger{color:#ff9d9d!important;}

@@ -41,32 +41,95 @@ class SoapService
             .'<SOAP-ENV:Body><ns1:executeCommand><command>'.htmlspecialchars($command,ENT_XML1|ENT_QUOTES,'UTF-8').'</command>'
             .'</ns1:executeCommand></SOAP-ENV:Body></SOAP-ENV:Envelope>';
 
-        $ch = curl_init($endpoint);
-        curl_setopt_array($ch,[
-            CURLOPT_POST=>true,
-            CURLOPT_HTTPHEADER=>[
-                'Content-Type: text/xml; charset=utf-8',
-                'SOAPAction: executeCommand'
-            ],
-            CURLOPT_USERPWD=> $this->user.':'.$this->pass,
-            CURLOPT_RETURNTRANSFER=>true,
-            CURLOPT_POSTFIELDS=>$xml,
-            CURLOPT_TIMEOUT=>8,
-        ]);
-        $resp = curl_exec($ch);
-        $err = curl_error($ch);
-        $code = curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-        if($resp === false){
-            $fallback = $err !== '' ? $err : Lang::get('app.soap.legacy.errors.curl_error_unknown');
+        if (function_exists('curl_init')) {
+            $ch = curl_init($endpoint);
+            curl_setopt_array($ch,[
+                CURLOPT_POST=>true,
+                CURLOPT_HTTPHEADER=>[
+                    'Content-Type: text/xml; charset=utf-8',
+                    'SOAPAction: executeCommand'
+                ],
+                CURLOPT_USERPWD=> $this->user.':'.$this->pass,
+                CURLOPT_RETURNTRANSFER=>true,
+                CURLOPT_POSTFIELDS=>$xml,
+                CURLOPT_TIMEOUT=>8,
+            ]);
+            $resp = curl_exec($ch);
+            $err = curl_error($ch);
+            $code = (int) curl_getinfo($ch,CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+            if($resp === false){
+                $fallback = $err !== '' ? $err : Lang::get('app.soap.legacy.errors.curl_error_unknown');
+                return [
+                    'success'=>false,
+                    'code'=>$code,
+                    'error'=>$fallback,
+                    'message'=>Lang::get('app.soap.legacy.errors.curl_failed'),
+                ];
+            }
+
+            return $this->normalizeSoapResponse($resp, $code);
+        }
+
+        // Fallback when ext-curl is not enabled.
+        return $this->executeViaStream($endpoint, $xml);
+    }
+
+    private function executeViaStream(string $endpoint, string $xml): array
+    {
+        $allow = (string) ini_get('allow_url_fopen');
+        if ($allow === '' || $allow === '0') {
             return [
-                'success'=>false,
-                'code'=>$code,
-                'error'=>$fallback,
-                'message'=>Lang::get('app.soap.legacy.errors.curl_failed'),
+                'success' => false,
+                'code' => 0,
+                'error' => 'ext-curl is not enabled and allow_url_fopen is disabled',
+                'message' => Lang::get('app.soap.legacy.errors.curl_failed'),
             ];
         }
 
+        $auth = base64_encode($this->user . ':' . $this->pass);
+        $headers = [
+            'Content-Type: text/xml; charset=utf-8',
+            'SOAPAction: executeCommand',
+            'Authorization: Basic ' . $auth,
+            'Connection: close',
+        ];
+
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => implode("\r\n", $headers),
+                'content' => $xml,
+                'timeout' => 8,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        $resp = @file_get_contents($endpoint, false, $context);
+        $code = 0;
+
+        if (isset($http_response_header) && is_array($http_response_header) && isset($http_response_header[0])) {
+            if (preg_match('#HTTP/\S+\s+(\d{3})#', (string) $http_response_header[0], $m)) {
+                $code = (int) $m[1];
+            }
+        }
+
+        if ($resp === false) {
+            $last = error_get_last();
+            $fallback = is_array($last) && isset($last['message']) ? (string) $last['message'] : Lang::get('app.soap.legacy.errors.curl_error_unknown');
+            return [
+                'success' => false,
+                'code' => $code,
+                'error' => $fallback,
+                'message' => Lang::get('app.soap.legacy.errors.curl_failed'),
+            ];
+        }
+
+        return $this->normalizeSoapResponse($resp, $code);
+    }
+
+    private function normalizeSoapResponse(string $resp, int $code): array
+    {
         if(preg_match('#<return>(<!\[CDATA\[)?(.*?)(\]\]>)?</return>#s',$resp,$m)){
             $out=trim($m[2]);
         } else {

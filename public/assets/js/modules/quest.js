@@ -148,24 +148,21 @@
 
   function openModal(id){
     const el = resolveModal(id); if(!el) return;
-    el.style.display = 'block';
     requestAnimationFrame(()=> el.classList.add('active'));
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
   }
 
   function hideModal(id){
     const el = resolveModal(id); if(!el) return;
     el.classList.remove('active');
-    el.style.display = 'none';
-    if(!document.querySelector('.modal-backdrop.active')) document.body.style.overflow = '';
+    if(!document.querySelector('.modal-backdrop.active')) document.body.classList.remove('modal-open');
   }
 
   function hideAllModals(){
     document.querySelectorAll('.modal-backdrop.active').forEach(el=>{
       el.classList.remove('active');
-      el.style.display = 'none';
     });
-    document.body.style.overflow = '';
+    document.body.classList.remove('modal-open');
   }
 
   if(!window.__questModalBound){
@@ -298,12 +295,26 @@
 
   function setupEditPage(form){
     const editorContainer = document.getElementById('qe-tabs') || form || document;
+    const tabBar = editorContainer.querySelector('.qe-tab-bar');
     const diffSqlEl = document.getElementById('diff-sql');
     const diffCountEl = document.getElementById('diff-count');
     const btnCopySql = document.getElementById('btn-copy-sql');
     const execStatusBox = document.getElementById('quest-exec-status');
     const fieldLabels = window.FIELD_LABELS || {};
     const meta = window.QUEST_META || { enums: {}, bitmasks: {} };
+
+    if(tabBar){
+      tabBar.addEventListener('click', (event) => {
+        const button = event.target.closest('.qe-tab');
+        if(!button) return;
+        const tabName = button.getAttribute('data-tab');
+        tabBar.querySelectorAll('.qe-tab').forEach((node) => node.classList.remove('active'));
+        button.classList.add('active');
+        document.querySelectorAll('.qe-tab-panel').forEach((panel) => {
+          panel.classList.toggle('active', panel.getAttribute('data-tab-panel') === tabName);
+        });
+      });
+    }
 
     if(window.QuestEditorCore && window.QUEST_DATA && !window.__qe_core_inited){
       window.__qe_core_inited = true;
@@ -482,17 +493,22 @@
 
     function showExecStatus(ok, kind, elapsedMs, affected){
       if(!execStatusBox) return;
-      execStatusBox.style.display = 'block';
       const cls = ok ? 'qe-status-ok' : 'qe-status-fail';
       let html = `<span class="qe-status-tag ${cls}">${kind} ${ok ? 'OK' : 'FAIL'}</span>`;
   if(typeof affected !== 'undefined') html += `<span class="qe-status-aff">${STRINGS.editorRowsLabel} ${affected}</span>`;
       html += `<span class="qe-status-time">${elapsedMs}ms</span>`;
       html += '<a href="javascript:void(0)" class="qe-status-hide" id="exec-status-hide">×</a>';
-      execStatusBox.className = 'mb-3 small qe-exec-status-line';
+      execStatusBox.className = 'mb-3 small qe-exec-status-line quest-exec-status quest-exec-status--visible';
       execStatusBox.innerHTML = html;
-      document.getElementById('exec-status-hide')?.addEventListener('click', ()=>{ execStatusBox.style.display='none'; });
-      execStatusBox.style.opacity = '1';
-      setTimeout(()=>{ if(execStatusBox.style.display!=='none') execStatusBox.style.opacity = '0.75'; }, 3200);
+      execStatusBox.classList.remove('quest-exec-status--faded');
+      document.getElementById('exec-status-hide')?.addEventListener('click', ()=>{
+        execStatusBox.classList.remove('quest-exec-status--visible', 'quest-exec-status--faded');
+      });
+      setTimeout(()=>{
+        if(execStatusBox.classList.contains('quest-exec-status--visible')){
+          execStatusBox.classList.add('quest-exec-status--faded');
+        }
+      }, 3200);
     }
 
     const miniTable = document.getElementById('mini-diff-table');
@@ -507,13 +523,13 @@
       const fields = Object.keys(dirty || {}).filter(f=>f !== 'ID');
       miniCount.textContent = fields.length;
       if(!fields.length){
-        miniTable.style.display='none';
-        miniEmpty.style.display='block';
+        miniTable.classList.remove('quest-mini-diff-table--visible');
+        miniEmpty.hidden = false;
         if(miniClearBtn) miniClearBtn.disabled = true;
         return;
       }
-      miniEmpty.style.display='none';
-      miniTable.style.display='table';
+      miniEmpty.hidden = true;
+      miniTable.classList.add('quest-mini-diff-table--visible');
       if(miniClearBtn) miniClearBtn.disabled = false;
       miniTbody.innerHTML = fields.map(f=>{
         const rec = dirty[f] || {};
@@ -536,7 +552,7 @@
       const card = document.getElementById('quest-mini-diff-card'); if(!card) return;
       card.classList.toggle('collapsed', !collapsed);
       const body = card.querySelector('.flex-grow-1');
-      if(body) body.style.display = collapsed ? 'block' : 'none';
+      if(body) body.hidden = !collapsed;
       miniCollapseBtn.textContent = collapsed ? STRINGS.miniCollapse : STRINGS.miniExpand;
     });
 

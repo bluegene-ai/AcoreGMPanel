@@ -34,6 +34,7 @@ use PDO;
 use Acme\Panel\Support\SrpService;
 use Acme\Panel\Core\Lang;
 use Acme\Panel\Support\Paginator;
+use Acme\Panel\Support\TransientCache;
 use Acme\Panel\Domain\Support\MultiServerRepository;
 
 class AccountRepository extends MultiServerRepository
@@ -50,6 +51,9 @@ class AccountRepository extends MultiServerRepository
     private array $accountColumnsMeta = [];
     private array $accountColumnsLower = [];
     private array $accountColumnTypes = [];
+    private array $requestBanStatusCache = [];
+    private array $requestCharactersCache = [];
+    private array $requestAccountsByIpCache = [];
     public function __construct(?int $serverId = null){
         parent::__construct($serverId);
         $this->authPdo = $this->auth();
@@ -72,6 +76,40 @@ class AccountRepository extends MultiServerRepository
         $this->accountColumnsMeta = [];
         $this->accountColumnsLower = [];
         $this->accountColumnTypes = [];
+        $this->requestBanStatusCache = [];
+        $this->requestCharactersCache = [];
+        $this->requestAccountsByIpCache = [];
+    }
+
+    private function banCacheKey(int $accountId): string
+    {
+        return 'server_' . $this->serverId . '_account_' . $accountId . '_ban';
+    }
+
+    private function charactersCacheKey(int $accountId): string
+    {
+        return 'server_' . $this->serverId . '_account_' . $accountId . '_characters';
+    }
+
+    private function accountsByIpNamespace(): string
+    {
+        return 'account_ip_relations_server_' . $this->serverId;
+    }
+
+    private function invalidateAccountReadCaches(int $accountId, bool $flushCharacters = false, bool $flushIpRelations = false): void
+    {
+        unset($this->requestBanStatusCache[$accountId]);
+        TransientCache::delete('account_bans', $this->banCacheKey($accountId));
+
+        if ($flushCharacters) {
+            unset($this->requestCharactersCache[$accountId]);
+            TransientCache::delete('account_characters', $this->charactersCacheKey($accountId));
+        }
+
+        if ($flushIpRelations) {
+            $this->requestAccountsByIpCache = [];
+            TransientCache::clearNamespace($this->accountsByIpNamespace());
+        }
     }
 
     public function search(string $type,string $value,int $page,int $perPage,array $filters = [], bool $loadAll = false, string $sort = ''): Paginator
@@ -87,6 +125,7 @@ class AccountRepository extends MultiServerRepository
 
         $hasOnlineFilter = in_array($onlineFilter, ['online','offline'], true);
         $hasBanFilter = in_array($banFilter, ['banned','unbanned'], true);
+        $needsOnlineJoin = $hasOnlineFilter || in_array($sort, ['online_asc','online_desc'], true);
 
         $hasCriteria = $loadAll || ($value !== '') || $hasOnlineFilter || $hasBanFilter || ($excludeUsername !== '');
         if(!$hasCriteria){ return new Paginator([],0,$page,$perPage); }
@@ -109,45 +148,24 @@ class AccountRepository extends MultiServerRepository
             $param[':exu'] = '%'.$excludeUsername.'%';
         }
 
-        // Online filter must reflect characters DB online state (not auth.account.online).
-        if($hasOnlineFilter){
+        $onlineTempTable = null;
+        if($needsOnlineJoin){
             try {
-                $charsPdo = $this->characters();
-                $onlineIds = $charsPdo->query('SELECT DISTINCT account FROM characters WHERE online=1')->fetchAll(PDO::FETCH_COLUMN,0);
-                $onlineIds = array_values(array_unique(array_map('intval',$onlineIds)));
-
-                if($onlineFilter === 'online'){
-                    if(!$onlineIds){
-                        return new Paginator([],0,$page,$perPage);
-                    }
-                    $chunks = array_chunk($onlineIds, 800);
-                    $ors = [];
-                    foreach($chunks as $chunkIdx => $chunk){
-                        $ph = [];
-                        foreach($chunk as $i => $id){
-                            $key = ':on'.$chunkIdx.'_'.$i;
-                            $ph[] = $key;
-                            $param[$key] = $id;
-                        }
-                        $ors[] = 'a.id IN ('.implode(',',$ph).')';
-                    }
-                    $wheres[] = '('.implode(' OR ', $ors).')';
-                } elseif($onlineFilter === 'offline'){
-                    if($onlineIds){
-                        $chunks = array_chunk($onlineIds, 800);
-                        foreach($chunks as $chunkIdx => $chunk){
-                            $ph = [];
-                            foreach($chunk as $i => $id){
-                                $key = ':off'.$chunkIdx.'_'.$i;
-                                $ph[] = $key;
-                                $param[$key] = $id;
-                            }
-                            $wheres[] = 'a.id NOT IN ('.implode(',',$ph).')';
-                        }
-                    }
-                }
+                $onlineTempTable = $this->prepareOnlineTempTable();
             } catch(\Throwable $e){
-                // If we cannot query characters DB, ignore online filter.
+                $onlineTempTable = null;
+            }
+
+            if($hasOnlineFilter && $onlineTempTable === null && $onlineFilter === 'online'){
+                return new Paginator([],0,$page,$perPage);
+            }
+
+            if($hasOnlineFilter && $onlineTempTable !== null){
+                if($onlineFilter === 'online'){
+                    $wheres[] = 'online_accounts.account_id IS NOT NULL';
+                } elseif($onlineFilter === 'offline'){
+                    $wheres[] = 'online_accounts.account_id IS NULL';
+                }
             }
         }
 
@@ -162,8 +180,11 @@ class AccountRepository extends MultiServerRepository
         }
 
         $where = $wheres ? 'WHERE '.implode(' AND ',$wheres) : '';
+        $onlineJoin = $onlineTempTable !== null
+            ? 'LEFT JOIN ' . $onlineTempTable . ' online_accounts ON online_accounts.account_id = a.id'
+            : '';
 
-        $cnt = $this->authPdo->prepare("SELECT COUNT(*) FROM account a $where");
+        $cnt = $this->authPdo->prepare("SELECT COUNT(*) FROM account a $onlineJoin $where");
         foreach($param as $k=>$v){ $cnt->bindValue($k,$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
         $cnt->execute(); $total=(int)$cnt->fetchColumn();
         $offset=($page-1)*$perPage;
@@ -175,15 +196,18 @@ class AccountRepository extends MultiServerRepository
             '' => 'a.id DESC',
             'id_desc' => 'a.id DESC',
             'id_asc' => 'a.id ASC',
+            'online_desc' => 'computed_online DESC, a.last_login DESC, a.id DESC',
+            'online_asc' => 'computed_online ASC, a.last_login DESC, a.id DESC',
             'last_login_desc' => 'a.last_login DESC, a.id DESC',
             'last_login_asc' => 'a.last_login ASC, a.id ASC',
         ];
         $orderBy = $orderMap[$sort] ?? $orderMap[''];
 
-        $selectOnline = '';
+        $selectOnline = ', '.($onlineTempTable !== null ? 'CASE WHEN online_accounts.account_id IS NULL THEN 0 ELSE 1 END' : '0').' AS computed_online';
         $sql="SELECT a.id,a.username,aa.gmlevel,a.last_login,a.last_ip{$selectOnline}
               FROM account a
               LEFT JOIN account_access aa ON aa.id=a.id
+              $onlineJoin
               $where ORDER BY $orderBy LIMIT :limit OFFSET :offset";
         $st=$this->authPdo->prepare($sql);
         foreach($param as $k=>$v){ $st->bindValue($k,$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
@@ -195,49 +219,81 @@ class AccountRepository extends MultiServerRepository
         if(!$rows){ return new Paginator([],0,$page,$perPage); }
 
         $ids=[]; foreach($rows as &$r){
-            $r['online']=isset($r['account_online'])?(int)$r['account_online']:0; unset($r['account_online']);
+            $r['online']=(int)($r['computed_online'] ?? 0); unset($r['computed_online']);
             $ids[]=(int)$r['id'];
         }
         unset($r);
 
-        try {
-            $charsPdo = $this->characters();
 
-            $in = implode(',', array_fill(0,count($ids),'?'));
-            $q = $charsPdo->prepare("SELECT DISTINCT account FROM characters WHERE online=1 AND account IN ($in)");
-            $q->execute($ids);
-            $onlineIds = array_column($q->fetchAll(PDO::FETCH_ASSOC),'account');
-            if($onlineIds){
-                $onlineMap = array_flip($onlineIds);
-                foreach($rows as &$r){ if(isset($onlineMap[$r['id']])) $r['online']=1; }
-                unset($r);
-            }
-    } catch(\Throwable $e){  }
-
-
-        try {
-            $in = implode(',', array_fill(0,count($ids),'?'));
-            $stBan = $this->authPdo->prepare("SELECT id,bandate,unbandate,banreason,active FROM account_banned WHERE active=1 AND id IN ($in)");
-            $stBan->execute($ids);
-            $banRows = $stBan->fetchAll(PDO::FETCH_ASSOC);
-            $banMap=[]; $now=time();
-            foreach($banRows as $b){
-                $unbandate = (int)$b['unbandate'];
-                $permanent = ($unbandate === 0) || ($unbandate <= $now);
-                $remaining = $permanent ? -1 : max(0, $unbandate - $now);
-                $banMap[$b['id']] = [
-                    'bandate'=>(int)$b['bandate'],
-                    'unbandate'=>(int)$b['unbandate'],
-                    'banreason'=>$b['banreason'],
-                    'permanent'=>$permanent,
-                    'remaining_seconds'=>$remaining,
-                ];
-            }
-            foreach($rows as &$r){ if(isset($banMap[$r['id']])) $r['ban']=$banMap[$r['id']]; }
-            unset($r);
-    } catch(\Throwable $e){  }
+        $this->hydrateBanStatuses($rows);
 
         return new Paginator($rows,$total,$page,$perPage);
+    }
+
+    private function prepareOnlineTempTable(): ?string
+    {
+        $table = 'tmp_panel_online_accounts';
+        $this->authPdo->exec('DROP TEMPORARY TABLE IF EXISTS '.$table);
+        $this->authPdo->exec('CREATE TEMPORARY TABLE '.$table.' (account_id INT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB');
+
+        $this->streamOnlineAccountIdsIntoTempTable($table);
+
+        return $table;
+    }
+
+    private function streamOnlineAccountIdsIntoTempTable(string $table): void
+    {
+        $stmt = $this->prepareOnlineAccountCursor();
+        $batch = [];
+
+        try {
+            while (($accountId = $stmt->fetchColumn()) !== false) {
+                $accountId = (int) $accountId;
+                if ($accountId <= 0)
+                    continue;
+
+                $batch[$accountId] = $accountId;
+                if (count($batch) < 500)
+                    continue;
+
+                $this->insertOnlineTempTableBatch($table, array_values($batch));
+                $batch = [];
+            }
+
+            if ($batch !== [])
+                $this->insertOnlineTempTableBatch($table, array_values($batch));
+        } finally {
+            $stmt->closeCursor();
+        }
+    }
+
+    private function prepareOnlineAccountCursor(): \PDOStatement
+    {
+        $sql = 'SELECT DISTINCT account FROM characters WHERE online=1';
+        $options = [];
+        if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY'))
+            $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = false;
+
+        $stmt = $options
+            ? $this->characters()->prepare($sql, $options)
+            : $this->characters()->prepare($sql);
+        $stmt->execute();
+
+        return $stmt;
+    }
+
+    private function insertOnlineTempTableBatch(string $table, array $accountIds): void
+    {
+        $accountIds = array_values(array_unique(array_filter(array_map('intval', $accountIds), static fn (int $id): bool => $id > 0)));
+        if ($accountIds === [])
+            return;
+
+        $values = [];
+        foreach ($accountIds as $accountId) {
+            $values[] = '(' . $accountId . ')';
+        }
+
+        $this->authPdo->exec('INSERT IGNORE INTO '.$table.' (account_id) VALUES '.implode(',', $values));
     }
 
     public function findById(int $id): ?array
@@ -349,6 +405,8 @@ class AccountRepository extends MultiServerRepository
             $this->authPdo->rollBack();
             return ['success'=>false,'message'=>Lang::get('app.account.delete.account_failed',['message'=>$e->getMessage()]),'characters_deleted'=>$charactersDeleted];
         }
+
+        $this->invalidateAccountReadCaches($accountId, true, true);
 
         return ['success'=>true,'message'=>Lang::get('app.account.delete.success'), 'username'=>$account['username'] ?? null, 'characters_deleted'=>$charactersDeleted];
     }
@@ -528,6 +586,8 @@ class AccountRepository extends MultiServerRepository
             return ['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])];
         }
 
+        $this->invalidateAccountReadCaches($accountId, false, true);
+
         return ['success'=>true,'message'=>Lang::get('app.account.rename.success', ['old'=>$oldUsername,'new'=>$newUsername])];
     }
 
@@ -537,10 +597,36 @@ class AccountRepository extends MultiServerRepository
 
     public function listCharacters(int $accountId): array
     {
-        $pdo = $this->characters();
-        $st=$pdo->prepare('SELECT guid,name,class,level,online FROM characters WHERE account=:a ORDER BY guid DESC LIMIT 50');
-        $st->execute([':a'=>$accountId]);
-        return $st->fetchAll(PDO::FETCH_ASSOC);
+        $accountId = (int)$accountId;
+        if ($accountId <= 0)
+            return [];
+
+        if (array_key_exists($accountId, $this->requestCharactersCache))
+            return $this->requestCharactersCache[$accountId];
+
+        $cacheKey = $this->charactersCacheKey($accountId);
+
+        $rows = TransientCache::remember('account_characters', $cacheKey, 20, function () use ($accountId): array {
+            $pdo = $this->characters();
+            $st = $pdo->prepare('SELECT guid,name,class,level,online FROM characters WHERE account=:a ORDER BY guid DESC LIMIT 50');
+            $st->execute([':a' => $accountId]);
+            $result = $st->fetchAll(PDO::FETCH_ASSOC);
+
+            return is_array($result) ? $result : [];
+        });
+
+        $resolved = is_array($rows) ? $rows : [];
+        $this->requestCharactersCache[$accountId] = $resolved;
+
+        return $resolved;
+    }
+
+    public function accountCharactersPayload(int $accountId): array
+    {
+        return [
+            'items' => $this->listCharacters($accountId),
+            'ban' => $this->banStatus($accountId),
+        ];
     }
 
     public function setGmLevel(int $accountId,int $gmLevel,int $realmId= -1): bool
@@ -555,6 +641,7 @@ class AccountRepository extends MultiServerRepository
                 $ins->execute([':id'=>$accountId,':g'=>$gmLevel,':r'=>$realmId]);
             }
             $this->authPdo->commit();
+            $this->invalidateAccountReadCaches($accountId, false, true);
             return true;
         }catch(\Throwable $e){ $this->authPdo->rollBack(); return false; }
     }
@@ -565,13 +652,20 @@ class AccountRepository extends MultiServerRepository
         $bandate=time();
         $unban=$durationHours>0? $bandate + $durationHours*3600 : 0;
         $st=$this->authPdo->prepare('INSERT INTO account_banned (id,bandate,unbandate,bannedby,banreason,active) VALUES (:id,:bd,:ud,:bb,:br,1)');
-        return $st->execute([':id'=>$accountId,':bd'=>$bandate,':ud'=>$unban,':bb'=>'panel',':br'=>$reason]);
+        $ok = $st->execute([':id'=>$accountId,':bd'=>$bandate,':ud'=>$unban,':bb'=>'panel',':br'=>$reason]);
+        if ($ok)
+            $this->invalidateAccountReadCaches($accountId, false, true);
+
+        return $ok;
     }
 
     public function unban(int $accountId): int
     {
         $st=$this->authPdo->prepare('UPDATE account_banned SET active=0 WHERE id=:id AND active=1');
         $st->execute([':id'=>$accountId]);
+        if ($st->rowCount() > 0)
+            $this->invalidateAccountReadCaches($accountId, false, true);
+
         return $st->rowCount();
     }
 
@@ -731,7 +825,7 @@ class AccountRepository extends MultiServerRepository
                 $addedColumns[$column] = true;
             };
 
-            $clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+            $clientIp = \Acme\Panel\Support\ClientIp::resolve($_SERVER);
 
             $addColumn('username',$username);
             if($this->hasColumn('email')){ $addColumn('email',$email); }
@@ -847,8 +941,8 @@ class AccountRepository extends MultiServerRepository
 
             if($email !== ''){
                 try {
-                    $upd = $this->authPdo->prepare('UPDATE account SET email=:e, reg_mail=:e WHERE id=:id');
-                    $upd->execute([':e'=>$email, ':id'=>$id]);
+                    $upd = $this->authPdo->prepare('UPDATE account SET email=:email, reg_mail=:reg_mail WHERE id=:id');
+                    $upd->execute([':email'=>$email, ':reg_mail'=>$email, ':id'=>$id]);
                 } catch(\PDOException $e){
                     if(stripos($e->getMessage(),'Unknown column')===false){
                         throw $e;
@@ -876,26 +970,48 @@ class AccountRepository extends MultiServerRepository
 
     public function banStatus(int $accountId): ?array
     {
-        $st=$this->authPdo->prepare('SELECT bandate,unbandate,banreason,active FROM account_banned WHERE id=:id AND active=1 ORDER BY bandate DESC LIMIT 1');
-        $st->execute([':id'=>$accountId]);
-        $row=$st->fetch(PDO::FETCH_ASSOC); if(!$row) return null;
-        $now=time();
-        $unbandate = (int)$row['unbandate'];
-        $permanent = ($unbandate === 0) || ($unbandate <= $now);
-        $remaining = $permanent ? -1 : max(0, $unbandate - $now);
-        return [
-            'bandate'=>(int)$row['bandate'],
-            'unbandate'=>(int)$row['unbandate'],
-            'banreason'=>$row['banreason'],
-            'permanent'=>$permanent,
-            'remaining_seconds'=>$remaining,
-        ];
+        $accountId = (int)$accountId;
+        if ($accountId <= 0)
+            return null;
+
+        if (array_key_exists($accountId, $this->requestBanStatusCache))
+            return $this->requestBanStatusCache[$accountId];
+
+        $cacheKey = $this->banCacheKey($accountId);
+        $cached = TransientCache::get('account_bans', $cacheKey);
+        if ($cached === null || is_array($cached)) {
+            $this->requestBanStatusCache[$accountId] = $cached;
+            if ($cached !== null)
+                return $cached;
+        }
+
+        $rows = [['id' => $accountId]];
+        $this->hydrateBanStatuses($rows);
+        $ban = $rows[0]['ban'] ?? null;
+        $this->requestBanStatusCache[$accountId] = $ban;
+        if ($ban !== null)
+            TransientCache::set('account_bans', $cacheKey, $ban, 15);
+
+        return $ban;
     }
 
     public function accountsByLastIp(string $ip, int $excludeAccountId = 0, int $limit = 50): array
     {
         $ip = trim($ip);
         if($ip === '') return [];
+
+        $limit = max(1, min(200, (int)$limit));
+        $requestCacheKey = $ip . '|' . $excludeAccountId . '|' . $limit;
+        if (array_key_exists($requestCacheKey, $this->requestAccountsByIpCache))
+            return $this->requestAccountsByIpCache[$requestCacheKey];
+
+        $namespace = $this->accountsByIpNamespace();
+        $cacheKey = md5($requestCacheKey);
+        $cached = TransientCache::get($namespace, $cacheKey);
+        if (is_array($cached)) {
+            $this->requestAccountsByIpCache[$requestCacheKey] = $cached;
+            return $cached;
+        }
 
         $sql = 'SELECT a.id,a.username,aa.gmlevel,a.last_login,a.last_ip FROM account a LEFT JOIN account_access aa ON aa.id=a.id WHERE a.last_ip = :ip';
         if($excludeAccountId > 0){
@@ -911,57 +1027,124 @@ class AccountRepository extends MultiServerRepository
         $st->bindValue(':limit', $limit, PDO::PARAM_INT);
         $st->execute();
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-        if(!$rows) return [];
+        if(!$rows) {
+            $this->requestAccountsByIpCache[$requestCacheKey] = [];
+            TransientCache::set($namespace, $cacheKey, [], 15);
+            return [];
+        }
 
+        $this->hydrateOnlineFlags($rows);
+        $this->hydrateBanStatuses($rows);
+        $this->requestAccountsByIpCache[$requestCacheKey] = $rows;
+        TransientCache::set($namespace, $cacheKey, $rows, 15);
+
+        return $rows;
+    }
+
+    private function hydrateOnlineFlags(array &$rows): void
+    {
         $ids = [];
-        foreach($rows as &$row){
-            $row['online'] = 0;
-            $ids[] = (int)$row['id'];
+        foreach ($rows as &$row) {
+            $row['online'] = (int)($row['online'] ?? 0);
+            $ids[] = (int)($row['id'] ?? 0);
         }
         unset($row);
 
-        try {
-            if($ids){
-                $charsPdo = $this->characters();
-                $in = implode(',', array_fill(0,count($ids),'?'));
-                $stOnline = $charsPdo->prepare("SELECT DISTINCT account FROM characters WHERE online=1 AND account IN ($in)");
-                $stOnline->execute($ids);
-                $onlineIds = array_column($stOnline->fetchAll(PDO::FETCH_ASSOC),'account');
-                if($onlineIds){
-                    $map = array_flip($onlineIds);
-                    foreach($rows as &$row){ if(isset($map[$row['id']])) $row['online'] = 1; }
-                    unset($row);
-                }
-            }
-        } catch(\Throwable $e){  }
+        $ids = array_values(array_unique(array_filter($ids, static fn (int $id): bool => $id > 0)));
+        if ($ids === [])
+            return;
 
         try {
-            if($ids){
-                $in = implode(',', array_fill(0,count($ids),'?'));
-                $stBan = $this->authPdo->prepare("SELECT id,bandate,unbandate,banreason,active FROM account_banned WHERE active=1 AND id IN ($in)");
-                $stBan->execute($ids);
-                $banRows = $stBan->fetchAll(PDO::FETCH_ASSOC);
-                if($banRows){
-                    $now = time();
-                    $banMap = [];
-                    foreach($banRows as $ban){
-                        $permanent = ((int)$ban['unbandate']) === 0;
-                        $remaining = $permanent ? -1 : max(0, ((int)$ban['unbandate']) - $now);
-                        $banMap[$ban['id']] = [
-                            'bandate'=>(int)$ban['bandate'],
-                            'unbandate'=>(int)$ban['unbandate'],
-                            'banreason'=>$ban['banreason'],
-                            'permanent'=>$permanent,
-                            'remaining_seconds'=>$remaining,
-                        ];
-                    }
-                    foreach($rows as &$row){ if(isset($banMap[$row['id']])) $row['ban'] = $banMap[$row['id']]; }
-                    unset($row);
-                }
-            }
-        } catch(\Throwable $e){  }
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $stOnline = $this->characters()->prepare("SELECT DISTINCT account FROM characters WHERE online=1 AND account IN ($in)");
+            $stOnline->execute($ids);
+            $onlineIds = array_map('intval', $stOnline->fetchAll(PDO::FETCH_COLUMN, 0) ?: []);
+            if ($onlineIds === [])
+                return;
 
-        return $rows;
+            $map = array_flip($onlineIds);
+            foreach ($rows as &$row) {
+                $row['online'] = isset($map[(int)($row['id'] ?? 0)]) ? 1 : 0;
+            }
+            unset($row);
+        } catch (\Throwable $e) {
+        }
+    }
+
+    private function hydrateBanStatuses(array &$rows): void
+    {
+        $targetIds = [];
+        foreach ($rows as $row) {
+            $accountId = (int)($row['id'] ?? 0);
+            if ($accountId > 0)
+                $targetIds[] = $accountId;
+        }
+
+        $targetIds = array_values(array_unique($targetIds));
+        if ($targetIds === [])
+            return;
+
+        $banMap = [];
+        $missingIds = [];
+        foreach ($targetIds as $accountId) {
+            if (array_key_exists($accountId, $this->requestBanStatusCache)) {
+                if ($this->requestBanStatusCache[$accountId] !== null)
+                    $banMap[$accountId] = $this->requestBanStatusCache[$accountId];
+                continue;
+            }
+
+            $cacheKey = $this->banCacheKey($accountId);
+            $cached = TransientCache::get('account_bans', $cacheKey);
+            if ($cached !== null && is_array($cached)) {
+                $this->requestBanStatusCache[$accountId] = $cached;
+                $banMap[$accountId] = $cached;
+                continue;
+            }
+
+            $this->requestBanStatusCache[$accountId] = null;
+            $missingIds[] = $accountId;
+        }
+
+        if ($missingIds !== []) {
+            try {
+                $in = implode(',', array_fill(0, count($missingIds), '?'));
+                $stBan = $this->authPdo->prepare("SELECT id,bandate,unbandate,banreason FROM account_banned WHERE active=1 AND id IN ($in) ORDER BY bandate DESC");
+                $stBan->execute($missingIds);
+                foreach ($stBan->fetchAll(PDO::FETCH_ASSOC) ?: [] as $banRow) {
+                    $accountId = (int)($banRow['id'] ?? 0);
+                    if ($accountId <= 0 || isset($banMap[$accountId]))
+                        continue;
+
+                    $normalized = $this->normalizeBanRow($banRow);
+                    $banMap[$accountId] = $normalized;
+                    $this->requestBanStatusCache[$accountId] = $normalized;
+                    TransientCache::set('account_bans', $this->banCacheKey($accountId), $normalized, 15);
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $accountId = (int)($row['id'] ?? 0);
+            if (isset($banMap[$accountId]))
+                $row['ban'] = $banMap[$accountId];
+        }
+        unset($row);
+    }
+
+    private function normalizeBanRow(array $row): array
+    {
+        $now = time();
+        $unbandate = (int)($row['unbandate'] ?? 0);
+        $permanent = ($unbandate === 0) || ($unbandate <= $now);
+
+        return [
+            'bandate' => (int)($row['bandate'] ?? 0),
+            'unbandate' => $unbandate,
+            'banreason' => (string)($row['banreason'] ?? ''),
+            'permanent' => $permanent,
+            'remaining_seconds' => $permanent ? -1 : max(0, $unbandate - $now),
+        ];
     }
 
     private function fetchAccountColumns(): void

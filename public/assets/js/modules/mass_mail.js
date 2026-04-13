@@ -66,11 +66,6 @@
 
   function toast(msg){ console.log('[mass]',msg); }
 
-  const BOOST_CONFIG = {
-    goldCopper: 500 * 10000,
-    extra: [{ id: 21841, count: 3 }, { id: 23720, count: 1 }]
-  };
-
   const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   async function post(path,data){
     const fd=new FormData(); if(data){ Object.entries(data).forEach(([k,v])=> fd.append(k,v)); }
@@ -320,8 +315,8 @@
       `<ul class="summary">${lines.map(line=>`<li>${line}</li>`).join('')}</ul>`+
       `<p class="muted small">${footer}</p>`;
   }
-  function openConfirm(summaryHtml){ const modal=qs('#mmConfirmModal'); if(!modal) return; modal.style.removeProperty('display'); modal.classList.add('active'); qs('#mmConfirmBody',modal).innerHTML=summaryHtml; const input=qs('#mmConfirmInput',modal); const ok=qs('#mmConfirmOk',modal); input.value=''; ok.disabled=true; const closeEls=qsa('[data-close]',modal); closeEls.forEach(el=> el.addEventListener('click',closeConfirm)); input.addEventListener('input',()=>{ ok.disabled = input.value.trim().toUpperCase()!=='CONFIRM'; }); ok.addEventListener('click',onConfirmOk,{once:true}); input.focus(); }
-  function closeConfirm(){ const modal=qs('#mmConfirmModal'); if(!modal) return; modal.classList.remove('active'); modal.style.removeProperty('display'); const ok=qs('#mmConfirmOk',modal); ok.replaceWith(ok.cloneNode(true)); const input=qs('#mmConfirmInput',modal); if(input){ const newInput=input.cloneNode(true); input.replaceWith(newInput); }
+  function openConfirm(summaryHtml){ const modal=qs('#mmConfirmModal'); if(!modal) return; modal.classList.add('active'); document.body.classList.add('modal-open'); qs('#mmConfirmBody',modal).innerHTML=summaryHtml; const input=qs('#mmConfirmInput',modal); const ok=qs('#mmConfirmOk',modal); input.value=''; ok.disabled=true; const closeEls=qsa('[data-close]',modal); closeEls.forEach(el=> el.addEventListener('click',closeConfirm)); input.addEventListener('input',()=>{ ok.disabled = input.value.trim().toUpperCase()!=='CONFIRM'; }); ok.addEventListener('click',onConfirmOk,{once:true}); input.focus(); }
+  function closeConfirm(){ const modal=qs('#mmConfirmModal'); if(!modal) return; modal.classList.remove('active'); if(!document.querySelector('.modal-backdrop.active')) document.body.classList.remove('modal-open'); const ok=qs('#mmConfirmOk',modal); ok.replaceWith(ok.cloneNode(true)); const input=qs('#mmConfirmInput',modal); if(input){ const newInput=input.cloneNode(true); input.replaceWith(newInput); }
     qsa('[data-close]',modal).forEach(btn=> btn.replaceWith(btn.cloneNode(true))); pendingSendData=null; }
   async function onConfirmOk(){ if(confirming) return; confirming=true; const data=pendingSendData; pendingSendData=null; closeConfirm(); if(data){ await actuallySend(data); } confirming=false; }
   async function actuallySend(data){
@@ -401,34 +396,50 @@
 
   function bindLogs(){ qs('#btnLogsRefresh')?.addEventListener('click',()=> refreshLogs()); qs('#logLimit')?.addEventListener('change',()=> refreshLogs()); }
 
-  function updateBoostSummary(){
-    const summary=qs('#boostSummary'); if(!summary) return;
-    const bagCount=BOOST_CONFIG.extra.find(it=>it.id===21841)?.count||3;
-    const mountCount=BOOST_CONFIG.extra.find(it=>it.id===23720)?.count||1;
-    summary.value=[
-      translate('boost.summary.gold','500 gold (:copper copper)',{ copper: formatNumber(BOOST_CONFIG.goldCopper) }),
-      translate('boost.summary.bag','Netherweave Bag ×:count (#21841)',{ count: bagCount }),
-      translate('boost.summary.mount','Sea Turtle ×:count (#23720)',{ count: mountCount }),
-      translate('boost.summary.set','Class-specific Tier 2 set (auto-detected)')
-    ].join('\n');
-  }
-
   function bindBoost(){
     const form=qs('#massBoostForm'); if(!form) return;
-    updateBoostSummary();
+
+    const tpl = qs('#boostTemplate', form);
+    const level = qs('#boostTargetLevel', form);
+    const applyTemplate = () => {
+      if(!tpl || !level) return;
+      const templateId = parseInt(tpl.value || '0', 10) || 0;
+      if(templateId > 0){
+        const opt = tpl.selectedOptions && tpl.selectedOptions[0];
+        const t = opt ? (parseInt(opt.getAttribute('data-target-level') || '0', 10) || 0) : 0;
+        level.value = t ? String(t) : '';
+        level.setAttribute('disabled','disabled');
+        level.hidden = true;
+      } else {
+        level.removeAttribute('disabled');
+        level.hidden = false;
+      }
+    };
+    if(tpl){
+      tpl.addEventListener('change', applyTemplate);
+      applyTemplate();
+    }
+
     form.addEventListener('submit', async e=>{
       e.preventDefault();
-      const name=form.character?.value?.trim();
-      const levelRaw=form.level?.value || '';
+      const name=form.character_name?.value?.trim();
+      const templateId = parseInt(form.template_id?.value || '0', 10) || 0;
+      const levelRaw=form.target_level?.value || '';
+      const targetLevel=parseInt(levelRaw,10) || 0;
       if(!name){ alert(translate('boost.validation.name','Please enter a character name')); return; }
-      const level=parseInt(levelRaw,10);
-      if(!level || ![60,70,80].includes(level)){ alert(translate('boost.validation.level','Please choose a target level')); return; }
+      if(templateId <= 0 && (!targetLevel || targetLevel < 1 || targetLevel > 255)){
+        alert(translate('boost.validation.level','Please choose a target level'));
+        return;
+      }
       disableBtn('#btnBoostExecute',true,translate('boost.status.executing','Executing…'));
       try{
-        const payload={ character:name, level:String(level) };
+        const payload={ character_name:name, template_id: templateId ? String(templateId) : '', target_level: templateId ? '' : String(targetLevel) };
         const res=await post('/api/boost',payload);
         alert(res.message || translate('feedback.done','Done'));
-        if(res.success){ form.reset(); updateBoostSummary(); }
+        if(res.success){
+          form.reset();
+          applyTemplate();
+        }
       }catch(err){ alert(translate('errors.request_failed_retry','Request failed, please try again later')); }
       disableBtn('#btnBoostExecute',false);
     });

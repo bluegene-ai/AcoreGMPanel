@@ -21,6 +21,16 @@ class SoapWizardController extends Controller
     private SoapWizardService $service;
     private SoapExecutor $executor;
 
+    private function requireCatalogCapability(): void
+    {
+        $this->requireCapability('soap.catalog');
+    }
+
+    private function requireExecuteCapability(): void
+    {
+        $this->requireCapability('soap.execute');
+    }
+
     public function __construct()
     {
         $this->service = new SoapWizardService();
@@ -29,36 +39,28 @@ class SoapWizardController extends Controller
 
     public function index(Request $request): Response
     {
-        if (!Auth::check()) {
-            return $this->redirect('/account/login');
-        }
+        $this->requireCatalogCapability();
 
-        $requestedServer = $request->input('server', null);
-        if ($requestedServer !== null) {
-            $sid = (int)$requestedServer;
-            if ($sid !== ServerContext::currentId() && ServerList::valid($sid)) {
-                ServerContext::set($sid);
-            }
-        }
+        $this->switchServerContext($request);
 
         $catalog = [
             'metadata' => $this->service->metadata(),
             'categories' => $this->service->categories(),
         ];
 
-        return $this->view('soap.index', [
-            'title' => Lang::get('app.soap.page_title'),
+        return $this->pageView('soap.index', $this->serverViewData([
             'catalog' => $catalog,
-            'current_server' => ServerContext::currentId(),
-            'servers' => ServerList::options(),
+        ]), [
+            'capabilities' => [
+                'catalog' => 'soap.catalog',
+                'execute' => 'soap.execute',
+            ],
         ]);
     }
 
     public function apiExecute(Request $request): Response
     {
-        if (!Auth::check()) {
-            return $this->json(['success' => false, 'message' => Lang::get('app.soap.api.errors.unauthorized')], 401);
-        }
+        $this->requireExecuteCapability();
 
         $commandKey = (string)$request->input('command_key', '');
         $rawArguments = $request->input('arguments', []);
@@ -81,10 +83,7 @@ class SoapWizardController extends Controller
             ], 422);
         }
 
-        $serverId = (int)$request->input('server_id', ServerContext::currentId());
-        if (ServerList::valid($serverId) && $serverId !== ServerContext::currentId()) {
-            ServerContext::set($serverId);
-        }
+        $serverId = $this->switchServerContext($request, null, 'server_id');
 
         $result = $this->executor->execute($build['command'], [
             'server_id' => $serverId,

@@ -684,7 +684,7 @@ class ItemOwnershipRepository extends MultiServerRepository
                 'action' => $action,
                 'server' => $this->serverId,
                 'admin' => $_SESSION['panel_user'] ?? ($_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown')),
-                'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
+                'ip' => \Acme\Panel\Support\ClientIp::resolve($_SERVER),
                 'time_iso' => date('c'),
             ];
             if ($summary !== null) {

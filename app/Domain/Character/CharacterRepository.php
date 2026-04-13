@@ -9,6 +9,7 @@ namespace Acme\Panel\Domain\Character;
 use PDO;
 use Acme\Panel\Domain\Support\MultiServerRepository;
 use Acme\Panel\Support\Paginator;
+use Acme\Panel\Support\TransientCache;
 
 class CharacterRepository extends MultiServerRepository
 {
@@ -53,21 +54,21 @@ class CharacterRepository extends MultiServerRepository
             $wheres[] = $online === 'online' ? 'c.online = 1' : 'c.online = 0';
         }
 
+        $accountTempTable = null;
         if($accountName !== ''){
-            $auth = $this->auth();
-            $st = $auth->prepare('SELECT id FROM account WHERE username LIKE :u LIMIT 200');
-            $st->execute([':u'=>'%'.$accountName.'%']);
-            $ids = $st->fetchAll(PDO::FETCH_COLUMN,0);
-            $ids = array_values(array_unique(array_map('intval',$ids)));
+            $ids = $this->loadAccountIdsByUsername($accountName);
             if(!$ids){
                 return new Paginator([],0,$page,$perPage);
             }
-            $ph = [];
-            foreach($ids as $idx=>$id){ $k=':acc'.$idx; $ph[]=$k; $params[$k]=$id; }
-            $wheres[] = 'c.account IN ('.implode(',',$ph).')';
+
+            $accountTempTable = $this->prepareAccountFilterTempTable($ids);
+            $wheres[] = 'account_filter.account_id IS NOT NULL';
         }
 
         $whereSql = $wheres ? 'WHERE '.implode(' AND ',$wheres) : '';
+        $accountJoinSql = $accountTempTable !== null
+            ? 'LEFT JOIN ' . $accountTempTable . ' account_filter ON account_filter.account_id = c.account'
+            : '';
 
         $sortMap = [
             'guid_desc' => 'c.guid DESC',
@@ -81,7 +82,7 @@ class CharacterRepository extends MultiServerRepository
         ];
         $orderBy = $sortMap[$sort] ?? $sortMap['guid_desc'];
 
-        $cnt = $pdo->prepare("SELECT COUNT(*) FROM characters c $whereSql");
+        $cnt = $pdo->prepare("SELECT COUNT(*) FROM characters c $accountJoinSql $whereSql");
         foreach($params as $k=>$v){ $cnt->bindValue($k,$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
         $cnt->execute();
         $total = (int)$cnt->fetchColumn();
@@ -89,6 +90,7 @@ class CharacterRepository extends MultiServerRepository
         $offset = ($page-1)*$perPage;
         $sql = "SELECT c.guid,c.name,c.account,c.level,c.class,c.race,c.gender,c.map,c.zone,c.online,c.logout_time
                  FROM characters c
+                 $accountJoinSql
                  $whereSql
                  ORDER BY $orderBy
                  LIMIT :limit OFFSET :offset";
@@ -123,29 +125,42 @@ class CharacterRepository extends MultiServerRepository
 
     public function findSummary(int $guid): ?array
     {
-        $pdo = $this->characters();
-        $st = $pdo->prepare('SELECT guid,name,account,race,class,gender,level,money,xp,position_x,position_y,position_z,map,zone,online,totaltime,logout_time,at_login,stable_slots FROM characters WHERE guid=:g LIMIT 1');
-        $st->execute([':g'=>$guid]);
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-        if(!$row){
+        if($guid <= 0)
+            return null;
+
+        return $this->loadSummaryBy('guid', $guid);
+    }
+
+    public function findSummaryByName(string $name): ?array
+    {
+        $name = trim($name);
+        if ($name == '') {
             return null;
         }
-        $row['online'] = (int)$row['online'];
-        $row['money'] = (int)$row['money'];
-        $row['level'] = (int)$row['level'];
-        $row['account'] = (int)$row['account'];
 
-        $row['homebind'] = $this->homebind($guid);
+        return $this->loadSummaryBy('name', $name);
+    }
 
-        $account = $this->fetchAccounts([$row['account']]);
-        if(isset($account[$row['account']])){
-            $row['account_username'] = $account[$row['account']]['username'];
-            $row['gmlevel'] = $account[$row['account']]['gmlevel'];
+    public function accountHighestLevel(int $accountId): ?int
+    {
+        $accountId = (int) $accountId;
+        if ($accountId <= 0) {
+            return null;
         }
 
-        $row['ban'] = $this->banStatus($guid);
+        $cacheKey = 'server_' . $this->serverId . '_account_' . $accountId . '_highest_level';
+        $max = TransientCache::remember('character_accounts', $cacheKey, 30, function () use ($accountId) {
+            $pdo = $this->characters();
+            $st = $pdo->prepare('SELECT MAX(level) AS max_level FROM characters WHERE account=:a');
+            $st->execute([':a' => $accountId]);
+            return $st->fetchColumn();
+        });
 
-        return $row;
+        if ($max === false || $max === null) {
+            return null;
+        }
+
+        return (int) $max;
     }
 
     public function inventory(int $guid): array
@@ -340,11 +355,21 @@ class CharacterRepository extends MultiServerRepository
 
     public function mailCount(int $guid): int
     {
-        $pdo = $this->characters();
+        $guid = (int) $guid;
+        if ($guid <= 0)
+            return 0;
+
+        $cacheKey = 'server_' . $this->serverId . '_guid_' . $guid . '_mail_count';
+
         try {
-            $st = $pdo->prepare('SELECT COUNT(*) FROM mail WHERE receiver=:g');
-            $st->execute([':g'=>$guid]);
-            return (int)$st->fetchColumn();
+            $count = TransientCache::remember('character_summary', $cacheKey, 15, function () use ($guid) {
+                $pdo = $this->characters();
+                $st = $pdo->prepare('SELECT COUNT(*) FROM mail WHERE receiver=:g');
+                $st->execute([':g'=>$guid]);
+                return (int)$st->fetchColumn();
+            });
+
+            return is_numeric($count) ? (int) $count : 0;
         } catch(\Throwable $e){
             return 0;
         }
@@ -424,7 +449,15 @@ class CharacterRepository extends MultiServerRepository
         if(!$hb){
             return false;
         }
-        return $this->teleport($guid,(int)$hb['mapId'],(int)$hb['zoneId'],(float)$hb['posX'],(float)$hb['posY'],(float)$hb['posZ']);
+
+        return $this->teleport(
+            $guid,
+            (int)$hb['mapId'],
+            (int)$hb['zoneId'],
+            (float)$hb['posX'],
+            (float)$hb['posY'],
+            (float)$hb['posZ']
+        );
     }
 
     public function resetTalents(int $guid): bool
@@ -692,22 +725,151 @@ class CharacterRepository extends MultiServerRepository
         return $row ?: null;
     }
 
+    private function loadSummaryBy(string $field, int|string $value): ?array
+    {
+        $allowedFields = ['guid', 'name'];
+        if (!in_array($field, $allowedFields, true))
+            return null;
+
+        $pdo = $this->characters();
+        $sql = 'SELECT guid,name,account,race,class,gender,level,money,xp,position_x,position_y,position_z,map,zone,online,totaltime,logout_time,at_login,stable_slots FROM characters WHERE ' . $field . ' = :value LIMIT 1';
+        $st = $pdo->prepare($sql);
+        $st->bindValue(':value', $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        $st->execute();
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row)
+            return null;
+
+        return $this->hydrateSummaryRow($row);
+    }
+
+    private function hydrateSummaryRow(array $row): array
+    {
+        $row['guid'] = (int)($row['guid'] ?? 0);
+        $row['online'] = (int)($row['online'] ?? 0);
+        $row['money'] = (int)($row['money'] ?? 0);
+        $row['level'] = (int)($row['level'] ?? 0);
+        $row['account'] = (int)($row['account'] ?? 0);
+        $row['homebind'] = $this->homebind((int)$row['guid']);
+
+        $accounts = $this->fetchAccounts([$row['account']]);
+        if(isset($accounts[$row['account']])){
+            $row['account_username'] = $accounts[$row['account']]['username'];
+            $row['gmlevel'] = $accounts[$row['account']]['gmlevel'];
+        }
+
+        $rows = [$row];
+        $this->attachBans($rows);
+        return $rows[0];
+    }
+
+    private function loadAccountIdsByUsername(string $accountName): array
+    {
+        $needle = trim($accountName);
+        if ($needle === '')
+            return [];
+
+        $cacheKey = 'server_' . $this->serverId . '_account_name_' . sha1(mb_strtolower($needle, 'UTF-8'));
+
+        $ids = TransientCache::remember('character_search', $cacheKey, 30, function () use ($needle): array {
+            $auth = $this->auth();
+            $st = $auth->prepare('SELECT id FROM account WHERE username LIKE :u LIMIT 200');
+            $st->execute([':u'=>'%'.$needle.'%']);
+            $rows = $st->fetchAll(PDO::FETCH_COLUMN, 0);
+
+            return array_values(array_unique(array_filter(array_map('intval', $rows), static fn (int $id): bool => $id > 0)));
+        });
+            $guid = (int) $guid;
+            if ($guid <= 0)
+                return 0;
+
+            $cacheKey = 'server_' . $this->serverId . '_guid_' . $guid . '_mail_count';
+
+            try {
+                $count = TransientCache::remember('character_summary', $cacheKey, 15, function () use ($guid) {
+                    $pdo = $this->characters();
+                    $st = $pdo->prepare('SELECT COUNT(*) FROM mail WHERE receiver=:g');
+                    $st->execute([':g' => $guid]);
+                    return (int) $st->fetchColumn();
+                });
+
+                return is_numeric($count) ? (int) $count : 0;
+            } catch(\Throwable $e){
+                return 0;
+            }
+        $pdo->exec('CREATE TEMPORARY TABLE ' . $table . ' (account_id INT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=MEMORY');
+
+        foreach (array_chunk($accountIds, 500) as $batch)
+            $this->insertAccountFilterBatch($pdo, $table, $batch);
+
+        return $table;
+    }
+
+    private function insertAccountFilterBatch(PDO $pdo, string $table, array $accountIds): void
+    {
+        $accountIds = array_values(array_unique(array_filter(array_map('intval', $accountIds), static fn (int $id): bool => $id > 0)));
+        if ($accountIds === [])
+            return;
+
+        $values = [];
+        foreach ($accountIds as $accountId)
+            $values[] = '(' . $accountId . ')';
+
+        $pdo->exec('INSERT IGNORE INTO ' . $table . ' (account_id) VALUES ' . implode(',', $values));
+    }
+
     private function fetchAccounts(array $ids): array
     {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
         if(!$ids){
             return [];
         }
+
+        $map = [];
+        $missing = [];
+        foreach($ids as $id){
+            $cached = TransientCache::get('character_accounts', 'account_' . $id);
+            if(is_array($cached) && array_key_exists('found', $cached)){
+                if(($cached['found'] ?? false) === true){
+                    $map[$id] = [
+                        'username' => (string)($cached['username'] ?? ''),
+                        'gmlevel' => $cached['gmlevel'] ?? null,
+                    ];
+                }
+                continue;
+            }
+            $missing[] = $id;
+        }
+
+        if(!$missing)
+            return $map;
+
         $auth = $this->auth();
         $ph = [];
         $params = [];
-        foreach(array_values(array_unique($ids)) as $idx=>$id){ $k=':a'.$idx; $ph[]=$k; $params[$k]=(int)$id; }
+        foreach($missing as $idx=>$id){ $k=':a'.$idx; $ph[]=$k; $params[$k]=(int)$id; }
         $sql = 'SELECT a.id,a.username,aa.gmlevel FROM account a LEFT JOIN account_access aa ON aa.id=a.id WHERE a.id IN ('.implode(',',$ph).')';
         $st = $auth->prepare($sql);
         foreach($params as $k=>$v){ $st->bindValue($k,$v,PDO::PARAM_INT); }
         $st->execute();
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-        $map = [];
-        foreach($rows as $r){ $map[(int)$r['id']] = ['username'=>$r['username'],'gmlevel'=>$r['gmlevel'] ?? null]; }
+        $freshMap = [];
+        foreach($rows as $r){
+            $accountId = (int)$r['id'];
+            $freshMap[$accountId] = ['username'=>$r['username'],'gmlevel'=>$r['gmlevel'] ?? null];
+        }
+
+        foreach($missing as $id){
+            $payload = isset($freshMap[$id])
+                ? ['found' => true, 'username' => $freshMap[$id]['username'], 'gmlevel' => $freshMap[$id]['gmlevel']]
+                : ['found' => false];
+            TransientCache::set('character_accounts', 'account_' . $id, $payload, 60);
+        }
+
+        foreach($freshMap as $id => $account){
+            $map[$id] = $account;
+        }
+
         return $map;
     }
 

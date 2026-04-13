@@ -401,14 +401,14 @@
     if(input){ input.value = currentItem ? currentItem.entry : ''; input.focus(); input.select(); }
     Feedback.clear('#itemOwnerReplaceFeedback');
     modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
   }
 
   function closeReplaceModal(){
     const modal = qs('#itemOwnerReplaceModal');
     if(!modal) return;
     modal.classList.remove('active');
-    document.body.style.overflow = '';
+    if(!document.querySelector('.modal-backdrop.active')) document.body.classList.remove('modal-open');
   }
 
   async function runBulkReplace(){

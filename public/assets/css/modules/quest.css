@@ -1,0 +1,174 @@
+.quest-filter-form__field-id {
+    width: 120px;
+    max-width: 100%;
+}
+
+.quest-filter-form__field-title {
+    width: 200px;
+    max-width: 100%;
+}
+
+.quest-filter-form__field-min-level,
+.quest-filter-form__field-level {
+    width: 110px;
+    max-width: 100%;
+}
+
+.quest-filter-form__field-type {
+    min-width: 180px;
+}
+
+.quest-filter-form__field-limit {
+    width: 80px;
+    max-width: 100%;
+}
+
+.quest-table__col-id {
+    width: 80px;
+}
+
+.quest-table__col-min-level,
+.quest-table__col-level {
+    width: 110px;
+}
+
+.quest-table__col-type {
+    width: 140px;
+}
+
+.quest-table__col-reward-xp {
+    width: 120px;
+}
+
+.quest-table__col-reward-money,
+.quest-table__col-actions {
+    width: 140px;
+}
+
+.quest-table__col-reward-items {
+    width: 260px;
+}
+
+.quest-table__empty {
+    text-align: center;
+}
+
+.quest-reward-section-label {
+    margin-bottom: 2px;
+}
+
+.quest-reward-section-label--spaced {
+    margin-top: 4px;
+}
+
+.quest-reward-row {
+    align-items: center;
+}
+
+.quest-modal-field--spaced {
+    margin-top: 8px;
+}
+
+.quest-modal-hint {
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+.quest-modal-footer {
+    text-align: right;
+    margin-top: 12px;
+}
+
+.quest-modal-footer--compact {
+    margin-top: 8px;
+}
+
+.quest-log-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.quest-log-type-label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #9bb0c0;
+}
+
+.quest-log-type-caption {
+    margin-bottom: 4px;
+    color: #c8d6e5;
+    font-size: 13px;
+}
+
+.quest-log-type-select {
+    min-width: 150px;
+}
+
+.quest-log-box {
+    max-height: 400px;
+    overflow: auto;
+    background: #111;
+    color: #9f9;
+    padding: 8px;
+}
+
+.quest-title-meta {
+    font-size: 12px;
+    color: #6f7a84;
+    margin-left: 6px;
+}
+
+.quest-diff-preview {
+    max-height: 220px;
+    overflow: auto;
+}
+
+.quest-exec-status {
+    display: none;
+}
+
+.quest-exec-status--visible {
+    display: block;
+}
+
+.quest-exec-status--faded {
+    opacity: 0.75;
+}
+
+.quest-mini-diff-card {
+    display: flex;
+    flex-direction: column;
+    max-height: 360px;
+}
+
+.quest-mini-diff-scroll {
+    overflow: auto;
+}
+
+.quest-mini-diff-table {
+    display: none;
+}
+
+.quest-mini-diff-table--visible {
+    display: table;
+}
+
+.quest-mini-diff-col-field {
+    width: 120px;
+}
+
+@media (max-width: 960px) {
+    .quest-filter-form__field-id,
+    .quest-filter-form__field-title,
+    .quest-filter-form__field-min-level,
+    .quest-filter-form__field-level,
+    .quest-filter-form__field-type,
+    .quest-filter-form__field-limit {
+        width: 100%;
+        min-width: 0;
+    }
+}

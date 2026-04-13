@@ -20,6 +20,11 @@ class SmartAiWizardController extends Controller
 {
     private SmartAiWizardService $service;
 
+    private function requirePreviewCapability(): void
+    {
+        $this->requireCapability('content.preview');
+    }
+
     public function __construct()
     {
         $this->service = new SmartAiWizardService();
@@ -27,37 +32,20 @@ class SmartAiWizardController extends Controller
 
     public function index(Request $request): Response
     {
-        if (!Auth::check()) {
-            $login = Url::to('/account/login');
-            return $this->redirect($login);
-        }
+        $this->requirePreviewCapability();
 
-        $requestedServer = $request->input('server', null);
-        if ($requestedServer !== null) {
-            $sid = (int)$requestedServer;
-            if ($sid !== ServerContext::currentId() && ServerList::valid($sid)) {
-                ServerContext::set($sid);
-            }
-        }
+        $this->switchServerContext($request);
 
         $catalog = $this->service->catalog();
 
-        return $this->view('smartai.index', [
-            'title' => Lang::get('app.smartai.page_title'),
+        return $this->pageView('smartai.index', $this->serverViewData([
             'catalog' => $catalog,
-            'current_server' => ServerContext::currentId(),
-            'servers' => ServerList::options(),
-        ]);
+        ]));
     }
 
     public function apiPreview(Request $request): Response
     {
-        if (!Auth::check()) {
-            return $this->json([
-                'success' => false,
-                'message' => Lang::get('app.common.api.errors.unauthorized'),
-            ], 401);
-        }
+        $this->requirePreviewCapability();
 
         $payload = $request->input('payload', []);
         if (is_string($payload)) {
