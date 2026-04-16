@@ -14,6 +14,8 @@ return array (
     'account' => 'Accounts',
     'character' => 'Characters',
     'character_boost' => 'Boost',
+    'raf' => 'Recruits',
+    'boss' => 'Boss Activity',
     'item' => 'Items',
     'creature' => 'Creatures',
     'quest' => 'Quests',

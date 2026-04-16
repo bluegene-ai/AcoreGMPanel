@@ -11,6 +11,7 @@ use Acme\Panel\Http\Controllers\AccountController;
 use Acme\Panel\Http\Controllers\Aegis\AegisController;
 use Acme\Panel\Http\Controllers\AuditController;
 use Acme\Panel\Http\Controllers\BagQuery\BagQueryController;
+use Acme\Panel\Http\Controllers\Boss\BossController;
 use Acme\Panel\Http\Controllers\Character\CharacterController;
 use Acme\Panel\Http\Controllers\Creature\CreatureController;
 use Acme\Panel\Http\Controllers\HomeController;
@@ -20,6 +21,7 @@ use Acme\Panel\Http\Controllers\LogsController;
 use Acme\Panel\Http\Controllers\Mail\MailController;
 use Acme\Panel\Http\Controllers\MassMail\MassMailController;
 use Acme\Panel\Http\Controllers\Quest\QuestController;
+use Acme\Panel\Http\Controllers\Raf\RafController;
 use Acme\Panel\Http\Controllers\RealmController;
 use Acme\Panel\Http\Controllers\Setup\SetupController;
 use Acme\Panel\Http\Controllers\SmartAi\SmartAiWizardController;
@@ -57,11 +59,13 @@ return static function (Router $router): void {
         $router->get('/aegis/api/events', [AegisController::class, 'apiEvents']);
         $router->get('/aegis/api/player', [AegisController::class, 'apiPlayer']);
         $router->get('/aegis/api/log', [AegisController::class, 'apiLog']);
+        $router->get('/boss', [BossController::class, 'index']);
         $router->get('/account/api/list', [AccountController::class, 'apiList']);
         $router->get('/account/api/ip-accounts', [AccountController::class, 'apiAccountsByIp']);
         $router->get('/account/api/ip-location', [AccountController::class, 'apiIpLocation']);
         $router->get('/account/api/characters', [AccountController::class, 'apiCharacters']);
         $router->get('/account/api/characters-status', [AccountController::class, 'apiCharactersStatus']);
+        $router->get('/raf', [RafController::class, 'index']);
 
         $router->get('/character', [CharacterController::class, 'index']);
         $router->get('/character/view', [CharacterController::class, 'show']);
@@ -72,6 +76,7 @@ return static function (Router $router): void {
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/account/api/create', [AccountController::class, 'apiCreate']);
             $router->post('/aegis/api/action', [AegisController::class, 'apiAction']);
+            $router->post('/boss/api/action', [BossController::class, 'apiAction']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
             $router->post('/soap/api/execute', [SoapWizardController::class, 'apiExecute']);
             $router->post('/smart-ai/api/preview', [SmartAiWizardController::class, 'apiPreview']);
@@ -107,6 +112,10 @@ return static function (Router $router): void {
 
             $router->post('/character-boost/api/templates/save', [CharacterBoostTemplateAdminController::class, 'apiSave']);
             $router->post('/character-boost/api/templates/delete', [CharacterBoostTemplateAdminController::class, 'apiDelete']);
+
+            $router->post('/raf/api/bind', [RafController::class, 'apiBind']);
+            $router->post('/raf/api/unbind', [RafController::class, 'apiUnbind']);
+            $router->post('/raf/api/comment', [RafController::class, 'apiComment']);
         });
 
         $router->get('/character-boost/templates', [CharacterBoostTemplateAdminController::class, 'index']);

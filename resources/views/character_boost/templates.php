@@ -66,7 +66,7 @@ include dirname(__DIR__) . '/components/page_header.php';
             <td><?= ((int)($tpl['require_account_level_match'] ?? 0) === 1) ? 'Y' : 'N' ?></td>
             <td class="flex cb-action-group">
               <a class="btn" href="<?= url('/character-boost/templates/edit?id='.(int)($tpl['id'] ?? 0)) ?>"><?= htmlspecialchars(__('app.character_boost.templates.actions.edit')) ?></a>
-              <button class="btn btn-danger js-boost-tpl-delete" type="button" data-id="<?= (int)($tpl['id'] ?? 0) ?>"><?= htmlspecialchars(__('app.character_boost.templates.actions.delete')) ?></button>
+              <button class="btn danger js-boost-tpl-delete" type="button" data-id="<?= (int)($tpl['id'] ?? 0) ?>"><?= htmlspecialchars(__('app.character_boost.templates.actions.delete')) ?></button>
             </td>
           </tr>
         <?php endforeach; ?>

@@ -15,6 +15,7 @@ final class ModuleAssets
         'account.' => 'account',
         'aegis.' => 'aegis',
         'bag_query.' => 'bag_query',
+        'boss.' => 'boss',
         'character.' => 'character',
         'creature.' => 'creature',
         'item.' => 'item',
@@ -23,6 +24,7 @@ final class ModuleAssets
         'mail.' => 'mail',
         'mass_mail.' => 'mass_mail',
         'quest.' => 'quest',
+        'raf.' => 'raf',
         'smartai.' => 'smart_ai_wizard',
         'soap.' => 'soap_wizard',
     ];
@@ -59,6 +61,18 @@ final class ModuleAssets
             'label' => 'app.nav.character_boost',
             'activePrefixes' => ['/character-boost'],
             'capability' => 'boost.templates',
+        ],
+        [
+            'path' => '/raf',
+            'label' => 'app.nav.raf',
+            'activePrefixes' => ['/raf'],
+            'capability' => 'raf.list',
+        ],
+        [
+            'path' => '/boss',
+            'label' => 'app.nav.boss',
+            'activePrefixes' => ['/boss'],
+            'capability' => 'boss.dashboard',
         ],
         [
             'path' => '/item',
@@ -130,6 +144,7 @@ final class ModuleAssets
         'account' => ['account'],
         'aegis' => ['aegis'],
         'bag_query' => ['bag_query'],
+        'boss' => ['boss'],
         'character' => ['character', 'bag_query'],
         'character_boost' => ['character_boost'],
         'creature' => ['editor_common', 'creature'],
@@ -139,6 +154,7 @@ final class ModuleAssets
         'mail' => ['mail'],
         'mass_mail' => ['mass_mail'],
         'quest' => ['quest'],
+        'raf' => ['raf'],
         'smartai' => ['smartai'],
         'soap' => ['soap'],
     ];
@@ -147,6 +163,7 @@ final class ModuleAssets
         'account' => ['account'],
         'aegis' => ['aegis'],
         'bag_query' => ['bag_query'],
+        'boss' => ['boss'],
         'character' => ['character', 'bag_query'],
         'character_boost' => ['character_boost'],
         'creature' => ['creature'],
@@ -156,6 +173,7 @@ final class ModuleAssets
         'mail' => ['mail'],
         'mass_mail' => ['mass_mail'],
         'quest' => ['quest'],
+        'raf' => ['raf'],
         'smartai' => ['smartai'],
         'soap' => ['soap'],
     ];
@@ -166,6 +184,7 @@ final class ModuleAssets
         'auth',
         'alerts',
         'bag_query',
+        'boss',
         'character',
         'character_boost',
         'creature',
@@ -176,6 +195,7 @@ final class ModuleAssets
         'mail',
         'mass_mail',
         'quest',
+        'raf',
         'realm',
         'smartai',
         'soap',
@@ -185,6 +205,7 @@ final class ModuleAssets
     private const SPLIT_JS_MODULES = [
         'aegis',
         'bag_query',
+        'boss',
         'character_boost',
         'creature',
         'item',
@@ -194,6 +215,7 @@ final class ModuleAssets
         'mail',
         'mass_mail',
         'quest',
+        'raf',
         'smartai',
         'soap',
     ];

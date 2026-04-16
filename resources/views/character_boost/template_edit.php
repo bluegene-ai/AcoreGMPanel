@@ -106,7 +106,7 @@ $capabilityNotice = $boostTemplateCapabilities['templates'] ?? false
     </div>
 
     <div class="form-row">
-      <button class="btn btn-primary" type="submit"><?= htmlspecialchars(__('app.character_boost.templates.actions.save')) ?></button>
+      <button class="btn primary" type="submit"><?= htmlspecialchars(__('app.character_boost.templates.actions.save')) ?></button>
     </div>
   </form>
 </div>

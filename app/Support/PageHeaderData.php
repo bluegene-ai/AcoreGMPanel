@@ -70,7 +70,7 @@ final class PageHeaderData
                     [
                         'label' => Lang::get('app.character_boost.templates.actions.create'),
                         'url' => Url::to('/character-boost/templates/edit'),
-                        'class' => 'btn btn-primary',
+                        'class' => 'btn primary',
                         'capability' => 'boost.templates',
                     ],
                     [

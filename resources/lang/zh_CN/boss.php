@@ -1,0 +1,151 @@
+<?php
+
+return [
+    'page_title' => 'Boss 活动管理',
+    'intro' => '查看 Boss 当前运行态、事件流水与贡献快照，并通过 SOAP 执行生成、模板切换和倍率重基准。',
+    'scope_note' => '当前服务器：:server',
+    'warnings' => [
+        'runtime_unavailable' => 'Boss 运行态表暂不可用，请确认 boss.lua 已创建 ac_eluna 持久化表。',
+        'events_unavailable' => 'Boss 事件表暂不可用。',
+        'contributors_unavailable' => 'Boss 贡献快照表暂不可用。',
+    ],
+    'runtime' => [
+        'title' => '当前运行态',
+        'status' => '状态',
+        'current_boss' => '当前 Boss',
+        'phase' => '阶段',
+        'skill_preset' => '技能预设',
+        'skill_difficulty' => '强度档位',
+        'respawn_at' => '预计重生',
+        'last_spawn_at' => '最近生成',
+        'last_engage_at' => '最近开战',
+        'last_death_at' => '最近死亡',
+        'last_reset_at' => '最近脱战',
+        'no_active_boss' => '当前无活跃 Boss',
+    ],
+    'status' => [
+        'idle' => '空闲',
+        'spawned' => '已生成',
+        'engaged' => '战斗中',
+        'cooldown' => '重生冷却',
+    ],
+    'stats' => [
+        'title' => '近期概览',
+        'events_24h' => '24 小时事件',
+        'kills_7d' => '7 天击杀',
+        'contributors_7d' => '7 天贡献快照',
+        'random_rewarded_7d' => '7 天随机奖励人数',
+    ],
+    'actions' => [
+        'title' => '管理动作',
+        'spawn' => '生成 Boss',
+        'spawn_help' => '在脚本配置的刷新点生成当前模板下的 Boss。',
+        'rebase' => '重基准生命',
+        'rebase_help' => '用当前模板重新刷新活跃 Boss 的基础血量倍率。',
+        'preset_label' => '技能预设',
+        'difficulty_label' => '强度档位',
+        'apply_preset' => '应用预设',
+        'apply_difficulty' => '应用强度',
+    ],
+    'presets' => [
+        'labels' => [
+            'storm_siege' => '风暴攻城',
+            'ember_storm' => '余烬风暴',
+            'frost_whiteout' => '霜雪白茫',
+            'venom_pursuit' => '毒影追猎',
+            'grave_bombard' => '墓雨轰击',
+            'spellbreak_bulwark' => '破法壁垒',
+        ],
+        'summary' => [
+            'storm_siege' => '偏雷电跳跃与震场压制。',
+            'ember_storm' => '偏火焰点名与强走位压力。',
+            'frost_whiteout' => '偏冰冻控场与视野压制。',
+            'venom_pursuit' => '偏追击与持续毒性伤害。',
+            'grave_bombard' => '偏轰炸与场地封锁。',
+            'spellbreak_bulwark' => '偏打断、反法与前排压制。',
+        ],
+    ],
+    'difficulties' => [
+        'labels' => [
+            'easy' => '简单',
+            'standard' => '标准',
+            'hard' => '困难',
+            'raid' => '团本级',
+        ],
+        'summary' => [
+            'easy' => '节奏更慢，适合单测或小队演练。',
+            'standard' => '默认压力档位。',
+            'hard' => '更快的技能覆盖与连招频率。',
+            'raid' => '高压团本节奏。',
+        ],
+    ],
+    'events' => [
+        'title' => '最近事件',
+        'empty' => '暂无事件快照。',
+        'columns' => [
+            'time' => '时间',
+            'type' => '事件类型',
+            'boss' => 'Boss',
+            'actor' => '执行者',
+            'note' => '说明',
+        ],
+        'types' => [
+            'spawn' => '生成',
+            'enter_combat' => '进入战斗',
+            'phase_change' => '阶段变化',
+            'leave_combat' => '脱离战斗',
+            'death' => '死亡',
+            'respawn_scheduled' => '排程重生',
+            'command_spawn' => '命令生成',
+            'command_preset' => '切换预设',
+            'command_difficulty' => '切换强度',
+            'command_rebase' => '重基准',
+        ],
+    ],
+    'contributors' => [
+        'title' => '最近贡献快照',
+        'empty' => '暂无贡献快照。',
+        'columns' => [
+            'time' => '时间',
+            'player' => '玩家',
+            'boss' => 'Boss',
+            'score' => '贡献分',
+            'damage' => '伤害',
+            'healing' => '治疗',
+            'rewards' => '奖励标记',
+        ],
+        'badges' => [
+            'guaranteed_reward' => '保底奖励',
+            'random_reward' => '随机奖励',
+            'last_hit' => '最后一击',
+        ],
+    ],
+    'feedback' => [
+        'action_success' => 'Boss 管理动作执行成功。',
+    ],
+    'errors' => [
+        'invalid_action' => '无效的 Boss 管理动作。',
+        'value_required' => '该动作需要一个值。',
+        'invalid_preset' => '无效的技能预设。',
+        'invalid_difficulty' => '无效的强度档位。',
+    ],
+    'js' => [
+        'modules' => [
+            'boss' => [
+                'confirm' => [
+                    'spawn' => '确认在当前服务器生成 Boss 吗？',
+                    'rebase' => '确认对当前活跃 Boss 执行重基准吗？',
+                    'preset' => '确认切换技能预设为 :value 吗？',
+                    'difficulty' => '确认切换强度档位为 :value 吗？',
+                ],
+                'feedback' => [
+                    'success' => '操作成功，即将刷新页面。',
+                    'failure' => '操作失败。',
+                ],
+                'errors' => [
+                    'request_failed' => '请求失败。',
+                ],
+            ],
+        ],
+    ],
+];

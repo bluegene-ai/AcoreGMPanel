@@ -14,6 +14,8 @@ return array (
     'account' => '账号',
     'character' => '角色',
     'character_boost' => '直升',
+    'raf' => '招募管理',
+    'boss' => 'Boss 活动',
     'item' => '物品',
     'creature' => '生物',
     'quest' => '任务',

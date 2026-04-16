@@ -63,7 +63,7 @@ class QuestFieldRenderer
             $html .= '<div class="d-flex align-items-center mb-1 gap-2">';
             $html .= '<input type="text" class="form-control form-control-sm bitmask-value flex-grow-1" value="' . htmlspecialchars((string) $val) . '"' . $commonAttr . ' readonly />';
             $undoTitle = htmlspecialchars(\__('app.quest.edit.fields.bitmask.undo_tooltip'));
-            $html .= '<button type="button" class="btn btn-outline-secondary btn-sm bitmask-undo" title="' . $undoTitle . '" aria-label="' . $undoTitle . '"><span class="small">↺</span></button>';
+            $html .= '<button type="button" class="btn outline neutral btn-sm bitmask-undo" title="' . $undoTitle . '" aria-label="' . $undoTitle . '"><span class="small">↺</span></button>';
             $html .= '</div>';
             $html .= '<div class="bitmask-boxes row row-cols-4 g-1" data-target="' . htmlspecialchars($name) . '"></div>';
             $html .= '</div>';

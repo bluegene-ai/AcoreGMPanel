@@ -63,7 +63,7 @@ include dirname(__DIR__) . '/components/page_header.php';
     </div>
 
     <div class="form-row">
-      <button class="btn btn-primary" type="submit"><?= htmlspecialchars(__('app.character_boost.codes.actions.generate')) ?></button>
+      <button class="btn primary" type="submit"><?= htmlspecialchars(__('app.character_boost.codes.actions.generate')) ?></button>
     </div>
   </form>
 </div>
@@ -119,7 +119,7 @@ include dirname(__DIR__) . '/components/page_header.php';
 
     <div class="form-row cb-action-row">
       <button class="btn" id="boostCodesManageRefresh" type="button"><?= htmlspecialchars(__('app.character_boost.codes.manage.actions.refresh')) ?></button>
-      <button class="btn btn-danger" id="boostCodesManagePurgeUnused" type="button"><?= htmlspecialchars(__('app.character_boost.codes.manage.actions.purge_unused')) ?></button>
+      <button class="btn danger" id="boostCodesManagePurgeUnused" type="button"><?= htmlspecialchars(__('app.character_boost.codes.manage.actions.purge_unused')) ?></button>
     </div>
   </form>
 

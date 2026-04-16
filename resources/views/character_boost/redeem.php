@@ -46,7 +46,7 @@ include dirname(__DIR__) . '/components/page_header.php';
     </div>
 
     <div class="form-row">
-      <button class="btn btn-primary" type="submit"><?= htmlspecialchars(__('app.character_boost.redeem.actions.submit')) ?></button>
+      <button class="btn primary" type="submit"><?= htmlspecialchars(__('app.character_boost.redeem.actions.submit')) ?></button>
     </div>
   </form>
 </div>

@@ -1,0 +1,151 @@
+<?php
+
+return [
+    'page_title' => 'Boss Activity',
+    'intro' => 'Review current boss runtime state, recent events, and contributor snapshots, then execute spawn, preset, difficulty, or rebase actions through SOAP.',
+    'scope_note' => 'Current realm: :server',
+    'warnings' => [
+        'runtime_unavailable' => 'Boss runtime data is unavailable. Verify boss.lua created the ac_eluna persistence tables.',
+        'events_unavailable' => 'Boss event data is unavailable.',
+        'contributors_unavailable' => 'Boss contributor snapshots are unavailable.',
+    ],
+    'runtime' => [
+        'title' => 'Current Runtime',
+        'status' => 'Status',
+        'current_boss' => 'Current boss',
+        'phase' => 'Phase',
+        'skill_preset' => 'Skill preset',
+        'skill_difficulty' => 'Difficulty',
+        'respawn_at' => 'Respawn ETA',
+        'last_spawn_at' => 'Last spawn',
+        'last_engage_at' => 'Last engage',
+        'last_death_at' => 'Last death',
+        'last_reset_at' => 'Last reset',
+        'no_active_boss' => 'No active boss',
+    ],
+    'status' => [
+        'idle' => 'Idle',
+        'spawned' => 'Spawned',
+        'engaged' => 'In combat',
+        'cooldown' => 'Respawn cooldown',
+    ],
+    'stats' => [
+        'title' => 'Recent Overview',
+        'events_24h' => 'Events in 24h',
+        'kills_7d' => 'Kills in 7d',
+        'contributors_7d' => 'Contributor snapshots in 7d',
+        'random_rewarded_7d' => 'Random rewards in 7d',
+    ],
+    'actions' => [
+        'title' => 'Actions',
+        'spawn' => 'Spawn Boss',
+        'spawn_help' => 'Spawn the current template at one of the configured spawn points.',
+        'rebase' => 'Rebase health',
+        'rebase_help' => 'Re-apply the current health multiplier to the active boss.',
+        'preset_label' => 'Skill preset',
+        'difficulty_label' => 'Difficulty',
+        'apply_preset' => 'Apply preset',
+        'apply_difficulty' => 'Apply difficulty',
+    ],
+    'presets' => [
+        'labels' => [
+            'storm_siege' => 'Storm Siege',
+            'ember_storm' => 'Ember Storm',
+            'frost_whiteout' => 'Frost Whiteout',
+            'venom_pursuit' => 'Venom Pursuit',
+            'grave_bombard' => 'Grave Bombard',
+            'spellbreak_bulwark' => 'Spellbreak Bulwark',
+        ],
+        'summary' => [
+            'storm_siege' => 'Focuses on chain pressure and zone control.',
+            'ember_storm' => 'Focuses on fire pressure and constant movement.',
+            'frost_whiteout' => 'Focuses on freeze control and visibility pressure.',
+            'venom_pursuit' => 'Focuses on pursuit and poison attrition.',
+            'grave_bombard' => 'Focuses on bombardment and area denial.',
+            'spellbreak_bulwark' => 'Focuses on interrupts and anti-caster pressure.',
+        ],
+    ],
+    'difficulties' => [
+        'labels' => [
+            'easy' => 'Easy',
+            'standard' => 'Standard',
+            'hard' => 'Hard',
+            'raid' => 'Raid',
+        ],
+        'summary' => [
+            'easy' => 'Slower pacing for solo or small-party testing.',
+            'standard' => 'Default pressure level.',
+            'hard' => 'Faster skill coverage and combo frequency.',
+            'raid' => 'High-pressure raid pacing.',
+        ],
+    ],
+    'events' => [
+        'title' => 'Recent Events',
+        'empty' => 'No event snapshots yet.',
+        'columns' => [
+            'time' => 'Time',
+            'type' => 'Type',
+            'boss' => 'Boss',
+            'actor' => 'Actor',
+            'note' => 'Note',
+        ],
+        'types' => [
+            'spawn' => 'Spawn',
+            'enter_combat' => 'Enter combat',
+            'phase_change' => 'Phase change',
+            'leave_combat' => 'Leave combat',
+            'death' => 'Death',
+            'respawn_scheduled' => 'Respawn scheduled',
+            'command_spawn' => 'Command spawn',
+            'command_preset' => 'Preset change',
+            'command_difficulty' => 'Difficulty change',
+            'command_rebase' => 'Rebase',
+        ],
+    ],
+    'contributors' => [
+        'title' => 'Recent Contributors',
+        'empty' => 'No contributor snapshots yet.',
+        'columns' => [
+            'time' => 'Time',
+            'player' => 'Player',
+            'boss' => 'Boss',
+            'score' => 'Score',
+            'damage' => 'Damage',
+            'healing' => 'Healing',
+            'rewards' => 'Reward flags',
+        ],
+        'badges' => [
+            'guaranteed_reward' => 'Guaranteed',
+            'random_reward' => 'Random reward',
+            'last_hit' => 'Last hit',
+        ],
+    ],
+    'feedback' => [
+        'action_success' => 'Boss action completed successfully.',
+    ],
+    'errors' => [
+        'invalid_action' => 'Invalid boss action.',
+        'value_required' => 'This action requires a value.',
+        'invalid_preset' => 'Invalid skill preset.',
+        'invalid_difficulty' => 'Invalid difficulty.',
+    ],
+    'js' => [
+        'modules' => [
+            'boss' => [
+                'confirm' => [
+                    'spawn' => 'Spawn a boss on the current realm?',
+                    'rebase' => 'Rebase the active boss health values?',
+                    'preset' => 'Switch preset to :value?',
+                    'difficulty' => 'Switch difficulty to :value?',
+                ],
+                'feedback' => [
+                    'success' => 'Action completed. Reloading…',
+                    'failure' => 'Action failed.',
+                ],
+                'errors' => [
+                    'request_failed' => 'Request failed.',
+                ],
+            ],
+        ],
+    ],
+];

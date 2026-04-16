@@ -37,6 +37,12 @@ return [
       'actions' => 'Manual Aegis SOAP actions such as clear, delete, purge, and reload.',
       'logs' => 'Aegis log reads.',
     ],
+    'boss' => [
+      'dashboard' => 'Boss activity page shell and runtime overview reads.',
+      'events' => 'Boss runtime event stream reads.',
+      'contributors' => 'Boss contributor snapshot and reward result reads.',
+      'actions' => 'Boss SOAP actions such as spawn, preset change, difficulty change, and rebase.',
+    ],
     'audit' => [
       'read' => 'Audit log list and filter reads.',
     ],
@@ -58,6 +64,12 @@ return [
       'send' => 'Mass mail send actions for mail, items, and gold.',
       'logs' => 'Mass mail recent log reads.',
       'boost' => 'Mass-mail-triggered character boost actions.',
+    ],
+    'raf' => [
+      'list' => 'Recruit-a-friend list, search, and summary reads.',
+      'bind' => 'Manual RAF bind and force-bind actions via SOAP.',
+      'unbind' => 'Manual RAF unbind actions via SOAP.',
+      'comment' => 'RAF operator comment updates.',
     ],
     'boost' => [
       'apply' => 'GM-triggered character boost actions from character detail surfaces.',

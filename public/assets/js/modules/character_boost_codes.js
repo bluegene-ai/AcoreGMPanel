@@ -145,7 +145,7 @@
         : '-';
       const act = used
         ? '<span class="cb-muted">-</span>'
-        : '<button class="btn btn-sm btn-danger js-del-unused" data-id="' + esc(row.id) + '">'
+        : '<button class="btn btn-sm danger js-del-unused" data-id="' + esc(row.id) + '">'
           + esc(translate('codes.actions.delete_unused', 'Delete'))
           + '</button>';
 
