@@ -9,10 +9,13 @@
     feedback: document.getElementById('bossFeedback'),
     spawnBtn: document.getElementById('bossSpawnBtn'),
     rebaseBtn: document.getElementById('bossRebaseBtn'),
+    configReloadBtn: document.getElementById('bossConfigReloadBtn'),
     presetBtn: document.getElementById('bossPresetBtn'),
     presetSelect: document.getElementById('bossPresetSelect'),
     difficultyBtn: document.getElementById('bossDifficultyBtn'),
-    difficultySelect: document.getElementById('bossDifficultySelect')
+    difficultySelect: document.getElementById('bossDifficultySelect'),
+    configForm: document.getElementById('bossConfigForm'),
+    configSaveBtn: document.getElementById('bossConfigSaveBtn')
   };
 
   function t(path, fallback){
@@ -49,11 +52,16 @@
   }
 
   function setBusy(disabled){
-    [dom.spawnBtn, dom.rebaseBtn, dom.presetBtn, dom.difficultyBtn].forEach(function(node){
+    [dom.spawnBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn].forEach(function(node){
       if(node) node.disabled = !!disabled;
     });
     if(dom.presetSelect) dom.presetSelect.disabled = !!disabled;
     if(dom.difficultySelect) dom.difficultySelect.disabled = !!disabled;
+    if(dom.configForm){
+      dom.configForm.querySelectorAll('input, textarea, select').forEach(function(node){
+        node.disabled = !!disabled;
+      });
+    }
   }
 
   function confirmMessage(action, label){
@@ -78,12 +86,36 @@
     window.setTimeout(function(){ window.location.reload(); }, 600);
   }
 
+  async function saveConfig(){
+    if(!dom.configForm) return;
+
+    const payload = Object.fromEntries(new FormData(dom.configForm).entries());
+    payload.guaranteed_reward_enabled = dom.configForm.querySelector('[name="guaranteed_reward_enabled"]')?.checked ? 1 : 0;
+    payload.guaranteed_reward_notify = dom.configForm.querySelector('[name="guaranteed_reward_notify"]')?.checked ? 1 : 0;
+
+    setBusy(true);
+    const json = await post('/boss/api/config', payload);
+    setBusy(false);
+
+    if(!json || !json.success){
+      show('error', (json && json.message) || t('feedback.config_failure', 'Configuration save failed.'));
+      return;
+    }
+
+    show('success', json.message || t('feedback.config_success', 'Configuration saved.'));
+    window.setTimeout(function(){ window.location.reload(); }, 600);
+  }
+
   if(dom.spawnBtn){
     dom.spawnBtn.addEventListener('click', function(){ runAction('spawn'); });
   }
 
   if(dom.rebaseBtn){
     dom.rebaseBtn.addEventListener('click', function(){ runAction('rebase'); });
+  }
+
+  if(dom.configReloadBtn){
+    dom.configReloadBtn.addEventListener('click', function(){ runAction('config_reload'); });
   }
 
   if(dom.presetBtn && dom.presetSelect){
@@ -97,6 +129,13 @@
     dom.difficultyBtn.addEventListener('click', function(){
       const option = dom.difficultySelect.options[dom.difficultySelect.selectedIndex];
       runAction('difficulty', dom.difficultySelect.value, option ? option.text : dom.difficultySelect.value);
+    });
+  }
+
+  if(dom.configForm){
+    dom.configForm.addEventListener('submit', function(event){
+      event.preventDefault();
+      saveConfig();
     });
   }
 })();

@@ -4,6 +4,9 @@ $bossDashboard = is_array($boss_dashboard ?? null) ? $boss_dashboard : [];
 $bossRuntime = is_array($bossDashboard['runtime'] ?? null)
     ? $bossDashboard['runtime']
     : [];
+$bossConfig = is_array($bossDashboard['config'] ?? null)
+  ? $bossDashboard['config']
+  : [];
 $bossStats = is_array($bossDashboard['stats'] ?? null)
     ? $bossDashboard['stats']
     : [];
@@ -143,6 +146,16 @@ $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
           </button>
         </div>
 
+        <div class="boss-action-card">
+          <div class="boss-action-card__body">
+            <strong><?= htmlspecialchars(__('app.boss.actions.reload_config')) ?></strong>
+            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.reload_config_help')) ?></p>
+          </div>
+          <button type="button" class="btn outline" id="bossConfigReloadBtn" data-boss-action="config_reload">
+            <?= htmlspecialchars(__('app.boss.actions.reload_config')) ?>
+          </button>
+        </div>
+
         <div class="boss-action-card boss-action-card--form">
           <label class="boss-field">
             <span><?= htmlspecialchars(__('app.boss.actions.preset_label')) ?></span>
@@ -179,6 +192,227 @@ $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
           </button>
         </div>
       </div>
+    </section>
+
+    <section class="boss-panel boss-panel--config">
+      <div class="boss-panel__head">
+        <h2><?= htmlspecialchars(__('app.boss.config.title')) ?></h2>
+      </div>
+      <p class="muted boss-config-note"><?= htmlspecialchars(__('app.boss.config.note')) ?></p>
+
+      <form id="bossConfigForm" class="boss-config-form">
+        <div class="boss-config-grid">
+          <section class="boss-config-section">
+            <div class="boss-config-section__head">
+              <h3><?= htmlspecialchars(__('app.boss.config.sections.identity')) ?></h3>
+            </div>
+            <div class="boss-config-columns">
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?></span>
+                <input type="number" name="boss_entry" min="1" step="1" value="<?= htmlspecialchars((string) ($bossConfig['boss_entry'] ?? 647)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_name')) ?></span>
+                <input type="text" name="boss_name" maxlength="120" value="<?= htmlspecialchars((string) ($bossConfig['boss_name'] ?? '')) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_level')) ?></span>
+                <input type="number" name="boss_level" min="1" max="255" step="1" value="<?= htmlspecialchars((string) ($bossConfig['boss_level'] ?? 83)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_scale')) ?></span>
+                <input type="number" name="boss_scale" min="0.10" max="50.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_scale'] ?? '5.00')) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_health_multiplier')) ?></span>
+                <input type="number" name="boss_health_multiplier" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_health_multiplier'] ?? '20.00')) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.respawn_time_minutes')) ?></span>
+                <input type="number" name="respawn_time_minutes" min="1" max="1440" step="1" value="<?= htmlspecialchars((string) ($bossConfig['respawn_time_minutes'] ?? 10)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_level')) ?></span>
+                <input type="number" name="ally_level" min="1" max="255" step="1" value="<?= htmlspecialchars((string) ($bossConfig['ally_level'] ?? 20)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_health_multiplier')) ?></span>
+                <input type="number" name="ally_health_multiplier" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['ally_health_multiplier'] ?? '1.50')) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_min')) ?></span>
+                <input type="number" name="minion_count_min" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_min'] ?? 1)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_max')) ?></span>
+                <input type="number" name="minion_count_max" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_max'] ?? 2)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_preset')) ?></span>
+                <select name="skill_preset">
+                  <?php foreach (($bossOptions['presets'] ?? []) as $option): ?>
+                    <option
+                      value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
+                      <?= (string) ($bossConfig['skill_preset'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
+                    ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_difficulty')) ?></span>
+                <select name="skill_difficulty">
+                  <?php foreach (($bossOptions['difficulties'] ?? []) as $option): ?>
+                    <option
+                      value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
+                      <?= (string) ($bossConfig['skill_difficulty'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
+                    ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+
+              <label class="boss-field boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_auras_text')) ?></span>
+                <textarea name="boss_auras_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['boss_auras_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_auras_text')) ?></small>
+              </label>
+            </div>
+          </section>
+
+          <section class="boss-config-section">
+            <div class="boss-config-section__head">
+              <h3><?= htmlspecialchars(__('app.boss.config.sections.rewards')) ?></h3>
+            </div>
+            <div class="boss-config-columns">
+              <label class="boss-check">
+                <input type="checkbox" name="guaranteed_reward_enabled" value="1" <?= !empty($bossConfig['guaranteed_reward_enabled']) ? 'checked' : '' ?>>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_reward_enabled')) ?></span>
+              </label>
+
+              <label class="boss-check">
+                <input type="checkbox" name="guaranteed_reward_notify" value="1" <?= !empty($bossConfig['guaranteed_reward_notify']) ? 'checked' : '' ?>>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_reward_notify')) ?></span>
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.max_random_reward_players')) ?></span>
+                <input type="number" name="max_random_reward_players" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['max_random_reward_players'] ?? 3)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.random_reward_mode')) ?></span>
+                <select name="random_reward_mode">
+                  <?php foreach (($bossOptions['random_modes'] ?? []) as $option): ?>
+                    <option
+                      value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
+                      <?= (string) ($bossConfig['random_reward_mode'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
+                    ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.class_reward_chance')) ?></span>
+                <input type="number" name="class_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['class_reward_chance'] ?? 60)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.formula_reward_chance')) ?></span>
+                <input type="number" name="formula_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['formula_reward_chance'] ?? 10)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.mount_reward_chance')) ?></span>
+                <input type="number" name="mount_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['mount_reward_chance'] ?? 15)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.participation_range')) ?></span>
+                <input type="number" name="participation_range" min="20" max="500" step="1" value="<?= htmlspecialchars((string) ($bossConfig['participation_range'] ?? 80)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.damage_weight')) ?></span>
+                <input type="number" name="damage_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['damage_weight'] ?? 100)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.healing_weight')) ?></span>
+                <input type="number" name="healing_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['healing_weight'] ?? 80)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.threat_weight')) ?></span>
+                <input type="number" name="threat_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['threat_weight'] ?? 35)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.presence_weight')) ?></span>
+                <input type="number" name="presence_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['presence_weight'] ?? 10)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.kill_weight')) ?></span>
+                <input type="number" name="kill_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['kill_weight'] ?? 3)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_item_id')) ?></span>
+                <input type="number" name="guaranteed_item_id" min="0" max="2000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['guaranteed_item_id'] ?? 40753)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_item_count')) ?></span>
+                <input type="number" name="guaranteed_item_count" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['guaranteed_item_count'] ?? 2)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.gold_min_copper')) ?></span>
+                <input type="number" name="gold_min_copper" min="0" max="2000000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['gold_min_copper'] ?? 30000)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.gold_max_copper')) ?></span>
+                <input type="number" name="gold_max_copper" min="0" max="2000000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['gold_max_copper'] ?? 50000)) ?>">
+              </label>
+
+              <label class="boss-field boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_items_text')) ?></span>
+                <textarea name="reward_items_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_items_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_items_text')) ?></small>
+              </label>
+
+              <label class="boss-field boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_formulas_text')) ?></span>
+                <textarea name="reward_formulas_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_formulas_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_formulas_text')) ?></small>
+              </label>
+
+              <label class="boss-field boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_mounts_text')) ?></span>
+                <textarea name="reward_mounts_text" rows="4" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_mounts_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_mounts_text')) ?></small>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div class="boss-config-actions">
+          <button type="submit" class="btn warn" id="bossConfigSaveBtn">
+            <?= htmlspecialchars(__('app.boss.config.save')) ?>
+          </button>
+        </div>
+      </form>
     </section>
   <?php else: ?>
     <section class="boss-panel">

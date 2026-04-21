@@ -77,6 +77,7 @@ return static function (Router $router): void {
             $router->post('/account/api/create', [AccountController::class, 'apiCreate']);
             $router->post('/aegis/api/action', [AegisController::class, 'apiAction']);
             $router->post('/boss/api/action', [BossController::class, 'apiAction']);
+            $router->post('/boss/api/config', [BossController::class, 'apiConfigSave']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
             $router->post('/soap/api/execute', [SoapWizardController::class, 'apiExecute']);
             $router->post('/smart-ai/api/preview', [SmartAiWizardController::class, 'apiPreview']);
