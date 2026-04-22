@@ -50,7 +50,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <tbody>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.guid')) ?></th><td><?= (int)$summary['guid'] ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.name')) ?></th><td><?= htmlspecialchars($summary['name']) ?></td></tr>
-              <tr><th><?= htmlspecialchars(__('app.character.show.summary.account')) ?></th><td><?= htmlspecialchars($summary['account_username'] ?? ('#'.($summary['account'] ?? ''))) ?></td></tr>
+              <tr><th><?= htmlspecialchars(__('app.character.show.summary.account')) ?></th><td><?= account_link((int)($summary['account'] ?? 0), (string)($summary['account_username'] ?? '')) ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.level')) ?></th><td><?= (int)$summary['level'] ?></td></tr>
               <?php $classId = (int)($summary['class'] ?? 0); ?>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.class')) ?></th><td><span data-class-id="<?= $classId ?>"><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::className($classId)) ?></span> (#<?= $classId ?>)</td></tr>
@@ -207,9 +207,9 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
                 <div class="teleport-grid">
                   <input type="number" name="map" value="<?= (int)($summary['map'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_map')) ?>">
                   <input type="number" name="zone" value="<?= (int)($summary['zone'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_zone')) ?>">
-                  <input type="number" step="0.01" name="x" value="<?= htmlspecialchars(number_format((float)$summary['position_x'],2,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_x')) ?>">
-                  <input type="number" step="0.01" name="y" value="<?= htmlspecialchars(number_format((float)$summary['position_y'],2,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_y')) ?>">
-                  <input type="number" step="0.01" name="z" value="<?= htmlspecialchars(number_format((float)$summary['position_z'],2,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_z')) ?>">
+                  <input type="number" step="0.0001" name="x" value="<?= htmlspecialchars(number_format((float)$summary['position_x'],4,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_x')) ?>">
+                  <input type="number" step="0.0001" name="y" value="<?= htmlspecialchars(number_format((float)$summary['position_y'],4,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_y')) ?>">
+                  <input type="number" step="0.0001" name="z" value="<?= htmlspecialchars(number_format((float)$summary['position_z'],4,'.','')) ?>" placeholder="<?= htmlspecialchars(__('app.character.actions.teleport_z')) ?>">
                 </div>
               </form>
               <form id="char-unstuck-form" class="js-char-action char-action-form char-action-form--hidden" data-endpoint="<?= htmlspecialchars($charBase.'/api/unstuck') ?>">

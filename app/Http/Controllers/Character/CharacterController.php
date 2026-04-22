@@ -117,6 +117,7 @@ class CharacterController extends Controller
                 'level_min' => $request->int('level_min', 0),
                 'level_max' => $request->int('level_max', 0),
                 'online' => $this->normalizedEnum($request, 'online', ['any', 'online', 'offline'], 'any'),
+                'ban' => $this->normalizedEnum($request, 'ban', ['any', 'banned', 'unbanned'], 'any'),
             ],
             'sort' => $this->normalizedEnum(
                 $request,
@@ -526,7 +527,30 @@ class CharacterController extends Controller
         $summary = $this->repo()->findSummary($guid);
         if(!$summary){ return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.not_found')],404); }
         if(!empty($summary['online'])){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.character.actions.blocked_online')],422);
+            $name = (string)($summary['name'] ?? '');
+            if($name === ''){
+                return $this->json(['success'=>false,'message'=>Lang::get('app.character.actions.blocked_online')],422);
+            }
+            $soap = new SoapService();
+            $kickRes = $soap->execute('.kick '.$name);
+            if(empty($kickRes['success'])){
+                $this->logCharacterAction('teleport','kick_failed',[
+                    'guid'=>$guid,
+                    'name'=>$name,
+                    'map'=>$map,
+                    'zone'=>$zone,
+                    'x'=>$x,
+                    'y'=>$y,
+                    'z'=>$z,
+                    'ip'=>$request->ip(),
+                    'message'=>$kickRes['message'] ?? null,
+                ]);
+                return $this->json([
+                    'success'=>false,
+                    'message'=>$kickRes['message'] ?? Lang::get('app.character.actions.blocked_online')
+                ],422);
+            }
+            Audit::log('character','kick_before_teleport',"guid=$guid name=$name");
         }
         $ok = $this->repo()->teleport($guid,$map,$zone,$x,$y,$z);
         $this->logCharacterAction('teleport',$ok?'success':'db_fail',['guid'=>$guid,'map'=>$map,'zone'=>$zone,'x'=>$x,'y'=>$y,'z'=>$z,'ip'=>$request->ip()]);
