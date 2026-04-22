@@ -15,7 +15,8 @@
 !/storage/logs/.gitkeep
 
 # Composer dependencies
-/vendor/
+#/vendor/
+#/vendor/composer/
 
 # Local composer phar (use scripts/install-deps.ps1 to download as needed)
 /composer.phar
