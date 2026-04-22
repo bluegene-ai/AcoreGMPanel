@@ -11,6 +11,7 @@
  $levelMin = (int)($filters['level_min'] ?? 0);
  $levelMax = (int)($filters['level_max'] ?? 0);
  $filter_online = $filters['online'] ?? 'any';
+ $filter_ban = $filters['ban'] ?? 'any';
  $sort = $sort ?? '';
  $load_all = !empty($load_all);
  $characterCapabilities = $__pageCapabilities ?? [
@@ -39,6 +40,11 @@
       <option value="online" <?= $filter_online==='online'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_only')) ?></option>
       <option value="offline" <?= $filter_online==='offline'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_offline')) ?></option>
     </select>
+    <select name="ban">
+      <option value="any" <?= $filter_ban==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_any')) ?></option>
+      <option value="banned" <?= $filter_ban==='banned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_only')) ?></option>
+      <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_unbanned')) ?></option>
+    </select>
     <span class="character-search__actions">
       <button class="btn" type="submit"><?= htmlspecialchars(__('app.character.index.search.submit')) ?></button>
       <button class="btn outline" type="submit" name="load_all" value="1"><?= htmlspecialchars(__('app.character.index.search.load_all')) ?></button>
@@ -46,7 +52,7 @@
   </div>
 </form>
 <div id="char-feedback" class="panel-flash panel-flash--inline char-feedback--hidden"></div>
-<?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any'; ?>
+<?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any' || $filter_ban!=='any'; ?>
 <?php if($hasCriteria): ?>
   <?php
     $sortUrl = static function(?string $value): string {
@@ -164,15 +170,9 @@
         <td><input type="checkbox" class="js-char-select" value="<?= (int)$row['guid'] ?>" aria-label="select"></td>
         <?php endif; ?>
         <td><?= (int)$row['guid'] ?></td>
-        <td><?= htmlspecialchars($row['name']) ?></td>
-        <?php $accName = (string)($row['account_username'] ?? ''); $accFallback = '#'.($row['account'] ?? ''); ?>
-        <td>
-          <?php if($accName !== ''): ?>
-            <a href="<?= htmlspecialchars(url_with_server('/account?search_type=username&search_value='.rawurlencode($accName))) ?>"><?= htmlspecialchars($accName) ?></a>
-          <?php else: ?>
-            <?= htmlspecialchars($accFallback) ?>
-          <?php endif; ?>
-        </td>
+        <td><?= character_link((int)$row['guid'], (string)$row['name']) ?></td>
+        <?php $accName = (string)($row['account_username'] ?? ''); ?>
+        <td><?= account_link((int)($row['account'] ?? 0), $accName) ?></td>
         <td><?= (int)$row['level'] ?></td>
         <?php $rowClassId = (int)($row['class'] ?? 0); ?>
         <td><span data-class-id="<?= $rowClassId ?>"><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::className($rowClassId)) ?></span></td>
@@ -203,7 +203,7 @@
           <?php endif; ?>
         </td>
         <td><?= htmlspecialchars(format_datetime($row['logout_time'] ?? null)) ?></td>
-        <?php $viewUrl = \Acme\Panel\Core\Url::to('/character/view') . '?guid=' . (int)$row['guid']; ?>
+        <?php $viewUrl = character_view_url((int)$row['guid']); ?>
         <td class="char-action-cell">
           <?php if($characterCapabilities['details']): ?>
           <a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a>

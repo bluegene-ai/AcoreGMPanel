@@ -116,6 +116,39 @@ class AccountController extends Controller
         $this->requireCapability('accounts.delete');
     }
 
+    public function show(Request $request): Response
+    {
+        if(!Auth::check()) return $this->loginPage();
+        $this->requireAccountListCapability();
+        $this->maybeSwitchServer($request);
+
+        $accountId = (int) $request->input('id', 0);
+        if ($accountId <= 0)
+            return $this->redirect('/account');
+
+        $summary = $this->repo()->findSummary($accountId);
+
+        return $this->pageView('account.show', [
+            'summary' => $summary,
+            'characters' => $summary ? $this->repo()->listCharacters($accountId) : [],
+            'account_id' => $accountId,
+            'error' => $summary ? null : Lang::get('app.common.errors.not_found'),
+        ], [
+            'capabilities' => [
+                'list' => 'accounts.list',
+                'characters' => 'accounts.characters',
+                'create' => 'accounts.create',
+                'update' => 'accounts.update',
+                'password' => 'accounts.password',
+                'gm' => 'accounts.gm',
+                'ban' => 'accounts.ban',
+                'ip' => 'accounts.ip',
+                'kick' => 'accounts.kick',
+                'delete' => 'accounts.delete',
+            ],
+        ]);
+    }
+
     public function index(Request $request): Response
     {
         if(!Auth::check()) return $this->loginPage();

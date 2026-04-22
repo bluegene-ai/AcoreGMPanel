@@ -56,6 +56,15 @@ final class PageHeaderData
                     ],
                 ],
             ],
+            'account.show' => [
+                'actions' => [
+                    [
+                        'label' => '<- ' . Lang::get('app.account.show.back'),
+                        'url' => Url::to('/account'),
+                        'class' => 'btn',
+                    ],
+                ],
+            ],
             'creature.edit' => [
                 'intro' => self::normalizeString($data['creature']['name'] ?? null),
             ],

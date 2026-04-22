@@ -223,15 +223,15 @@ $pageUrl = static function (int $page) use ($current_server, $search, $recruiter
             ?>
             <tr>
               <td>
-                <div class="raf-cell-title"><?= htmlspecialchars($accountLabel) ?></div>
+                <div class="raf-cell-title"><?= account_link((int) ($row['account_id'] ?? 0), $accountLabel) ?></div>
                 <div class="small muted">ID #<?= (int) ($row['account_id'] ?? 0) ?></div>
               </td>
               <td>
-                <div class="raf-cell-title"><?= htmlspecialchars($recruiterLabel) ?></div>
+                <div class="raf-cell-title"><?= character_link((int) ($row['recruiter_guid'] ?? 0), $recruiterLabel) ?></div>
                 <div class="small muted">
                   GUID #<?= (int) ($row['recruiter_guid'] ?? 0) ?>
                   <?php if (!empty($row['recruiter_account_id'])): ?>
-                    · Account #<?= (int) $row['recruiter_account_id'] ?>
+                    · <?= account_link((int) $row['recruiter_account_id']) ?>
                   <?php endif; ?>
                 </div>
               </td>

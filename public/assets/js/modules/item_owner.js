@@ -45,6 +45,7 @@
   const moduleTranslator = window.Panel && typeof window.Panel.createModuleTranslator === 'function'
     ? window.Panel.createModuleTranslator('item_owner')
     : (path, fallback) => fallback;
+  const currentServer = new URLSearchParams(window.location.search).get('server') || '';
 
   function translate(path, fallback, replacements){
     let text = moduleTranslator ? moduleTranslator(path, fallback ?? path) : (fallback ?? path);
@@ -77,6 +78,11 @@
       el.classList.remove('is-visible');
       el.textContent='';
     }, 5000);
+  }
+
+  function withServer(path){
+    if(!currentServer) return path;
+    return path + (path.includes('?') ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
   }
 
   const api = {
@@ -265,8 +271,8 @@
       const clsMeta = getClassMeta(owner.class);
       const name = owner.name || ('#'+owner.guid);
       const colorizedName = clsMeta
-        ? `<span class="item-owner-character-name" data-class-id="${owner.class}" title="${esc(clsMeta.label ?? '')}">${esc(name)}</span>`
-        : esc(name);
+        ? `<a href="${esc(withServer(`/character/view?guid=${owner.guid}`))}"><span class="item-owner-character-name" data-class-id="${owner.class}" title="${esc(clsMeta.label ?? '')}">${esc(name)}</span></a>`
+        : `<a href="${esc(withServer(`/character/view?guid=${owner.guid}`))}">${esc(name)}</a>`;
       return `<tr>
         <td>${colorizedName}</td>
         <td>${owner.level ?? '-'}</td>
@@ -300,7 +306,7 @@
       return `<tr data-instance="${inst.instance_guid}">
         <td><input type="checkbox" data-role="select-instance" value="${inst.instance_guid}" ${checked}></td>
         <td>${inst.instance_guid}</td>
-        <td>${esc(owner.name || ('#'+owner.guid))}</td>
+        <td><a href="${esc(withServer(`/character/view?guid=${owner.guid}`))}">${esc(owner.name || ('#'+owner.guid))}</a></td>
         <td>${inst.count ?? 0}</td>
         <td>${esc(inst.location_label || inst.location_code || '-')}</td>
         <td>${esc(containerText)}</td>

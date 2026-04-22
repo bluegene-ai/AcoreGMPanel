@@ -192,7 +192,7 @@
         <td><input type="checkbox" class="js-account-select" value="<?= (int)$row['id'] ?>" aria-label="select"></td>
         <?php endif; ?>
         <td><?= (int)$row['id'] ?></td>
-        <td><?= htmlspecialchars($row['username']) ?></td>
+        <td><?= account_link((int)$row['id'], (string)$row['username']) ?></td>
         <td><?= isset($row['gmlevel'])?(int)$row['gmlevel']:'-' ?></td>
         <td>
           <?php if(!empty($row['ban'])): $b=$row['ban']; ?>

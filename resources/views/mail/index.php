@@ -110,8 +110,8 @@
       <td><input type="checkbox" class="mail-select" value="<?= (int)$r['id'] ?>"></td>
       <?php endif; ?>
       <td><?= (int)$r['id'] ?></td>
-      <td><?= htmlspecialchars($r['sender_name'] ?? ('#'.($r['sender']??''))) ?></td>
-      <td><?= htmlspecialchars($r['receiver_name'] ?? ('#'.($r['receiver']??''))) ?></td>
+      <td><?= character_link((int)($r['sender'] ?? 0), (string)($r['sender_name'] ?? '')) ?></td>
+      <td><?= character_link((int)($r['receiver'] ?? 0), (string)($r['receiver_name'] ?? '')) ?></td>
       <td><?= htmlspecialchars(mb_strimwidth($r['subject']??'',0,50,'...','UTF-8')) ?></td>
       <td><?= htmlspecialchars(format_money_gsc($r['money'] ?? 0)) ?></td>
       <td><?= (int)($r['has_items']??0)===1 ? '<span class="badge">'.htmlspecialchars(__('app.mail.table.attachments.has')).'</span>' : '' ?></td>

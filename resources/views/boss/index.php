@@ -504,8 +504,8 @@ $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
                 <tr>
                   <td><?= htmlspecialchars(format_datetime((int) ($row['created_at'] ?? 0))) ?></td>
                   <td>
-                    <div class="boss-cell-title"><?= htmlspecialchars((string) ($row['player_name'] ?? '-')) ?></div>
-                    <div class="small muted">GUID #<?= (int) ($row['player_guid'] ?? 0) ?> · Account #<?= (int) ($row['account_id'] ?? 0) ?></div>
+                    <div class="boss-cell-title"><?= character_link((int) ($row['player_guid'] ?? 0), (string) ($row['player_name'] ?? '')) ?></div>
+                    <div class="small muted">GUID #<?= (int) ($row['player_guid'] ?? 0) ?> · <?= account_link((int) ($row['account_id'] ?? 0), 'Account #' . (int) ($row['account_id'] ?? 0)) ?></div>
                   </td>
                   <td>
                     <div class="boss-cell-title"><?= htmlspecialchars((string) ($row['boss_name'] ?? '-')) ?></div>

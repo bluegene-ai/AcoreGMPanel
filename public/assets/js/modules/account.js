@@ -89,6 +89,18 @@
 		return path + (path.includes('?') ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
 	}
 
+		function toCharacterUrl(guid){
+			return urlWithServer(`/character/view?guid=${encodeURIComponent(guid)}`);
+		}
+
+		function toAccountUrl(id){
+			return urlWithServer(`/account/view?id=${encodeURIComponent(id)}`);
+		}
+
+		function linkHtml(url, label){
+			return `<a href="${esc(url)}">${esc(label)}</a>`;
+		}
+
 	function bodyWithServer(payload){
 		if(!currentServer) return payload || {};
 		const body = payload ? { ...payload } : {};
@@ -396,7 +408,7 @@
 				return `<tr data-id="${esc(idValue)}" data-username="${esc(usernameValue)}" data-gm="${esc(gmData)}" data-last-ip="${esc(lastIp)}">`
 					+ selectCell
 					+ `<td>${esc(idValue)}</td>`
-					+ `<td>${esc(usernameValue)}</td>`
+					+ `<td>${linkHtml(toAccountUrl(idValue), usernameValue || ('#' + idValue))}</td>`
 					+ `<td>${esc(gmValue)}</td>`
 					+ `<td>${statusHtml}</td>`
 					+ `<td>${esc(lastLogin)}</td>`
@@ -488,7 +500,7 @@
 			const rows = (res.items || []).map(character => {
 				const online = !!character.online;
 				const guid = character.guid;
-				const rawCharacterUrl = urlWithServer(`/character?guid=${encodeURIComponent(guid)}`);
+				const rawCharacterUrl = toCharacterUrl(guid);
 				const toCharacter = (window.Panel && typeof window.Panel.url === 'function')
 					? window.Panel.url(rawCharacterUrl)
 					: rawCharacterUrl;
@@ -1076,7 +1088,7 @@
 				const ipText = item.last_ip || cleanIp;
 				return `<tr data-id="${esc(item.id)}">`
 					+ `<td>${esc(item.id)}</td>`
-					+ `<td>${esc(item.username || '')}</td>`
+					+ `<td>${linkHtml(toAccountUrl(item.id), item.username || ('#' + item.id))}</td>`
 					+ `<td>${esc(gm)}</td>`
 					+ `<td>${statusHtml}</td>`
 					+ `<td>${esc(lastLogin)}</td>`

@@ -304,6 +304,50 @@ class AccountRepository extends MultiServerRepository
         return $r ?: null;
     }
 
+    public function findSummary(int $accountId): ?array
+    {
+        $accountId = (int) $accountId;
+        if ($accountId <= 0)
+            return null;
+
+        if (!$this->schemaChecked)
+            $this->inspectAccountSchema();
+
+        $select = ['a.id', 'a.username', 'a.last_login', 'a.last_ip', 'aa.gmlevel'];
+        if ($this->hasColumn('email'))
+            $select[] = 'a.email';
+        if ($this->hasColumn('reg_mail'))
+            $select[] = 'a.reg_mail';
+
+        $st = $this->authPdo->prepare(
+            'SELECT ' . implode(',', $select)
+            . ' FROM account a'
+            . ' LEFT JOIN account_access aa ON aa.id=a.id'
+            . ' WHERE a.id=:id'
+            . ' ORDER BY aa.RealmID DESC LIMIT 1'
+        );
+        $st->execute([':id' => $accountId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row)
+            return null;
+
+        $characters = $this->listCharacters($accountId);
+        $row['character_count'] = count($characters);
+        $row['highest_level'] = null;
+        $row['online'] = 0;
+        foreach ($characters as $character) {
+            $level = (int) ($character['level'] ?? 0);
+            if ($row['highest_level'] === null || $level > (int) $row['highest_level'])
+                $row['highest_level'] = $level;
+            if (!empty($character['online']))
+                $row['online'] = 1;
+        }
+
+        $row['ban'] = $this->banStatus($accountId);
+
+        return $row;
+    }
+
     public function listCharactersFull(int $accountId): array
     {
         $pdo = $this->characters();

@@ -46,6 +46,44 @@ return array (
     'online' => '在线',
     'offline' => '离线',
   ),
+  'show' => 
+  array (
+    'title' => '账号：:name (ID :id)',
+    'title_not_found' => '账号不存在 (ID :id)',
+    'title_default' => '账号详情',
+    'back' => '返回列表',
+    'not_found' => '账号未找到',
+    'summary' => 
+    array (
+      'title' => '概要',
+      'id' => 'ID',
+      'username' => '用户名',
+      'gmlevel' => 'GM等级',
+      'status' => '状态',
+      'last_login' => '最后登录',
+      'last_ip' => '最后IP',
+      'email' => '邮箱',
+      'reg_mail' => '注册邮箱',
+      'character_count' => '角色数量',
+      'highest_level' => '最高等级',
+    ),
+    'status' => 
+    array (
+      'banned' => '已封禁',
+    ),
+    'characters' => 
+    array (
+      'title' => '角色列表',
+      'empty' => '无角色',
+      'table' => 
+      array (
+        'guid' => 'GUID',
+        'name' => '名称',
+        'level' => '等级',
+        'status' => '状态',
+      ),
+    ),
+  ),
   'actions' => 
   array (
     'chars' => '角色',

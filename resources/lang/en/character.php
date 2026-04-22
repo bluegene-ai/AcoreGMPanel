@@ -15,6 +15,9 @@ return [
             'online_any' => 'All accounts',
             'online_only' => 'Online only',
             'online_offline' => 'Offline only',
+            'ban_any' => 'Any ban state',
+            'ban_only' => 'Banned only',
+            'ban_unbanned' => 'Not banned',
         ],
         'sort' => [
             'guid_desc' => 'GUID (newest first)',

@@ -15,6 +15,9 @@ return [
             'online_any' => '全部账号',
             'online_only' => '仅在线',
             'online_offline' => '仅离线',
+            'ban_any' => '全部封禁状态',
+            'ban_only' => '仅封禁',
+            'ban_unbanned' => '未封禁',
         ],
         'sort' => [
             'guid_desc' => 'GUID（最新优先）',

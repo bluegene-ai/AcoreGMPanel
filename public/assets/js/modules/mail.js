@@ -275,8 +275,10 @@
       const expireTs = Number(row.expire_time || 0);
       const expired = Number(row.is_expired || 0) === 1 || (expireTs && expireTs < now);
       const remain = formatExpire(expireTs);
-      const sender = row.sender_name ? escapeHtml(row.sender_name) : ('#' + (row.sender ?? ''));
-      const receiver = row.receiver_name ? escapeHtml(row.receiver_name) : ('#' + (row.receiver ?? ''));
+      const senderLabel = row.sender_name || ('#' + (row.sender ?? ''));
+      const receiverLabel = row.receiver_name || ('#' + (row.receiver ?? ''));
+      const sender = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(row.sender ?? 0)))}">${escapeHtml(senderLabel)}</a>`;
+      const receiver = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(row.receiver ?? 0)))}">${escapeHtml(receiverLabel)}</a>`;
       const subj = row.subject
         ? escapeHtml(truncate(row.subject, 50))
         : `<span class="muted">${escapeHtml(translate('detail.no_subject', '(No subject)'))}</span>`;
@@ -617,9 +619,9 @@
     const items = Array.isArray(mail.items) ? mail.items : [];
 
     const senderEl = qs('#mdSender');
-    if(senderEl) senderEl.textContent = mail.sender_name || ('#' + (mail.sender ?? ''));
+    if(senderEl) senderEl.innerHTML = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(mail.sender ?? 0)))}">${escapeHtml(mail.sender_name || ('#' + (mail.sender ?? '')))}</a>`;
     const receiverEl = qs('#mdReceiver');
-    if(receiverEl) receiverEl.textContent = mail.receiver_name || ('#' + (mail.receiver ?? ''));
+    if(receiverEl) receiverEl.innerHTML = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(mail.receiver ?? 0)))}">${escapeHtml(mail.receiver_name || ('#' + (mail.receiver ?? '')))}</a>`;
     const moneyEl = qs('#mdMoney');
     if(moneyEl) moneyEl.textContent = money;
     const expireEl = qs('#mdExpire');

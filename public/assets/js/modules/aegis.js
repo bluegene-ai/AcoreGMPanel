@@ -178,13 +178,14 @@
     dom.stageSummary.innerHTML = (payload.stages || []).map((row) => `<span class="badge">${esc(stageLabel(row.value))}: ${esc(row.total)}</span>`).join('') || `<span class="muted">${esc(t('status.empty', 'No data'))}</span>`;
     dom.cheatSummary.innerHTML = (payload.cheats || []).map((row) => `<span class="badge">${esc(cheatLabel(row.value))}: ${esc(row.total)}</span>`).join('') || `<span class="muted">${esc(t('status.empty', 'No data'))}</span>`;
     dom.topOffenders.innerHTML = (payload.top_offenders || []).map((row) => {
+      const playerUrl = withServer(`/character/view?guid=${encodeURIComponent(row.guid || 0)}`);
       const inner = `
-        <strong>${esc(row.player_name || ('#' + row.guid))}</strong>
+        <strong><a href="${esc(playerUrl)}">${esc(row.player_name || ('#' + row.guid))}</a></strong>
         <span>${esc(stageLabel(row.punish_stage))}</span>
         <span>${esc(t('top.offense_count', 'Offenses: :count').replace(':count', row.offense_count || 0))}</span>
       `;
       if(can('player')){
-        return `<button type="button" class="aegis-list-item" data-guid="${Number(row.guid || 0)}" data-name="${esc(row.player_name || '')}">${inner}</button>`;
+        return `<div class="aegis-list-item" data-guid="${Number(row.guid || 0)}" data-name="${esc(row.player_name || '')}">${inner}</div>`;
       }
       return `<div class="aegis-list-item">${inner}</div>`;
     }).join('') || `<div class="muted">${esc(t('status.empty', 'No data'))}</div>`;
@@ -210,14 +211,16 @@
     const recentEvents = payload.recent_events || [];
     dom.playerLookup.value = player.guid ? `${player.name} (#${player.guid})` : (player.name || name || String(guid || ''));
     dom.playerCard.classList.remove('aegis-player-card--empty');
+    const playerUrl = withServer(`/character/view?guid=${encodeURIComponent(player.guid || 0)}`);
+    const accountUrl = withServer(`/account/view?id=${encodeURIComponent(player.account || 0)}`);
     dom.playerCard.innerHTML = `
       <div class="aegis-player-card__header">
-        <strong>${esc(player.name || ('#' + (player.guid || '')))}</strong>
+        <strong><a href="${esc(playerUrl)}">${esc(player.name || ('#' + (player.guid || '')))}</a></strong>
         <span class="badge">${esc(player.online ? t('player.online', 'Online') : t('player.offline', 'Offline'))}</span>
       </div>
       <div class="aegis-player-meta">
         <span>${esc(t('player.guid', 'GUID: :value').replace(':value', player.guid || '-'))}</span>
-        <span>${esc(t('player.account', 'Account: :value').replace(':value', player.account_username || ('#' + (player.account || ''))))}</span>
+        <span>${esc(t('player.account', 'Account: '))}<a href="${esc(accountUrl)}">${esc(player.account_username || ('#' + (player.account || '')))}</a></span>
         <span>${esc(t('player.level', 'Level: :value').replace(':value', player.level || '-'))}</span>
       </div>
       ${offense ? `
@@ -259,8 +262,8 @@
     } else {
       dom.offenseTable.innerHTML = items.map((row) => `
         <tr>
-          <td><button type="button" class="link-button" data-player-guid="${Number(row.guid || 0)}">${esc(row.player_name || ('#' + row.guid))}</button></td>
-          <td>${esc(row.account_username || ('#' + row.account_id))}</td>
+          <td><a class="link-button" href="${esc(withServer(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
+          <td><a href="${esc(withServer(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
           <td>${esc(cheatLabel(row.last_cheat_type))}</td>
           <td>${esc(stageLabel(row.punish_stage))}</td>
           <td>${esc(row.offense_count || 0)}</td>
@@ -273,11 +276,6 @@
             : `<span class="muted">${esc(t('status.read_only', 'Read-only'))}</span>`}</td>
         </tr>
       `).join('');
-    }
-    if(can('player')){
-      dom.offenseTable.querySelectorAll('[data-player-guid]').forEach((button) => {
-        button.addEventListener('click', () => loadPlayer({ guid: Number(button.getAttribute('data-player-guid') || 0) }).catch(handleError));
-      });
     }
     if(can('actions')){
       dom.offenseTable.querySelectorAll('.js-aegis-action').forEach((button) => {
@@ -311,8 +309,8 @@
       dom.eventTable.innerHTML = items.map((row) => `
         <tr>
           <td>${esc(formatTime(row.created_at))}</td>
-          <td><button type="button" class="link-button" data-player-guid="${Number(row.guid || 0)}">${esc(row.player_name || ('#' + row.guid))}</button></td>
-          <td>${esc(row.account_username || ('#' + row.account_id))}</td>
+          <td><a class="link-button" href="${esc(withServer(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
+          <td><a href="${esc(withServer(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
           <td>${esc(cheatLabel(row.cheat_type))}</td>
           <td>${esc(evidenceLabel(row.evidence_level))}</td>
           <td>${esc(row.evidence_tag || '-')}</td>
@@ -321,11 +319,6 @@
           <td title="${esc(row.detail_text || '')}">${esc(row.detail_text || '-')}</td>
         </tr>
       `).join('');
-    }
-    if(can('player')){
-      dom.eventTable.querySelectorAll('[data-player-guid]').forEach((button) => {
-        button.addEventListener('click', () => loadPlayer({ guid: Number(button.getAttribute('data-player-guid') || 0) }).catch(handleError));
-      });
     }
     renderPagination(dom.eventPagination, payload.page || 1, payload.pages || 1, (nextPage) => loadEvents(nextPage).catch(handleError));
   }

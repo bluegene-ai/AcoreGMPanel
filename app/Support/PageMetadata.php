@@ -67,6 +67,7 @@ final class PageMetadata
                 'title' => Lang::get('app.account.page_title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.account.page_title', '/account'),
             ],
+            'account.show' => self::accountShowMetadata($data),
             'character.index' => [
                 'title' => Lang::get('app.character.index.title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.character.index.title', '/character'),
@@ -194,6 +195,36 @@ final class PageMetadata
                 self::crumb(Lang::get('app.nav.home'), '/'),
                 self::crumb(Lang::get('app.character.index.title'), '/character'),
                 self::crumb(Lang::get('app.character.show.title_default')),
+            ],
+        ];
+    }
+
+    private static function accountShowMetadata(array $data): array
+    {
+        $summary = $data['summary'] ?? null;
+        if (is_array($summary) && !empty($summary['username'])) {
+            $id = (int) ($summary['id'] ?? ($data['account_id'] ?? 0));
+
+            return [
+                'title' => Lang::get('app.account.show.title', [
+                    'name' => (string) $summary['username'],
+                    'id' => $id,
+                ]),
+                'breadcrumbs' => [
+                    self::crumb(Lang::get('app.nav.home'), '/'),
+                    self::crumb(Lang::get('app.account.page_title'), '/account'),
+                    self::crumb((string) $summary['username']),
+                ],
+            ];
+        }
+
+        $id = (int) ($data['account_id'] ?? 0);
+        return [
+            'title' => Lang::get('app.account.show.title_not_found', ['id' => $id]),
+            'breadcrumbs' => [
+                self::crumb(Lang::get('app.nav.home'), '/'),
+                self::crumb(Lang::get('app.account.page_title'), '/account'),
+                self::crumb(Lang::get('app.account.show.title_default')),
             ],
         ];
     }

@@ -59,6 +59,48 @@ if (!function_exists('url_with_server')) {
     }
 }
 
+if (!function_exists('character_view_url')) {
+    function character_view_url(int|string $guid, ?int $serverId = null): string
+    {
+        return url_with_server('/character/view?guid=' . (int) $guid, $serverId);
+    }
+}
+
+if (!function_exists('account_view_url')) {
+    function account_view_url(int|string $accountId, ?int $serverId = null): string
+    {
+        return url_with_server('/account/view?id=' . (int) $accountId, $serverId);
+    }
+}
+
+if (!function_exists('character_link')) {
+    function character_link(int|string $guid, ?string $label = null, ?int $serverId = null, string $fallbackPrefix = '#'): string
+    {
+        $guid = (int) $guid;
+        $text = trim((string) ($label ?? ''));
+        if ($text === '')
+            $text = $fallbackPrefix . $guid;
+
+        return '<a href="' . htmlspecialchars(character_view_url($guid, $serverId), ENT_QUOTES, 'UTF-8') . '">'
+            . htmlspecialchars($text, ENT_QUOTES, 'UTF-8')
+            . '</a>';
+    }
+}
+
+if (!function_exists('account_link')) {
+    function account_link(int|string $accountId, ?string $label = null, ?int $serverId = null, string $fallbackPrefix = '#'): string
+    {
+        $accountId = (int) $accountId;
+        $text = trim((string) ($label ?? ''));
+        if ($text === '')
+            $text = $fallbackPrefix . $accountId;
+
+        return '<a href="' . htmlspecialchars(account_view_url($accountId, $serverId), ENT_QUOTES, 'UTF-8') . '">'
+            . htmlspecialchars($text, ENT_QUOTES, 'UTF-8')
+            . '</a>';
+    }
+}
+
 if (!function_exists('flash_add')) {
     function flash_add(string $type, string $message): void
     {

@@ -22,10 +22,11 @@ class CharacterRepository extends MultiServerRepository
         $guid = (int)($filters['guid'] ?? 0);
         $accountName = trim((string)($filters['account'] ?? ''));
         $online = $filters['online'] ?? 'any';
+        $ban = $filters['ban'] ?? 'any';
         $levelMin = (int)($filters['level_min'] ?? 0);
         $levelMax = (int)($filters['level_max'] ?? 0);
 
-        $hasCriteria = $loadAll || $name !== '' || $guid > 0 || $accountName !== '' || $levelMin > 0 || $levelMax > 0 || in_array($online,['online','offline'],true);
+        $hasCriteria = $loadAll || $name !== '' || $guid > 0 || $accountName !== '' || $levelMin > 0 || $levelMax > 0 || in_array($online,['online','offline'],true) || in_array($ban,['banned','unbanned'],true);
         if(!$hasCriteria){
             return new Paginator([],0,$page,$perPage);
         }
@@ -52,6 +53,10 @@ class CharacterRepository extends MultiServerRepository
         }
         if(in_array($online,['online','offline'],true)){
             $wheres[] = $online === 'online' ? 'c.online = 1' : 'c.online = 0';
+        }
+        if(in_array($ban,['banned','unbanned'],true)){
+            $banSql = 'EXISTS (SELECT 1 FROM character_banned cb WHERE cb.guid = c.guid)';
+            $wheres[] = $ban === 'banned' ? $banSql : 'NOT ' . $banSql;
         }
 
         $accountTempTable = null;

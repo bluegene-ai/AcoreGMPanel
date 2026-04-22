@@ -83,6 +83,7 @@
   const ctxEmbedGuid = parseInt((ctx.embedGuid ?? (ctxEmbed && ctxEmbed.guid) ?? 0), 10) || 0;
   const ctxEmbedName = (ctx.embedName ?? (ctxEmbed && ctxEmbed.name) ?? '');
   const ctxLabels = ctx.labels || {};
+  const currentServer = new URLSearchParams(window.location.search).get('server') || '';
   const CLASS_META_FALLBACK = [
     [1,'warrior','Warrior'],
     [2,'paladin','Paladin'],
@@ -119,6 +120,11 @@
       el.textContent='';
     }
   };
+
+  function withServer(path){
+    if(!currentServer) return `${apiBase}${path}`;
+    return `${apiBase}${path}${path.includes('?') ? '&' : '?'}server=${encodeURIComponent(currentServer)}`;
+  }
   function resolveFlashTarget(target){
     if(!target) return null;
     const el=typeof target==='string'? document.querySelector(target):target;
@@ -264,14 +270,14 @@
       const rawAccount=typeof r.account_username==='string' && r.account_username.trim()? r.account_username.trim():'';
       let accountLabel;
       if(rawAccount){
-        accountLabel = esc(rawAccount);
+        accountLabel = `<a href="${esc(withServer(`/account/view?id=${accountId}`))}">${esc(rawAccount)}</a>`;
       } else if(Number.isFinite(accountId) && accountId>0){
-        accountLabel = esc(`#${accountId}`);
+        accountLabel = `<a href="${esc(withServer(`/account/view?id=${accountId}`))}">${esc(`#${accountId}`)}</a>`;
       } else {
         accountLabel = '&#8212;';
       }
       const viewLabel = translate('actions.view', ctxLabels.view || 'View');
-      return `<tr class="bag-query-row${classSlug}${active}" data-guid="${r.guid}"${dataClass}><td>${r.guid}</td><td class="bag-query-name">${esc(r.name)}</td><td>${r.level}</td><td>${r.race}</td><td>${accountLabel}</td><td><button class="btn-sm btn info" data-act="view" data-guid="${r.guid}" data-name="${esc(r.name)}">${esc(viewLabel)}</button></td></tr>`;
+      return `<tr class="bag-query-row${classSlug}${active}" data-guid="${r.guid}"${dataClass}><td>${r.guid}</td><td class="bag-query-name"><a href="${esc(withServer(`/character/view?guid=${r.guid}`))}">${esc(r.name)}</a></td><td>${r.level}</td><td>${r.race}</td><td>${accountLabel}</td><td><button class="btn-sm btn info" data-act="view" data-guid="${r.guid}" data-name="${esc(r.name)}">${esc(viewLabel)}</button></td></tr>`;
     }).join('');
     tb.querySelectorAll('button[data-act=view]').forEach(b=> b.addEventListener('click',()=> loadItems(b.dataset.guid,b.dataset.name)));
     activateRow();

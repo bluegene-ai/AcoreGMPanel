@@ -60,6 +60,7 @@ return static function (Router $router): void {
         $router->get('/aegis/api/player', [AegisController::class, 'apiPlayer']);
         $router->get('/aegis/api/log', [AegisController::class, 'apiLog']);
         $router->get('/boss', [BossController::class, 'index']);
+        $router->get('/account/view', [AccountController::class, 'show']);
         $router->get('/account/api/list', [AccountController::class, 'apiList']);
         $router->get('/account/api/ip-accounts', [AccountController::class, 'apiAccountsByIp']);
         $router->get('/account/api/ip-location', [AccountController::class, 'apiIpLocation']);

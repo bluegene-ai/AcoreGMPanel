@@ -46,6 +46,44 @@ return array (
     'online' => 'Online',
     'offline' => 'Offline',
   ),
+  'show' => 
+  array (
+    'title' => 'Account: :name (ID :id)',
+    'title_not_found' => 'Account not found (ID :id)',
+    'title_default' => 'Account details',
+    'back' => 'Back to list',
+    'not_found' => 'Account not found',
+    'summary' => 
+    array (
+      'title' => 'Summary',
+      'id' => 'ID',
+      'username' => 'Username',
+      'gmlevel' => 'GM level',
+      'status' => 'Status',
+      'last_login' => 'Last login',
+      'last_ip' => 'Last IP',
+      'email' => 'Email',
+      'reg_mail' => 'Registration email',
+      'character_count' => 'Character count',
+      'highest_level' => 'Highest level',
+    ),
+    'status' => 
+    array (
+      'banned' => 'Banned',
+    ),
+    'characters' => 
+    array (
+      'title' => 'Characters',
+      'empty' => 'No characters',
+      'table' => 
+      array (
+        'guid' => 'GUID',
+        'name' => 'Name',
+        'level' => 'Level',
+        'status' => 'Status',
+      ),
+    ),
+  ),
   'actions' => 
   array (
     'chars' => 'Characters',
