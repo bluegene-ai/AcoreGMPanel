@@ -18,6 +18,9 @@ return [
         'skill_preset' => 'Skill preset',
         'skill_difficulty' => 'Difficulty',
         'respawn_at' => 'Respawn ETA',
+        'current_position' => 'Current position',
+        'instance_id' => 'Instance ID',
+        'coordinates' => 'Coordinates',
         'last_spawn_at' => 'Last spawn',
         'last_engage_at' => 'Last engage',
         'last_death_at' => 'Last death',
@@ -92,15 +95,18 @@ return [
             'reward_items_text' => 'Base reward pool',
             'reward_formulas_text' => 'Formula reward pool',
             'reward_mounts_text' => 'Mount reward pool',
+            'spawn_points_text' => 'Boss spawn points',
         ],
         'placeholders' => [
             'id_list' => 'Comma, whitespace, or newline separated ID list',
+            'spawn_point_line' => 'One point per line: map_id,x,y,z (e.g. 571,4353.573,-4411.8877,151.3909)',
         ],
         'hints' => [
             'boss_auras_text' => 'Example: 21562,1126,467,20217',
             'reward_items_text' => 'Every extra random winner receives one item chosen from this list.',
             'reward_formulas_text' => 'If the formula roll succeeds, one item is chosen from this list. Can be empty.',
             'reward_mounts_text' => 'If the mount roll succeeds, one item is chosen from this list. Can be empty.',
+            'spawn_points_text' => 'Use one line per point in map_id,x,y,z format. Save triggers .boss config reload and applies immediately; if all lines are invalid, built-in script defaults are used.',
         ],
         'random_modes' => [
             'weighted' => 'Weighted by contribution',

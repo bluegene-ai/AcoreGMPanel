@@ -18,6 +18,9 @@ return [
         'skill_preset' => '技能预设',
         'skill_difficulty' => '强度档位',
         'respawn_at' => '预计重生',
+        'current_position' => '当前位置',
+        'instance_id' => '副本 ID',
+        'coordinates' => '坐标',
         'last_spawn_at' => '最近生成',
         'last_engage_at' => '最近开战',
         'last_death_at' => '最近死亡',
@@ -92,15 +95,18 @@ return [
             'reward_items_text' => '基础奖励物品池',
             'reward_formulas_text' => '公式奖励物品池',
             'reward_mounts_text' => '坐骑奖励物品池',
+            'spawn_points_text' => 'Boss 刷新点列表',
         ],
         'placeholders' => [
             'id_list' => '支持逗号、空格或换行分隔的 ID 列表',
+            'spawn_point_line' => '每行一个刷新点：map_id,x,y,z（例如 571,4353.573,-4411.8877,151.3909）',
         ],
         'hints' => [
             'boss_auras_text' => '示例：21562,1126,467,20217',
             'reward_items_text' => '所有额外随机获奖者必得物品，从此列表中随机抽取一个。',
             'reward_formulas_text' => '命中公式奖励概率后，从此列表随机抽取一个。可留空。',
             'reward_mounts_text' => '命中坐骑奖励概率后，从此列表随机抽取一个。可留空。',
+            'spawn_points_text' => '每行填写 map_id,x,y,z。保存后通过 .boss config reload 即时生效；无有效行时回退到脚本内置刷新点。',
         ],
         'random_modes' => [
             'weighted' => '按贡献加权',

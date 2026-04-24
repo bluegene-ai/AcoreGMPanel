@@ -3,7 +3,7 @@
 .boss-panel{background:#0d1621;border:1px solid rgba(220,168,82,.16);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(5,13,22,.22);min-width:0;}
 .boss-panel__head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .boss-panel__head h2{margin:0;color:#f7f0e2;font-size:18px;}
-.boss-panel--runtime,.boss-panel--table{grid-column:1 / -1;}
+.boss-panel--table{grid-column:1 / -1;}
 .boss-runtime-grid,.boss-stats-grid,.boss-action-grid{display:grid;gap:14px;}
 .boss-runtime-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px;}
 .boss-runtime-card,.boss-stat-card,.boss-action-card{background:#101b27;border:1px solid rgba(220,168,82,.14);border-radius:10px;padding:14px;}

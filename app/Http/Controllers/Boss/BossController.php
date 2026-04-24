@@ -387,6 +387,13 @@ class BossController extends Controller
                     (string) ($defaults['reward_mounts_text'] ?? '')
                 )
             ),
+            'spawn_points_text' => $this->normalizedSpawnPointsText(
+                $this->normalizedString(
+                    $request,
+                    'spawn_points_text',
+                    (string) ($defaults['spawn_points_text'] ?? '')
+                )
+            ),
         ];
 
         if ($config['minion_count_max'] < $config['minion_count_min']) {
@@ -579,5 +586,38 @@ class BossController extends Controller
         }
 
         return substr($resolved, 0, 120);
+    }
+
+    private function normalizedSpawnPointsText(string $value): string
+    {
+        $rows = preg_split('/\r\n|\r|\n/', trim($value)) ?: [];
+        $normalized = [];
+
+        foreach ($rows as $row) {
+            $parts = preg_split('/\s*,\s*/', trim((string) $row)) ?: [];
+            if (count($parts) !== 4) {
+                continue;
+            }
+
+            if (!is_numeric($parts[0]) || !is_numeric($parts[1]) || !is_numeric($parts[2]) || !is_numeric($parts[3])) {
+                continue;
+            }
+
+            $mapId = max(0, min(2000000, (int) round((float) $parts[0])));
+            $x = (float) $parts[1];
+            $y = (float) $parts[2];
+            $z = (float) $parts[3];
+
+            $normalized[] = $mapId . ','
+                . number_format($x, 4, '.', '') . ','
+                . number_format($y, 4, '.', '') . ','
+                . number_format($z, 4, '.', '');
+
+            if (count($normalized) >= 100) {
+                break;
+            }
+        }
+
+        return implode("\n", $normalized);
     }
 }

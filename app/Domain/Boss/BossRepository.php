@@ -108,7 +108,8 @@ class BossRepository extends MultiServerRepository
                 . 'threat_weight, presence_weight, kill_weight, '
                 . 'guaranteed_item_id, guaranteed_item_count, '
                 . 'gold_min_copper, gold_max_copper, reward_items_text, '
-                . 'reward_formulas_text, reward_mounts_text, updated_at '
+                . 'reward_formulas_text, reward_mounts_text, '
+                . 'spawn_points_text, updated_at '
                 . 'FROM ' . $this->table($this->configTable)
                 . ' WHERE state_key = :state_key LIMIT 1'
             );
@@ -292,6 +293,15 @@ class BossRepository extends MultiServerRepository
             'CREATE DATABASE IF NOT EXISTS `' . $this->customDbName . '`'
         );
         $this->characters()->exec($this->createConfigTableSql());
+        try {
+            $this->characters()->exec(
+                'ALTER TABLE ' . $this->table($this->configTable)
+                . ' ADD COLUMN `spawn_points_text` TEXT NULL '
+                . 'AFTER `reward_mounts_text`'
+            );
+        } catch (Throwable $exception) {
+            // Ignore duplicate-column errors for existing upgraded schemas.
+        }
         $this->storeConfig($defaults, true);
     }
 
@@ -332,6 +342,7 @@ class BossRepository extends MultiServerRepository
             . '`reward_items_text` TEXT NULL,'
             . '`reward_formulas_text` TEXT NULL,'
             . '`reward_mounts_text` TEXT NULL,'
+                . '`spawn_points_text` TEXT NULL,'
             . '`updated_at` INT NOT NULL DEFAULT 0,'
             . 'PRIMARY KEY (`state_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4';
     }
@@ -353,6 +364,7 @@ class BossRepository extends MultiServerRepository
             . 'presence_weight, kill_weight, guaranteed_item_id, '
             . 'guaranteed_item_count, gold_min_copper, gold_max_copper, '
             . 'reward_items_text, reward_formulas_text, reward_mounts_text, '
+            . 'spawn_points_text, '
             . 'updated_at'
             . ') VALUES ('
             . ':state_key, :boss_entry, :boss_name, :boss_level, '
@@ -367,6 +379,7 @@ class BossRepository extends MultiServerRepository
             . ':presence_weight, :kill_weight, :guaranteed_item_id, '
             . ':guaranteed_item_count, :gold_min_copper, :gold_max_copper, '
             . ':reward_items_text, :reward_formulas_text, :reward_mounts_text, '
+            . ':spawn_points_text, '
             . ':updated_at'
             . ')'
         );
@@ -411,6 +424,7 @@ class BossRepository extends MultiServerRepository
         $stmt->bindValue(':reward_items_text', (string) ($config['reward_items_text'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':reward_formulas_text', (string) ($config['reward_formulas_text'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':reward_mounts_text', (string) ($config['reward_mounts_text'] ?? ''), PDO::PARAM_STR);
+        $stmt->bindValue(':spawn_points_text', (string) ($config['spawn_points_text'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':updated_at', (int) ($config['updated_at'] ?? time()), PDO::PARAM_INT);
     }
 
@@ -478,6 +492,7 @@ class BossRepository extends MultiServerRepository
             'reward_items_text' => (string) ($resolved['reward_items_text'] ?? ''),
             'reward_formulas_text' => (string) ($resolved['reward_formulas_text'] ?? ''),
             'reward_mounts_text' => (string) ($resolved['reward_mounts_text'] ?? ''),
+            'spawn_points_text' => (string) ($resolved['spawn_points_text'] ?? ''),
             'updated_at' => (int) ($resolved['updated_at'] ?? 0),
         ];
     }
@@ -547,6 +562,7 @@ class BossRepository extends MultiServerRepository
             'reward_items_text' => '38082,41600,51809,34067',
             'reward_formulas_text' => '45059,44491',
             'reward_mounts_text' => '32768,30480,13335,37719,49282,49290,19872,33977,33809,37828,43963,54068,33183,33189,35513,43964,19902,43963,46109,50250,49286,30609,54860,37012',
+            'spawn_points_text' => (string) Config::get('boss.defaults.spawn_points_text', ''),
             'updated_at' => 0,
         ];
 

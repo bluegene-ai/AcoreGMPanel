@@ -34,6 +34,12 @@ $capabilityNotice = $__canAll(['boss.events', 'boss.contributors', 'boss.actions
     : __('app.common.capabilities.page_limited');
 $bossName = trim((string) ($bossRuntime['boss_name'] ?? ''));
 $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
+$bossMapId = (int) ($bossRuntime['map_id'] ?? 0);
+$bossMapLabel = \Acme\Panel\Support\GameMaps::mapLabel($bossMapId);
+$bossInstanceId = (int) ($bossRuntime['instance_id'] ?? 0);
+$bossHomeX = number_format((float) ($bossRuntime['home_x'] ?? 0), 3, '.', '');
+$bossHomeY = number_format((float) ($bossRuntime['home_y'] ?? 0), 3, '.', '');
+$bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -83,6 +89,21 @@ $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
         <div class="boss-runtime-card">
           <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.respawn_at')) ?></span>
           <strong class="boss-runtime-card__value"><?= htmlspecialchars(format_datetime((int) ($bossRuntime['respawn_at'] ?? 0))) ?></strong>
+        </div>
+        <div class="boss-runtime-card">
+          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.current_position')) ?></span>
+          <?php if ($hasActiveBoss): ?>
+            <strong class="boss-runtime-card__value"><?= htmlspecialchars($bossMapLabel) ?></strong>
+            <span class="small muted">
+              <?= htmlspecialchars(__('app.boss.runtime.instance_id')) ?>: #<?= $bossInstanceId ?> ·
+              <?= htmlspecialchars(__('app.boss.runtime.coordinates')) ?>:
+              X <?= htmlspecialchars($bossHomeX) ?> ·
+              Y <?= htmlspecialchars($bossHomeY) ?> ·
+              Z <?= htmlspecialchars($bossHomeZ) ?>
+            </span>
+          <?php else: ?>
+            <strong class="boss-runtime-card__value">-</strong>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -285,6 +306,12 @@ $hasActiveBoss = (int) ($bossRuntime['boss_guid'] ?? 0) > 0;
                 <span><?= htmlspecialchars(__('app.boss.config.fields.boss_auras_text')) ?></span>
                 <textarea name="boss_auras_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['boss_auras_text'] ?? '')) ?></textarea>
                 <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_auras_text')) ?></small>
+              </label>
+
+              <label class="boss-field boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?></span>
+                <textarea name="spawn_points_text" rows="6" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.spawn_point_line')) ?>"><?= htmlspecialchars((string) ($bossConfig['spawn_points_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.spawn_points_text')) ?></small>
               </label>
             </div>
           </section>
