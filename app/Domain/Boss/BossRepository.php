@@ -17,6 +17,7 @@ class BossRepository extends MultiServerRepository
     private string $runtimeKey;
     private string $configTable;
     private int $decimalScale;
+    private ?array $tableAvailability = null;
 
     public function __construct(?int $serverId = null)
     {
@@ -31,6 +32,19 @@ class BossRepository extends MultiServerRepository
     public function dashboard(int $eventLimit, int $contributorLimit): array
     {
         $warnings = [];
+        $criticalWarnings = [];
+        $missingTables = $this->missingTables([
+            'boss_activity_runtime',
+            $this->configTable,
+            'boss_activity_events',
+            'boss_activity_contributors',
+        ]);
+
+        if ($missingTables !== []) {
+            $criticalWarnings[] = Lang::get('app.boss.warnings.schema_missing', [
+                'tables' => implode(', ', $missingTables),
+            ]);
+        }
 
         return [
             'runtime' => $this->loadRuntime($warnings),
@@ -38,6 +52,7 @@ class BossRepository extends MultiServerRepository
             'stats' => $this->loadStats($warnings),
             'events' => $this->loadEvents($eventLimit, $warnings),
             'contributors' => $this->loadContributors($contributorLimit, $warnings),
+            'critical_warnings' => $criticalWarnings,
             'warnings' => $warnings,
         ];
     }
@@ -50,7 +65,9 @@ class BossRepository extends MultiServerRepository
             'updated_at' => time(),
         ]);
 
-        $this->ensureConfigStorage($defaults);
+        if (!$this->tableExists($this->configTable))
+            throw new \RuntimeException('boss_config_storage_missing');
+
         $this->storeConfig($normalized, false);
 
         return $this->normalizeConfigRow($normalized, $defaults);
@@ -58,6 +75,15 @@ class BossRepository extends MultiServerRepository
 
     private function loadRuntime(array &$warnings): array
     {
+        if (!$this->tableExists('boss_activity_runtime')) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.runtime_unavailable')
+            );
+
+            return $this->defaultRuntime();
+        }
+
         try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
@@ -90,9 +116,16 @@ class BossRepository extends MultiServerRepository
     {
         $defaults = $this->defaultConfigStorage();
 
-        try {
-            $this->ensureConfigStorage($defaults);
+        if (!$this->tableExists($this->configTable)) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.config_unavailable')
+            );
 
+            return $this->normalizeConfigRow($defaults, $defaults);
+        }
+
+        try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
                 . 'state_key, boss_entry, boss_name, boss_level, '
@@ -117,10 +150,8 @@ class BossRepository extends MultiServerRepository
             $stmt->execute();
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!is_array($row)) {
-                $this->storeConfig($defaults, true);
+            if (!is_array($row))
                 return $this->normalizeConfigRow($defaults, $defaults);
-            }
 
             return $this->normalizeConfigRow($row, $defaults);
         } catch (Throwable $exception) {
@@ -139,21 +170,29 @@ class BossRepository extends MultiServerRepository
         $lastDay = $now - 86400;
         $lastWeek = $now - 604800;
 
-        try {
-            $eventStmt = $this->characters()->prepare(
-                'SELECT '
-                . 'SUM(CASE WHEN created_at >= :last_day THEN 1 ELSE 0 END) '
-                . 'AS events_24h, '
-                . 'SUM(CASE WHEN event_type = :death_type '
-                . 'AND created_at >= :last_week THEN 1 ELSE 0 END) AS kills_7d '
-                . 'FROM ' . $this->table('boss_activity_events')
-            );
-            $eventStmt->bindValue(':last_day', $lastDay, PDO::PARAM_INT);
-            $eventStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
-            $eventStmt->bindValue(':death_type', 'death', PDO::PARAM_STR);
-            $eventStmt->execute();
-            $eventRow = $eventStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable $exception) {
+        if ($this->tableExists('boss_activity_events')) {
+            try {
+                $eventStmt = $this->characters()->prepare(
+                    'SELECT '
+                    . 'SUM(CASE WHEN created_at >= :last_day THEN 1 ELSE 0 END) '
+                    . 'AS events_24h, '
+                    . 'SUM(CASE WHEN event_type = :death_type '
+                    . 'AND created_at >= :last_week THEN 1 ELSE 0 END) AS kills_7d '
+                    . 'FROM ' . $this->table('boss_activity_events')
+                );
+                $eventStmt->bindValue(':last_day', $lastDay, PDO::PARAM_INT);
+                $eventStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
+                $eventStmt->bindValue(':death_type', 'death', PDO::PARAM_STR);
+                $eventStmt->execute();
+                $eventRow = $eventStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            } catch (Throwable $exception) {
+                $this->warn(
+                    $warnings,
+                    Lang::get('app.boss.warnings.events_unavailable')
+                );
+                $eventRow = [];
+            }
+        } else {
             $this->warn(
                 $warnings,
                 Lang::get('app.boss.warnings.events_unavailable')
@@ -161,23 +200,23 @@ class BossRepository extends MultiServerRepository
             $eventRow = [];
         }
 
-        try {
-            $contributorStmt = $this->characters()->prepare(
-                'SELECT '
-                . 'SUM(CASE WHEN created_at >= :last_week THEN 1 ELSE 0 END) '
-                . 'AS contributors_7d, '
-                . 'SUM(CASE WHEN created_at >= :last_week THEN rewarded_random '
-                . 'ELSE 0 END) AS random_rewarded_7d '
-                . 'FROM ' . $this->table('boss_activity_contributors')
-            );
-            $contributorStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
-            $contributorStmt->execute();
-            $contributorRow = $contributorStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable $exception) {
-            $this->warn(
-                $warnings,
-                Lang::get('app.boss.warnings.contributors_unavailable')
-            );
+        if ($this->tableExists('boss_activity_contributors')) {
+            try {
+                $contributorStmt = $this->characters()->prepare(
+                    'SELECT '
+                    . 'SUM(CASE WHEN created_at >= :last_week THEN 1 ELSE 0 END) '
+                    . 'AS contributors_7d, '
+                    . 'SUM(CASE WHEN created_at >= :last_week THEN rewarded_random '
+                    . 'ELSE 0 END) AS random_rewarded_7d '
+                    . 'FROM ' . $this->table('boss_activity_contributors')
+                );
+                $contributorStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
+                $contributorStmt->execute();
+                $contributorRow = $contributorStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            } catch (Throwable $exception) {
+                $contributorRow = [];
+            }
+        } else {
             $contributorRow = [];
         }
 
@@ -193,6 +232,15 @@ class BossRepository extends MultiServerRepository
 
     private function loadEvents(int $limit, array &$warnings): array
     {
+        if (!$this->tableExists('boss_activity_events')) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.events_unavailable')
+            );
+
+            return [];
+        }
+
         try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
@@ -230,6 +278,15 @@ class BossRepository extends MultiServerRepository
 
     private function loadContributors(int $limit, array &$warnings): array
     {
+        if (!$this->tableExists('boss_activity_contributors')) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.contributors_unavailable')
+            );
+
+            return [];
+        }
+
         try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
@@ -287,64 +344,36 @@ class BossRepository extends MultiServerRepository
         return is_array($decoded) ? $decoded : null;
     }
 
-    private function ensureConfigStorage(array $defaults): void
+    private function missingTables(array $tables): array
     {
-        $this->characters()->exec(
-            'CREATE DATABASE IF NOT EXISTS `' . $this->customDbName . '`'
-        );
-        $this->characters()->exec($this->createConfigTableSql());
-        try {
-            $this->characters()->exec(
-                'ALTER TABLE ' . $this->table($this->configTable)
-                . ' ADD COLUMN `spawn_points_text` TEXT NULL '
-                . 'AFTER `reward_mounts_text`'
-            );
-        } catch (Throwable $exception) {
-            // Ignore duplicate-column errors for existing upgraded schemas.
+        $missing = [];
+
+        foreach ($tables as $table) {
+            if (!$this->tableExists($table))
+                $missing[] = $table;
         }
-        $this->storeConfig($defaults, true);
+
+        return $missing;
     }
 
-    private function createConfigTableSql(): string
+    private function tableExists(string $table): bool
     {
-        return 'CREATE TABLE IF NOT EXISTS ' . $this->table($this->configTable) . ' ('
-            . '`state_key` VARCHAR(32) NOT NULL,'
-            . '`boss_entry` INT NOT NULL DEFAULT 647,'
-            . '`boss_name` VARCHAR(120) NOT NULL DEFAULT "",'
-            . '`boss_level` INT NOT NULL DEFAULT 83,'
-            . '`boss_scale_scaled` INT NOT NULL DEFAULT 500,'
-            . '`boss_health_multiplier_scaled` INT NOT NULL DEFAULT 2000,'
-            . '`boss_auras_text` TEXT NULL,'
-            . '`ally_level` INT NOT NULL DEFAULT 20,'
-            . '`ally_health_multiplier_scaled` INT NOT NULL DEFAULT 150,'
-            . '`respawn_time_minutes` INT NOT NULL DEFAULT 10,'
-            . '`minion_count_min` INT NOT NULL DEFAULT 1,'
-            . '`minion_count_max` INT NOT NULL DEFAULT 2,'
-            . '`skill_preset` VARCHAR(64) NOT NULL DEFAULT "storm_siege",'
-            . '`skill_difficulty` VARCHAR(64) NOT NULL DEFAULT "standard",'
-            . '`guaranteed_reward_enabled` TINYINT NOT NULL DEFAULT 1,'
-            . '`guaranteed_reward_notify` TINYINT NOT NULL DEFAULT 1,'
-            . '`max_random_reward_players` INT NOT NULL DEFAULT 3,'
-            . '`class_reward_chance` INT NOT NULL DEFAULT 60,'
-            . '`formula_reward_chance` INT NOT NULL DEFAULT 10,'
-            . '`mount_reward_chance` INT NOT NULL DEFAULT 15,'
-            . '`random_reward_mode` VARCHAR(16) NOT NULL DEFAULT "weighted",'
-            . '`participation_range` INT NOT NULL DEFAULT 80,'
-            . '`damage_weight` INT NOT NULL DEFAULT 100,'
-            . '`healing_weight` INT NOT NULL DEFAULT 80,'
-            . '`threat_weight` INT NOT NULL DEFAULT 35,'
-            . '`presence_weight` INT NOT NULL DEFAULT 10,'
-            . '`kill_weight` INT NOT NULL DEFAULT 3,'
-            . '`guaranteed_item_id` INT NOT NULL DEFAULT 40753,'
-            . '`guaranteed_item_count` INT NOT NULL DEFAULT 2,'
-            . '`gold_min_copper` INT NOT NULL DEFAULT 30000,'
-            . '`gold_max_copper` INT NOT NULL DEFAULT 50000,'
-            . '`reward_items_text` TEXT NULL,'
-            . '`reward_formulas_text` TEXT NULL,'
-            . '`reward_mounts_text` TEXT NULL,'
-                . '`spawn_points_text` TEXT NULL,'
-            . '`updated_at` INT NOT NULL DEFAULT 0,'
-            . 'PRIMARY KEY (`state_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4';
+        if ($this->tableAvailability !== null && array_key_exists($table, $this->tableAvailability))
+            return $this->tableAvailability[$table];
+
+        $stmt = $this->characters()->prepare(
+            'SELECT 1 FROM information_schema.TABLES '
+            . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table LIMIT 1'
+        );
+        $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
+        $stmt->bindValue(':table', $table, PDO::PARAM_STR);
+        $stmt->execute();
+
+        $exists = $stmt->fetchColumn() !== false;
+        $this->tableAvailability ??= [];
+        $this->tableAvailability[$table] = $exists;
+
+        return $exists;
     }
 
     private function storeConfig(array $config, bool $ignoreExisting): void

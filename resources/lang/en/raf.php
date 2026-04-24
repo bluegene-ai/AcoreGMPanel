@@ -86,6 +86,7 @@ return [
         'comment_saved' => 'Note saved.',
     ],
     'errors' => [
+        'schema_missing' => 'RAF tables are missing: :tables. Load RecruitAFriend.lua first so Lua can initialize the ac_eluna schema before using this page.',
         'load_failed' => 'Unable to load RAF data. Verify RecruitAFriend.lua is active and the tables are reachable.',
         'account_id_required' => 'A valid account ID is required.',
         'recruiter_guid_required' => 'A valid recruiter GUID is required.',

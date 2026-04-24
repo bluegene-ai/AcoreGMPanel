@@ -16,6 +16,9 @@ $bossEvents = is_array($bossDashboard['events'] ?? null)
 $bossContributors = is_array($bossDashboard['contributors'] ?? null)
     ? $bossDashboard['contributors']
     : [];
+$bossCriticalWarnings = is_array($bossDashboard['critical_warnings'] ?? null)
+  ? $bossDashboard['critical_warnings']
+  : [];
 $bossWarnings = is_array($bossDashboard['warnings'] ?? null)
     ? $bossDashboard['warnings']
     : [];
@@ -46,6 +49,12 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
 
 <div class="boss-page">
   <div id="bossFeedback" class="panel-flash panel-flash--inline" hidden></div>
+
+  <?php foreach ($bossCriticalWarnings as $warning): ?>
+    <div class="panel-flash panel-flash--error panel-flash--inline is-visible">
+      <?= htmlspecialchars((string) $warning) ?>
+    </div>
+  <?php endforeach; ?>
 
   <?php foreach ($bossWarnings as $warning): ?>
     <div class="panel-flash panel-flash--info panel-flash--inline is-visible">

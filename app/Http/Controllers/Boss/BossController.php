@@ -407,9 +407,13 @@ class BossController extends Controller
         try {
             $savedConfig = $this->repo()->saveConfig($config);
         } catch (Throwable $exception) {
+            $message = $exception->getMessage() === 'boss_config_storage_missing'
+                ? Lang::get('app.boss.errors.config_storage_missing')
+                : Lang::get('app.boss.errors.config_save_failed');
+
             return $this->json([
                 'success' => false,
-                'message' => Lang::get('app.boss.errors.config_save_failed'),
+                'message' => $message,
             ], 422);
         }
 

@@ -14,6 +14,7 @@ class RafRepository extends MultiServerRepository
 {
     private string $customDbName;
     private int $permanentBlockThreshold;
+    private ?array $tableAvailability = null;
 
     public function __construct(?int $serverId = null)
     {
@@ -203,6 +204,21 @@ class RafRepository extends MultiServerRepository
         $cfg = ServerContext::server($this->serverId);
 
         return (int) ($cfg['realm_id'] ?? 0);
+    }
+
+    public function schemaStatus(): array
+    {
+        $missingTables = [];
+
+        foreach (['recruit_a_friend_links', 'recruit_a_friend_rewards'] as $table) {
+            if (!$this->tableExists($table))
+                $missingTables[] = $table;
+        }
+
+        return [
+            'ready' => $missingTables === [],
+            'missing_tables' => $missingTables,
+        ];
     }
 
     private function normalizeRow(array $row): array
@@ -441,5 +457,25 @@ class RafRepository extends MultiServerRepository
     private function table(string $table): string
     {
         return '`' . $this->customDbName . '`.`' . $table . '`';
+    }
+
+    private function tableExists(string $table): bool
+    {
+        if ($this->tableAvailability !== null && array_key_exists($table, $this->tableAvailability))
+            return $this->tableAvailability[$table];
+
+        $stmt = $this->characters()->prepare(
+            'SELECT 1 FROM information_schema.TABLES '
+            . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table LIMIT 1'
+        );
+        $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
+        $stmt->bindValue(':table', $table, PDO::PARAM_STR);
+        $stmt->execute();
+
+        $exists = $stmt->fetchColumn() !== false;
+        $this->tableAvailability ??= [];
+        $this->tableAvailability[$table] = $exists;
+
+        return $exists;
     }
 }

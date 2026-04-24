@@ -15,6 +15,7 @@ $capabilityNotice = $__canAll(['raf.bind', 'raf.unbind', 'raf.comment'])
     ? null
     : __('app.common.capabilities.page_limited');
 $loadError = trim((string) ($raf_error ?? ''));
+$schemaMissing = !empty($raf_schema_missing);
 $pageSizeOptions = is_array($rafDefaults['page_size_options'] ?? null)
     ? $rafDefaults['page_size_options']
     : [20, 30, 50, 100];
@@ -52,7 +53,7 @@ $pageUrl = static function (int $page) use ($current_server, $search, $recruiter
 
 <div class="raf-page">
   <?php if ($loadError !== ''): ?>
-    <div class="panel-flash panel-flash--error panel-flash--inline is-visible">
+    <div class="panel-flash <?= $schemaMissing ? 'panel-flash--error' : 'panel-flash--error' ?> panel-flash--inline is-visible">
       <?= htmlspecialchars($loadError) ?>
     </div>
   <?php endif; ?>

@@ -63,16 +63,23 @@ class RafController extends Controller
         $pager = new Paginator([], 0, $state['page'], $state['limit']);
         $stats = $this->defaultStats();
         $error = null;
+        $schemaStatus = $this->repo()->schemaStatus();
 
-        try {
-            $pager = $this->repo()->listLinks(
-                $state['filters'],
-                $state['page'],
-                $state['limit']
-            );
-            $stats = $this->repo()->stats($state['filters']);
-        } catch (Throwable $exception) {
-            $error = Lang::get('app.raf.errors.load_failed');
+        if (!$schemaStatus['ready']) {
+            $error = Lang::get('app.raf.errors.schema_missing', [
+                'tables' => implode(', ', $schemaStatus['missing_tables']),
+            ]);
+        } else {
+            try {
+                $pager = $this->repo()->listLinks(
+                    $state['filters'],
+                    $state['page'],
+                    $state['limit']
+                );
+                $stats = $this->repo()->stats($state['filters']);
+            } catch (Throwable $exception) {
+                $error = Lang::get('app.raf.errors.load_failed');
+            }
         }
 
         $server = ServerContext::server();
@@ -81,6 +88,7 @@ class RafController extends Controller
         return $this->pageView('raf.index', $this->listViewData($pager, $state['filters'], [
             'raf_stats' => $stats,
             'raf_error' => $error,
+            'raf_schema_missing' => !$schemaStatus['ready'],
             'raf_defaults' => [
                 'server_name' => (string) ($server['name'] ?? ''),
                 'realm_id' => $realmId,

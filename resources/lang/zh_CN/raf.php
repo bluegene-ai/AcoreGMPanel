@@ -86,6 +86,7 @@ return [
         'comment_saved' => '备注已保存。',
     ],
     'errors' => [
+        'schema_missing' => '未检测到 RAF 相关表：:tables。请先加载 RecruitAFriend.lua，让 Lua 初始化 ac_eluna 表结构后再使用管理页面。',
         'load_failed' => 'RAF 数据加载失败，请确认 RecruitAFriend.lua 已加载并且数据表可访问。',
         'account_id_required' => '请输入有效的账号 ID。',
         'recruiter_guid_required' => '请输入有效的招募角色 GUID。',

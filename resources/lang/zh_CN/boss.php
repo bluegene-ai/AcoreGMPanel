@@ -5,6 +5,7 @@ return [
     'intro' => '查看 Boss 当前运行态、活动配置、事件流水与贡献快照，并通过 SOAP 执行生成、热加载、模板切换和倍率重基准。',
     'scope_note' => '当前服务器：:server',
     'warnings' => [
+        'schema_missing' => '未检测到部分 Boss 相关表：:tables。请先加载 boss.lua，让 Lua 完成 ac_eluna 表结构初始化后再使用 AGMP。',
         'runtime_unavailable' => 'Boss 运行态表暂不可用，请确认 boss.lua 已创建 ac_eluna 持久化表。',
         'config_unavailable' => 'Boss 配置表暂不可用，AGMP 将回退到内置默认值。',
         'events_unavailable' => 'Boss 事件表暂不可用。',
@@ -197,6 +198,7 @@ return [
         'value_required' => '该动作需要一个值。',
         'invalid_preset' => '无效的技能预设。',
         'invalid_difficulty' => '无效的强度档位。',
+        'config_storage_missing' => 'Boss 配置表尚未由 boss.lua 初始化，当前只能查看默认值，不能保存。',
         'config_save_failed' => 'Boss 配置保存失败。',
         'reload_failed' => 'Lua 热加载失败。',
     ],

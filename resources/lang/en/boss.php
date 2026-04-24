@@ -5,6 +5,7 @@ return [
     'intro' => 'Review current boss runtime state, editable activity config, recent events, and contributor snapshots, then execute spawn, reload, preset, difficulty, or rebase actions through SOAP.',
     'scope_note' => 'Current realm: :server',
     'warnings' => [
+        'schema_missing' => 'Some Boss tables are missing: :tables. Load boss.lua first so Lua can initialize the ac_eluna schema before using AGMP.',
         'runtime_unavailable' => 'Boss runtime data is unavailable. Verify boss.lua created the ac_eluna persistence tables.',
         'config_unavailable' => 'Boss config storage is unavailable. AGMP fell back to built-in defaults.',
         'events_unavailable' => 'Boss event data is unavailable.',
@@ -197,6 +198,7 @@ return [
         'value_required' => 'This action requires a value.',
         'invalid_preset' => 'Invalid skill preset.',
         'invalid_difficulty' => 'Invalid difficulty.',
+        'config_storage_missing' => 'Boss config storage has not been initialized by boss.lua yet. AGMP can only show defaults until Lua creates the table.',
         'config_save_failed' => 'Boss config could not be saved.',
         'reload_failed' => 'Lua reload failed.',
     ],
