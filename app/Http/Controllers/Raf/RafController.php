@@ -76,9 +76,36 @@ class RafController extends Controller
                     $state['page'],
                     $state['limit']
                 );
-                $stats = $this->repo()->stats($state['filters']);
             } catch (Throwable $exception) {
                 $error = Lang::get('app.raf.errors.load_failed');
+            }
+
+            // 统计单独兜底：统计失败不应把已经取到的列表也一并清空
+            try {
+                $stats = $this->repo()->stats($state['filters']);
+            } catch (Throwable $exception) {
+                $stats = $this->defaultStats();
+            }
+        }
+
+        // 奖励发放记录：独立加载，失败时只影响该区块
+        $logState = $this->prepareRewardLogState($request);
+        $logPager = new Paginator([], 0, $logState['page'], $logState['limit']);
+        $logStats = $this->defaultRewardLogStats();
+        $logError = null;
+
+        if (!$schemaStatus['reward_log_ready']) {
+            $logError = Lang::get('app.raf.errors.reward_log_missing');
+        } else {
+            try {
+                $logPager = $this->repo()->listRewardLogs(
+                    $logState['filters'],
+                    $logState['page'],
+                    $logState['limit']
+                );
+                $logStats = $this->repo()->rewardLogStats($logState['filters']);
+            } catch (Throwable $exception) {
+                $logError = Lang::get('app.raf.errors.reward_log_load_failed');
             }
         }
 
@@ -89,6 +116,15 @@ class RafController extends Controller
             'raf_stats' => $stats,
             'raf_error' => $error,
             'raf_schema_missing' => !$schemaStatus['ready'],
+            'raf_reward_log' => [
+                'pager' => $logPager,
+                'stats' => $logStats,
+                'error' => $logError,
+                'ready' => (bool) $schemaStatus['reward_log_ready'],
+                'filters' => $logState['filters'],
+                'page' => $logState['page'],
+                'limit' => $logState['limit'],
+            ],
             'raf_defaults' => [
                 'server_name' => (string) ($server['name'] ?? ''),
                 'realm_id' => $realmId,
@@ -203,11 +239,20 @@ class RafController extends Controller
             ], 422);
         }
 
-        if ($this->repo()->findLink($accountId) === null) {
+        $link = $this->repo()->findLink($accountId);
+        if ($link === null) {
             return $this->json([
                 'success' => false,
                 'message' => Lang::get('app.raf.errors.link_not_found'),
             ], 404);
+        }
+
+        // 已失效或已完成的绑定不需要再解绑，避免产生误导性的审计记录
+        if ((int) ($link['time_stamp'] ?? 0) <= 0) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.raf.errors.link_inactive'),
+            ], 422);
         }
 
         $command = '.unbindraf ' . $accountId;
@@ -323,6 +368,79 @@ class RafController extends Controller
             ],
             'page' => $this->normalizedPage($request),
             'limit' => $limit,
+        ];
+    }
+
+    private function prepareRewardLogState(Request $request): array
+    {
+        $limit = $this->boundedInt(
+            $request,
+            'log_limit',
+            (int) Config::get('raf.page_size', 30),
+            10,
+            200
+        );
+
+        return [
+            'filters' => [
+                'search' => $this->normalizedString($request, 'log_search'),
+                'level' => (int) $request->int('log_level', 0),
+                'source' => $this->normalizedEnum(
+                    $request,
+                    'log_source',
+                    ['', 'login', 'level_change'],
+                    ''
+                ),
+                'from' => $this->rewardLogDateBoundary(
+                    $this->normalizedString($request, 'log_from'),
+                    false
+                ),
+                'to' => $this->rewardLogDateBoundary(
+                    $this->normalizedString($request, 'log_to'),
+                    true
+                ),
+                'sort' => $this->normalizedEnum(
+                    $request,
+                    'log_sort',
+                    [
+                        'granted_at',
+                        'reward_level',
+                        'recruiter_guid',
+                        'recruit_account_id',
+                        'id',
+                    ],
+                    'granted_at'
+                ),
+                'dir' => $this->normalizedDirection($request, 'log_dir', 'DESC'),
+                'limit' => $limit,
+            ],
+            'page' => $this->normalizedPage($request, 'log_page'),
+            'limit' => $limit,
+        ];
+    }
+
+    /**
+     * 把日期输入转换为当天的起止时间戳（按面板时区）
+     */
+    private function rewardLogDateBoundary(string $value, bool $endOfDay): int
+    {
+        $value = trim($value);
+        if ($value === '')
+            return 0;
+
+        $timestamp = strtotime($value . ($endOfDay ? ' 23:59:59' : ' 00:00:00'));
+
+        return $timestamp === false ? 0 : (int) $timestamp;
+    }
+
+    private function defaultRewardLogStats(): array
+    {
+        return [
+            'total' => 0,
+            'recruiters' => 0,
+            'recruits' => 0,
+            'default_rewards' => 0,
+            'latest_granted_at' => 0,
         ];
     }
 

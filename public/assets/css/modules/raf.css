@@ -34,19 +34,31 @@
 .raf-modal-field{display:flex;flex-direction:column;gap:6px;color:#d8e7f7;font-size:13px;}
 .raf-modal-field input{background:#071018;border:1px solid rgba(109,163,214,.2);border-radius:8px;color:#edf6ff;padding:9px 10px;font-size:13px;}
 .raf-modal-check{display:flex;align-items:center;gap:8px;margin-top:4px;color:#d8e7f7;font-size:13px;}
+.raf-summary-grid--log{grid-template-columns:repeat(5,minmax(0,1fr));}
+.raf-stat-card__value--time{font-size:18px;line-height:1.3;}
+.raf-panel__head--sub{margin-top:18px;padding-top:16px;border-top:1px solid rgba(109,163,214,.14);}
+.raf-panel__subtitle{margin:0;color:#edf5ff;font-size:15px;}
+.raf-reward-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-width:320px;}
+.raf-reward-item{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.raf-reward-item__name{font-weight:600;}
+.raf-reward-item__count{color:#bcd7f2;font-size:12px;}
+.raf-badge{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(143,158,178,.18);color:#c8d3df;}
+.raf-badge--login{background:rgba(45,167,118,.18);color:#86efb5;}
+.raf-badge--level_change{background:rgba(77,128,216,.2);color:#b9d5ff;}
+.raf-badge--unknown{background:rgba(143,158,178,.18);color:#c8d3df;}
 
 @media (max-width:1280px){
-  .raf-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:repeat(3,minmax(0,1fr));}
   .raf-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
 
 @media (max-width:860px){
-  .raf-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:repeat(2,minmax(0,1fr));}
   .raf-filter-grid,.raf-modal-grid{grid-template-columns:1fr;}
   .raf-field--span-2{grid-column:auto;}
   .raf-pagination{justify-content:flex-start;}
 }
 
 @media (max-width:560px){
-  .raf-summary-grid{grid-template-columns:1fr;}
+  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:1fr;}
 }

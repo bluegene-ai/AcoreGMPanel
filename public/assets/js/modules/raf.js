@@ -43,6 +43,16 @@
     return response.json();
   }
 
+  // 网络层异常（断线、超时、5xx）不应让交互静默失败：合成一个失败响应交给既有分支提示
+  async function postSafe(path, body){
+    try{
+      return await post(path, body);
+    }catch(error){
+      console.warn('RAF request failed', error);
+      return { success: false, message: t('errors.request_failed', 'Request failed.') };
+    }
+  }
+
   function show(type, message){
     if(feedback && dom.feedback){
       feedback.show(dom.feedback, type, message, { duration: 4000 });
@@ -127,7 +137,7 @@
       return;
     }
 
-    const json = await post('/raf/api/bind', {
+    const json = await postSafe('/raf/api/bind', {
       account_id: accountId,
       recruiter_guid: recruiterGuid,
       force: payload.force ? 1 : 0
@@ -149,7 +159,7 @@
     const confirmMessage = t('confirm_unbind', 'Unbind account :account?').replace(':account', accountLabel);
     if(!window.confirm(confirmMessage)) return;
 
-    const json = await post('/raf/api/unbind', { account_id: accountId });
+    const json = await postSafe('/raf/api/unbind', { account_id: accountId });
     if(!json || !json.success){
       show('error', (json && json.message) || t('action_failure', 'Action failed.'));
       return;
@@ -165,7 +175,7 @@
     const next = window.prompt(t('comment_prompt', 'Enter a new note'), current);
     if(next === null) return;
 
-    const json = await post('/raf/api/comment', {
+    const json = await postSafe('/raf/api/comment', {
       account_id: accountId,
       comment: next
     });
