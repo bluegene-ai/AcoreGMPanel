@@ -1,10 +1,10 @@
-﻿# Acore GM Panel
+# Acore GM Panel
 
 A web game management toolkit for AzerothCore realms. Acore GM Panel is a modern MVC control panel for [AzerothCore](https://www.azerothcore.org/) realms. It streamlines daily server operations with a consistent UI, unified tooling, and multi-realm aware services that cover the most common GM and administrator workflows.
 
 ## Highlights
 
-- **Modular architecture** – Each feature lives in an isolated domain (Account, Item, Creature, Quest, Mail, Mass Mail, Bag Query, Item Ownership, SmartAI, SOAP). Modules share common helpers, middleware, and UI components.
+- **Modular architecture** – Each feature lives in an isolated domain (Account, Item, Creature, Quest, Mail, Mass Mail, Items / Inventory, SmartAI, SOAP). Modules share common helpers, middleware, and UI components.
 - **Multi-realm support** – Dynamic realm switching with per-realm database and SOAP credentials, plus inheritance rules for shared authentication.
 - **Secure by default** – CSRF protection, authentication middleware, audit logging, and configurable SOAP whitelisting.
 - **Consistent UX** – Shared layout, design tokens, reusable components, and a front-end helper (`panel.js`) that abstracts base-path aware API calls.
@@ -101,8 +101,7 @@ AcoreGMPanel/
 | Quest Toolkit | `/quest` | Aggregated quest authoring with editor, diffing, and logs. |
 | Mail Center | `/mail` | Inspect, delete, and mark mail with attachments. |
 | Mass Mail | `/mass-mail` | Bulk announcements, item/gold distribution, and boost presets. |
-| Bag Query | `/bag` | Cross-character inventory lookup and item removal. |
-| Item Ownership | `/item-ownership` | Find who owns a specific item, inspect stacks, bulk delete or replace instances. |
+| Items / Inventory | `/item-inventory` | Two search axes: per-character bag/bank/equipment reads, and item-to-owner lookup with stack reduction, bulk delete and bulk replace. The legacy `/bag`, `/item-ownership` and `/bag-query` URLs 301-redirect here. |
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
 

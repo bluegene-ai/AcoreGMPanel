@@ -41,6 +41,9 @@
  */
 
 (function(){
+
+  /** Base path of the panel install: window.APP_BASE is never set by the server. */
+  const resolveBasePath = () => ((window.Panel && window.Panel.basePath && window.Panel.basePath()) || (document.body && document.body.dataset && document.body.dataset.appBase) || '').replace(/\/$/, '');
   const qs=(s,r=document)=>r.querySelector(s); const qsa=(s,r=document)=>Array.from(r.querySelectorAll(s));
   const data = window.SOAP_WIZARD_DATA || { categories: [], metadata:{} };
   const Feedback = (window.Panel && Panel.feedback) ? Panel.feedback : { success(){}, error(){}, info(){}, clear(){}, show(){} };
@@ -559,7 +562,7 @@
 
   function resolveUrl(path){
     if(/^https?:/i.test(path)) return path;
-    const base = window.APP_BASE || '';
+    const base = resolveBasePath() || '';
     if(!path.startsWith('/')) path = '/' + path;
     if(!base) return path;
     return base + path;
@@ -591,6 +594,16 @@
     }
   }
 
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+  // panel.js injects page modules from an immediately-invoked body script, so
+  // this module can execute while the document is still parsing. Defer via the
+  // panel helper (it covers loading AND interactive) instead of the classic
+  // readyState check, which silently skips init() in the interactive state.
+  if (window.Panel && typeof window.Panel.whenDomReady === 'function') {
+    window.Panel.whenDomReady(init);
+  } else if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
 

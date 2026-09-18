@@ -1,5 +1,67 @@
 <?php
 return [
+    'admin' => [
+        'page_title' => 'Boost Management',
+        'note' => 'realm_id=:id — apply boosts and review templates and redeem codes from one place.',
+        'apply' => [
+            'title' => 'Apply a boost',
+            'note' => 'realm_id=:realm. Locate the character by name or GUID, then pick a template or set a target level.',
+            'hint' => 'The boost raises the level first and then delivers the template items and gold. Templates are safer than a manual level; prefer them.',
+        ],
+        'fields' => [
+            'character_name' => 'Character name',
+            'character_name_placeholder' => 'e.g. Arthas',
+            'guid' => 'Character GUID',
+            'guid_placeholder' => 'Optional; takes priority when set',
+            'template' => 'Boost template',
+            'template_none' => 'No template (level only)',
+            'target_level' => 'Target level',
+            'target_level_placeholder' => 'e.g. 80',
+            'target_level_from_template' => 'Set by template',
+        ],
+        'actions' => [
+            'preview' => 'Preview rewards',
+            'apply' => 'Apply boost',
+            'working' => 'Working…',
+        ],
+        'preview' => [
+            'title' => 'Will be delivered',
+            'character' => 'Character',
+            'level' => 'Level',
+            'template' => 'Template',
+            'items' => 'Rewards',
+            'items_none' => 'Level change only, no items',
+            'money' => 'Gold',
+        ],
+        'overview' => [
+            'title' => 'Overview',
+            'templates' => 'Templates',
+            'code_total' => 'Redeem codes',
+            'code_unused' => 'Unused',
+            'code_used' => 'Used',
+        ],
+        'links' => [
+            'templates' => 'Manage templates',
+            'codes' => 'Manage redeem codes',
+        ],
+        'history' => [
+            'title' => 'Recent boosts',
+            'refresh' => 'Refresh',
+            'empty' => 'No boosts recorded yet',
+            'columns' => [
+                'time' => 'Time',
+                'character' => 'Character',
+                'rewards' => 'Rewards',
+                'status' => 'Status',
+            ],
+        ],
+        'applied' => 'Boost applied to :name.',
+        'errors' => [
+            'character_required' => 'Enter a character name or GUID.',
+            'target_required' => 'Pick a boost template or enter a target level.',
+            'character_missing' => 'Character not found.',
+        ],
+    ],
     'codes' => [
         'title' => 'Boost Redeem Code Generator',
         'fields' => [
@@ -18,9 +80,16 @@ return [
         'actions' => [
             'generate' => 'Generate Codes',
         ],
+        'generate' => [
+            'title' => 'Generate Redeem Codes',
+            'quick' => 'Quick count',
+            'safety' => 'Codes are written to the database immediately — check template and count first.',
+        ],
         'generated' => [
             'title' => 'Generated Output',
-            'hint' => 'One code per line. Copy & distribute as needed.',
+            'hint' => 'One code per line. Copy or download to distribute.',
+            'copy' => 'Copy all',
+            'collapse' => 'Collapse',
         ],
         'success' => 'Generated :count redeem codes.',
         'errors' => [
@@ -33,6 +102,13 @@ return [
             'hint' => 'Only unused redeem codes can be deleted. Used codes are shown for record only.',
             'fields' => [
                 'template' => 'Boost Template',
+                'status' => 'Usage status',
+                'status_all' => 'All statuses',
+                'status_unused' => 'Unused only',
+                'status_used' => 'Used only',
+                'search' => 'Quick filter',
+                'search_placeholder' => 'Filter this page by code / character / IP',
+                'per_page' => 'Rows per page',
                 'unused_only' => 'Filter',
                 'unused_only_label' => 'Unused only',
             ],
@@ -152,8 +228,12 @@ return [
                     ],
                 ],
                 'codes' => [
+                    'generating' => 'Generating…',
                     'table' => [
                         'empty' => 'No redeem codes',
+                    ],
+                    'manage' => [
+                        'no_match' => 'No codes on this page match the filter',
                     ],
                     'status' => [
                         'used' => 'USED',
@@ -170,13 +250,21 @@ return [
                         'summary' => 'Page :page / :pages · :total',
                     ],
                     'generated' => [
+                        'count' => ':count codes',
                         'download_ok' => 'OK',
                         'download_ok_count' => 'OK (:count)',
                         'template_named' => ':name (#:id)',
                         'template_fallback' => 'Template #:id',
+                        'copied' => 'Copied to clipboard',
+                        'copy_failed' => 'Copy failed, please select the text manually',
+                        'copy_empty' => 'Nothing to copy yet',
                     ],
                     'usage' => [
                         'realm_suffix' => ' (realm :id)',
+                    ],
+                    'errors' => [
+                        'invalid_count' => 'Enter a valid count',
+                        'count_too_large' => 'At most 10000 codes per run',
                     ],
                 ],
                 'redeem' => [

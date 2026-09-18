@@ -5,3 +5,66 @@
 .massmail-logs__col-result{width:90px;}
 .massmail-logs__col-status{width:60px;}
 .massmail-logs__col-recipients{width:160px;}
+
+/* ===== 操作反馈条：发送/公告结果不再只写进 console ===== */
+.mm-feedback{margin-bottom:14px;}
+.mm-feedback[hidden]{display:none;}
+
+/* ===== 收件人预览 ===== */
+.mm-recipients{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:38px;}
+.mm-recipients__count{
+  font-size:18px;font-weight:700;color:#e7f1fb;font-variant-numeric:tabular-nums;
+  min-width:44px;
+}
+.mm-recipients__count.is-ok{color:#86efb5;}
+.mm-recipients__count.is-warn{color:#ffd479;}
+.mm-recipients__count.is-over{color:#ffb5bd;}
+.mm-recipients__detail{
+  font-size:12px;color:#7e8c98;flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+.mm-recipients .btn{margin-left:auto;}
+.mm-custom-count{margin-top:2px;}
+
+/* ===== 物品编辑器：ID / 名称 / 数量 三列 ===== */
+.massmail-items__grid{
+  grid-template-columns:minmax(110px,150px) minmax(160px,1fr) minmax(150px,190px);
+}
+.massmail-items__head-actions{text-align:left;}
+.massmail-items__row{padding:4px 0;border-radius:8px;}
+.massmail-items__row.is-duplicate{background:rgba(207,73,91,.08);box-shadow:inset 0 0 0 1px rgba(207,73,91,.25);}
+.mm-item-name{
+  font-size:13px;color:#c7d4dd;line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
+.mm-item-name.is-pending{color:#7e8c98;font-style:italic;}
+.mm-item-name.is-missing{color:#ffb5bd;}
+.mm-item-name.is-duplicate{color:#ffd479;}
+.mm-item-qty-wrap{display:flex;align-items:center;gap:8px;}
+.mm-item-qty-wrap input{min-width:70px;}
+.mm-item-remove{white-space:nowrap;}
+.massmail-items__actions{display:flex;justify-content:flex-end;gap:8px;}
+
+/* 物品摘要：确认前一眼看清"发什么、发多少" */
+.mm-items-summary{
+  margin-top:4px;padding:8px 10px;border-radius:8px;
+  background:rgba(15,23,28,.72);border:1px solid rgba(70,90,105,.45);
+  font-size:12.5px;color:#b1c1cf;line-height:1.5;
+}
+.mm-items-summary[hidden]{display:none;}
+.mm-items-summary__label{color:#7e8c98;margin-right:6px;}
+.mm-items-summary__value{color:#dbe7f1;}
+
+/* 搜索框在日志工具条里不需要撑满 */
+.massmail-logs__controls input[type="search"]{
+  min-width:170px;padding:7px 10px;border-radius:6px;
+  background:#0f171c;border:1px solid rgba(70,90,105,.6);color:#e7f1fb;font-size:13px;
+}
+.massmail-logs__controls input[type="search"]:focus{outline:none;border-color:var(--c-accent,#4d8acf);}
+
+@media (max-width:720px){
+  .massmail-items__grid{grid-template-columns:minmax(90px,1fr) minmax(120px,1.4fr);}
+  .massmail-items__head-actions{display:none;}
+  .mm-item-qty-wrap{grid-column:1 / -1;}
+  .mm-recipients__detail{max-width:100%;}
+}

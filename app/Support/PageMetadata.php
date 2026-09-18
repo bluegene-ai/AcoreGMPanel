@@ -109,13 +109,13 @@ final class PageMetadata
                 'title' => Lang::get('app.aegis.page_title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.aegis.page_title', '/aegis'),
             ],
-            'bag_query.index' => [
-                'title' => Lang::get('app.bag_query.page_title'),
-                'breadcrumbs' => self::moduleBreadcrumbs('app.bag_query.page_title', '/bag'),
+            'item_inventory.index' => [
+                'title' => Lang::get('app.item_inventory.page_title'),
+                'breadcrumbs' => self::moduleBreadcrumbs('app.item_inventory.page_title', '/item-inventory'),
             ],
-            'item_owner.index' => [
-                'title' => Lang::get('app.item_owner.page_title'),
-                'breadcrumbs' => self::moduleBreadcrumbs('app.item_owner.page_title', '/item-owner'),
+            'character_boost.index' => [
+                'title' => Lang::get('app.character_boost.admin.page_title'),
+                'breadcrumbs' => self::moduleBreadcrumbs('app.character_boost.admin.page_title', '/character-boost'),
             ],
             'character_boost.templates' => [
                 'title' => Lang::get('app.character_boost.templates.title'),

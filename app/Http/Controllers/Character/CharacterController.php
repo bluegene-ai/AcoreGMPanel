@@ -14,7 +14,7 @@ use Acme\Panel\Domain\CharacterBoost\CharacterBoostNotFoundException;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostService;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostSoapException;
 use Acme\Panel\Support\{Auth,Audit,LogPath,ServerContext,ServerList};
-use Acme\Panel\Support\NfuwowNameResolver;
+use Acme\Panel\Support\GameNameResolver;
 use Acme\Panel\Support\SoapService;
 
 class CharacterController extends Controller
@@ -176,6 +176,8 @@ class CharacterController extends Controller
             ? (new BoostTemplateRepository())->listForRealm($realmId)
             : [];
 
+        $names = $this->resolveDetailNames($skills, $spells, $reps, $quests, $auras, $achievements, $cooldowns);
+
         return $this->pageView('character.show',[
             'summary' => $summary,
             'inventory' => $inventory,
@@ -186,6 +188,7 @@ class CharacterController extends Controller
             'auras' => $auras,
             'cooldowns' => $cooldowns,
             'achievements' => $achievements,
+            'game_names' => $names,
             'mail_count' => $mailCount,
             'boost_templates' => $boostTemplates,
             'error' => null,
@@ -201,6 +204,9 @@ class CharacterController extends Controller
                 'boost' => 'boost.apply',
                 'boost_templates' => 'boost.templates',
                 'boost_codes' => 'boost.codes',
+                // Lets the inventory / quest lists deep-link into the item and
+                // quest editors; the target pages enforce the same capability.
+                'content_view' => 'content.view',
             ],
         ]);
     }
@@ -354,6 +360,7 @@ class CharacterController extends Controller
             'auras'=>$auras,
             'cooldowns'=>$cooldowns,
             'achievements'=>$ach,
+            'game_names'=>$this->resolveDetailNames($skills, $spells, $reps, $quests, $auras, $ach, $cooldowns),
             'mail_count'=>$mailCount,
         ]);
     }
@@ -376,12 +383,85 @@ class CharacterController extends Controller
         }
 
         try {
-            $names = NfuwowNameResolver::resolveMany($state['type'], $state['ids']);
+            $names = GameNameResolver::resolveMany($state['type'], $state['ids']);
         } catch(\Throwable $e) {
             return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.query_failed',['message'=>$e->getMessage()])],500);
         }
 
         return $this->json(['success'=>true,'type'=>$state['type'],'names'=>$names]);
+    }
+
+    /**
+     * 角色详情页需要用到的全部 ID → 文本映射。
+     *
+     * 这里一次性解析（缓存命中后只是读 JSON），页面首屏直接显示名称，
+     * 不再依赖外部网站或前端异步补名。
+     */
+    private function resolveDetailNames(array $skills, array $spells, array $reps, array $quests, array $auras, array $achievements, array $cooldowns = []): array
+    {
+        $skillIds = [];
+        foreach ($skills as $row) {
+            $id = (int) ($row['skill'] ?? 0);
+            if ($id > 0) $skillIds[$id] = $id;
+        }
+
+        $spellIds = [];
+        foreach (array_merge($spells, $auras) as $row) {
+            $id = (int) ($row['spell'] ?? 0);
+            if ($id > 0) $spellIds[$id] = $id;
+        }
+
+        // 冷却表同时引用法术与物品，两边都要补名
+        $itemIds = [];
+        foreach ($cooldowns as $row) {
+            $spellId = (int) ($row['spellid'] ?? 0);
+            if ($spellId > 0) $spellIds[$spellId] = $spellId;
+
+            $itemId = (int) ($row['itemid'] ?? 0);
+            if ($itemId > 0) $itemIds[$itemId] = $itemId;
+        }
+
+        $factionIds = [];
+        foreach ($reps as $row) {
+            $id = (int) ($row['faction'] ?? 0);
+            if ($id > 0) $factionIds[$id] = $id;
+        }
+
+        $questIds = [];
+        foreach (array_merge(
+            is_array($quests['regular'] ?? null) ? $quests['regular'] : [],
+            is_array($quests['daily'] ?? null) ? $quests['daily'] : [],
+            is_array($quests['weekly'] ?? null) ? $quests['weekly'] : []
+        ) as $row) {
+            $id = (int) ($row['quest'] ?? 0);
+            if ($id > 0) $questIds[$id] = $id;
+        }
+
+        $achievementIds = [];
+        foreach (is_array($achievements['unlocks'] ?? null) ? $achievements['unlocks'] : [] as $row) {
+            $id = (int) ($row['achievement'] ?? 0);
+            if ($id > 0) $achievementIds[$id] = $id;
+        }
+
+        $resolveSafely = static function (string $type, array $ids): array {
+            if ($ids === []) {
+                return [];
+            }
+            try {
+                return GameNameResolver::resolveMany($type, array_values($ids));
+            } catch (\Throwable $exception) {
+                return [];
+            }
+        };
+
+        return [
+            'skill' => $resolveSafely('skill', $skillIds),
+            'spell' => $resolveSafely('spell', $spellIds),
+            'faction' => $resolveSafely('faction', $factionIds),
+            'quest' => $resolveSafely('quest', $questIds),
+            'achievement' => $resolveSafely('achievement', $achievementIds),
+            'item' => $resolveSafely('item', $itemIds),
+        ];
     }
 
     private function prepareCharacterDetailState(Request $request): array
@@ -396,15 +476,15 @@ class CharacterController extends Controller
         $type = $this->normalizedEnum(
             $request,
             'type',
-            ['spell', 'skill', 'achievement', 'achievementcriteria', 'quest', 'faction'],
+            ['spell', 'skill', 'achievement', 'achievementcriteria', 'quest', 'faction', 'item'],
             ''
         );
         $raw = $this->normalizedString($request, 'ids');
         $parts = preg_split('/\s*,\s*/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $ids = array_values(array_unique(array_filter(array_map('intval', $parts), static fn($value) => $value > 0)));
 
-        if (count($ids) > 80) {
-            $ids = array_slice($ids, 0, 80);
+        if (count($ids) > 400) {
+            $ids = array_slice($ids, 0, 400);
         }
 
         return [

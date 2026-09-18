@@ -22,8 +22,7 @@
  *   - esc()
  *   - short()
  *   - bindLogs()
- *   - updateBoostSummary()
- *   - bindBoost()
+ *   - applyLogFilter()
  *   - init()
  *   - qs()
  *   - qsa()
@@ -31,7 +30,10 @@
  */
 
 (function(){
-  const BASE=(window.APP_BASE||'').replace(/\/$/,'');
+
+  /** Base path of the panel install: window.APP_BASE is never set by the server. */
+  const resolveBasePath = () => ((window.Panel && window.Panel.basePath && window.Panel.basePath()) || (document.body && document.body.dataset && document.body.dataset.appBase) || '').replace(/\/$/, '');
+  const BASE=(resolveBasePath()||'').replace(/\/$/,'');
   const apiBase= BASE + '/mass-mail';
   const csrf = window.__CSRF_TOKEN;
   const qs=(s,r=document)=>r.querySelector(s); const qsa=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -64,13 +66,32 @@
     return text;
   }
 
-  function toast(msg){ console.log('[mass]',msg); }
+  /**
+   * 统一的界面反馈：以前这里只是 console.log，用户看不到任何结果。
+   * 优先用面板的 feedback 组件，缺失时退化为自绘的提示条。
+   */
+  function toast(msg, type){
+    const text = String(msg == null ? '' : msg);
+    if(!text) return;
+    const kind = (type === 'error' || type === 'success' || type === 'info') ? type : 'info';
+    const host = qs('#mmFeedback');
+
+    if(host && window.Panel && Panel.feedback && typeof Panel.feedback.show === 'function'){
+      Panel.feedback.show(host, kind, text, { duration: kind === 'error' ? 6000 : 4000 });
+      return;
+    }
+    if(host){
+      host.hidden = false;
+      host.textContent = text;
+      host.classList.remove('panel-flash--success','panel-flash--error','panel-flash--info','is-visible');
+      host.classList.add('panel-flash--' + kind, 'is-visible');
+      window.clearTimeout(host.__mmTimer);
+      host.__mmTimer = window.setTimeout(() => { host.hidden = true; host.classList.remove('is-visible'); }, kind === 'error' ? 6000 : 4000);
+    }
+  }
 
   const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   async function post(path,data){
-    const fd=new FormData(); if(data){ Object.entries(data).forEach(([k,v])=> fd.append(k,v)); }
-    if(csrf) fd.append('_token',csrf);
-    const url = apiBase + path;
     if(window.Panel && Panel.api){
       try{
         return await Panel.api.post('/mass-mail'+path,data||{});
@@ -81,6 +102,9 @@
         };
       }
     }
+    const fd=new FormData(); if(data){ Object.entries(data).forEach(([k,v])=> fd.append(k,v)); }
+    if(csrf) fd.append('_token',csrf);
+    const url = apiBase + path;
     const res=await fetch(url,{method:'POST',body:fd}); let json=null;
     try{
       json=await res.json();
@@ -106,7 +130,7 @@
       disableBtn('#btnAnnounce',true);
       const res=await post('/api/announce',{message:msg});
       disableBtn('#btnAnnounce',false);
-      toast(res.message || translate('feedback.done','Done'));
+      toast(res.message || translate('feedback.done','Done'), res && res.success ? 'success' : 'error');
       if(res.success) form.reset();
       refreshLogs();
     });
@@ -117,53 +141,94 @@
   if(goldInput){ goldInput.addEventListener('input',()=>{ const v=parseInt(goldInput.value||'0',10); preview.textContent=v? formatGold(v):translate('send.gold_preview_placeholder','—'); }); }
 
     // Items editor: visual rows -> hidden items string ("id:qty id:qty")
+    // 同时按 ID 解析物品名（world 库 / DBC），并在行内提示重复与缺失
     let syncItemsToHidden = null;
+    let itemsEditorApi = null;
+
+    /**
+     * 确认弹窗里用"物品名 ×数量"来展示，比一行裸 ID 更容易核对。
+     * 由物品编辑器的 updateSummary() 实时同步过来。
+     */
+    let confirmItemsMirror = '';
+
     (function initItemsEditor(){
       const editor = qs('#mmItemsEditor', f);
       if(!editor) return;
       const body = qs('#mmItemsBody', editor);
       const hidden = qs('#mmItems', editor);
       const addBtn = qs('#mmItemsAdd', editor);
+      const clearBtn = qs('#mmItemsClear', editor);
+      const summaryBox = qs('#mmItemsSummary');
+      const summaryValue = qs('#mmItemsSummaryValue');
       if(!body || !hidden || !addBtn) return;
 
       const removeLabel = editor.dataset.removeLabel || 'Remove';
+      const loadingLabel = editor.dataset.nameLoading || 'Loading…';
+      const unknownLabel = editor.dataset.nameUnknown || 'Item not found';
+      const emptyLabel = editor.dataset.nameEmpty || '';
+      const duplicateLabel = editor.dataset.nameDuplicate || 'Duplicate item';
 
-      const createRow = () => {
+      /** 已解析的物品名缓存：同一 ID 不重复请求 */
+      const nameCache = new Map();
+      const namePending = new Set();
+      let resolveTimer = null;
+
+    const rowsOf = () => qsa('.massmail-items__row', editor);
+    const rowId = (row) => parseInt(row.querySelector('[data-role="item-id"]')?.value || '0', 10) || 0;
+    const rowQty = (row) => parseInt(row.querySelector('[data-role="item-qty"]')?.value || '0', 10) || 0;
+
+    function updateConfirmSummaryMirror(info){
+      confirmItemsMirror = info && info.text ? info.text : '';
+    }
+
+      function createRow(id, qty){
         const row = document.createElement('div');
         row.className = 'massmail-items__grid massmail-items__row';
 
-        const id = document.createElement('input');
-        id.type = 'number';
-        id.min = '1';
-        id.placeholder = 'ID';
-        id.setAttribute('data-role', 'item-id');
+        const idInput = document.createElement('input');
+        idInput.type = 'number';
+        idInput.min = '1';
+        idInput.placeholder = 'ID';
+        idInput.setAttribute('data-role', 'item-id');
+        if(id) idInput.value = String(id);
 
-        const qty = document.createElement('input');
-        qty.type = 'number';
-        qty.min = '1';
-        qty.value = '1';
-        qty.setAttribute('data-role', 'item-qty');
+        const nameEl = document.createElement('div');
+        nameEl.className = 'mm-item-name';
+        nameEl.setAttribute('data-role', 'item-name');
+        nameEl.textContent = emptyLabel;
+
+        const qtyWrap = document.createElement('div');
+        qtyWrap.className = 'mm-item-qty-wrap';
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'number';
+        qtyInput.min = '1';
+        qtyInput.value = String(qty || 1);
+        qtyInput.setAttribute('data-role', 'item-qty');
+        qtyInput.setAttribute('aria-label', translate('send.quantity_label', 'Quantity'));
 
         const rm = document.createElement('button');
         rm.type = 'button';
-        rm.className = 'btn btn-sm outline';
+        rm.className = 'btn btn-sm outline mm-item-remove';
         rm.textContent = removeLabel;
         rm.setAttribute('data-role', 'item-remove');
 
-        row.appendChild(id);
-        row.appendChild(qty);
-        row.appendChild(rm);
+        qtyWrap.appendChild(qtyInput);
+        qtyWrap.appendChild(rm);
+
+        row.appendChild(idInput);
+        row.appendChild(nameEl);
+        row.appendChild(qtyWrap);
         body.appendChild(row);
-      };
+
+        return row;
+      }
 
       const buildItemsString = () => {
-        const rows = qsa('.massmail-items__row', editor);
         const pairs = [];
-        rows.forEach(r => {
-          const idEl = r.querySelector('[data-role="item-id"]');
-          const qtyEl = r.querySelector('[data-role="item-qty"]');
-          const id = parseInt(idEl?.value || '0', 10) || 0;
-          const qty = parseInt(qtyEl?.value || '0', 10) || 0;
+        rowsOf().forEach(r => {
+          const id = rowId(r);
+          const qty = rowQty(r);
           if(id > 0 && qty > 0){
             pairs.push(id + ':' + qty);
           }
@@ -171,9 +236,131 @@
         return pairs.join(' ');
       };
 
-      const sync = () => {
+      function describe(){
+        const items = parseItems(hidden.value);
+        if(!items.length){ return { text: '', count: 0, total: 0 }; }
+        const parts = items.map(it => {
+          const name = nameCache.get(it.id);
+          return (name ? name : ('#' + it.id)) + ' ×' + it.count;
+        });
+        const total = items.reduce((sum, it) => sum + it.count, 0);
+        return { text: parts.join('、'), count: items.length, total: total };
+      }
+
+      function updateSummary(){
+        const info = describe();
+        if(summaryBox && summaryValue){
+          if(info.text){
+            summaryBox.hidden = false;
+            summaryValue.textContent = info.text;
+          } else {
+            summaryBox.hidden = true;
+            summaryValue.textContent = '';
+          }
+        }
+        updateConfirmSummaryMirror(info);
+      }
+
+      function markDuplicates(){
+        const seen = new Map();
+        rowsOf().forEach(row => {
+          const id = rowId(row);
+          if(id > 0){ seen.set(id, (seen.get(id) || 0) + 1); }
+        });
+        rowsOf().forEach(row => {
+          const id = rowId(row);
+          const nameEl = row.querySelector('[data-role="item-name"]');
+          const dup = id > 0 && (seen.get(id) || 0) > 1;
+          row.classList.toggle('is-duplicate', dup);
+          if(dup && nameEl){
+            nameEl.classList.add('is-duplicate');
+            nameEl.title = duplicateLabel;
+          } else if(nameEl){
+            nameEl.classList.remove('is-duplicate');
+            nameEl.removeAttribute('title');
+          }
+        });
+        return seen;
+      }
+
+      function paintName(id, row){
+        const nameEl = row.querySelector('[data-role="item-name"]');
+        if(!nameEl) return;
+        if(id <= 0){
+          nameEl.textContent = emptyLabel;
+          nameEl.classList.remove('is-missing','is-pending');
+          return;
+        }
+        const cached = nameCache.get(id);
+        if(cached){
+          nameEl.textContent = cached;
+          nameEl.classList.remove('is-missing','is-pending');
+          return;
+        }
+        if(nameCache.has(id) && !cached){
+          nameEl.textContent = unknownLabel;
+          nameEl.classList.add('is-missing');
+          nameEl.classList.remove('is-pending');
+          return;
+        }
+        if(namePending.has(id)){
+          nameEl.textContent = loadingLabel;
+          nameEl.classList.add('is-pending');
+          nameEl.classList.remove('is-missing');
+          return;
+        }
+        nameEl.textContent = emptyLabel;
+        nameEl.classList.remove('is-missing','is-pending');
+      }
+
+      function repaintNames(){
+        rowsOf().forEach(row => paintName(rowId(row), row));
+      }
+
+      async function resolveNames(){
+        const ids = [];
+        rowsOf().forEach(row => {
+          const id = rowId(row);
+          if(id > 0 && !nameCache.has(id) && !namePending.has(id)){
+            ids.push(id);
+          }
+        });
+        if(!ids.length) return;
+
+        const unique = Array.from(new Set(ids)).slice(0, 200);
+        unique.forEach(id => namePending.add(id));
+        repaintNames();
+
+        const res = await post('/api/items', { ids: unique.join(',') });
+        unique.forEach(id => namePending.delete(id));
+
+        if(res && res.success && res.names){
+          Object.keys(res.names).forEach(key => {
+            nameCache.set(parseInt(key, 10) || 0, String(res.names[key]));
+          });
+          // 请求成功但没有返回名字的 ID 记为"未找到"，避免无限重试
+          unique.forEach(id => {
+            if(!nameCache.has(id)){ nameCache.set(id, null); }
+          });
+        } else {
+          unique.forEach(id => nameCache.delete(id));
+          if(res && res.message){ toast(res.message, 'error'); }
+        }
+
+        repaintNames();
+        updateSummary();
+      }
+
+      function scheduleResolve(){
+        window.clearTimeout(resolveTimer);
+        resolveTimer = window.setTimeout(resolveNames, 350);
+      }
+
+      function sync(){
         hidden.value = buildItemsString();
-      };
+        markDuplicates();
+        updateSummary();
+      }
       syncItemsToHidden = sync;
 
       body.addEventListener('click', (e) => {
@@ -183,7 +370,7 @@
         const row = t.closest('.massmail-items__row');
         if(row){
           row.remove();
-          if(!qsa('.massmail-items__row', editor).length){
+          if(!rowsOf().length){
             createRow();
           }
           sync();
@@ -194,7 +381,17 @@
         const t = e.target;
         if(!(t instanceof HTMLElement)) return;
         const role = t.getAttribute('data-role');
-        if(role === 'item-id' || role === 'item-qty'){
+        if(role === 'item-id'){
+          const row = t.closest('.massmail-items__row');
+          if(row){
+            const id = rowId(row);
+            // ID 变了就重新解析：清掉该行的旧状态
+            const nameEl = row.querySelector('[data-role="item-name"]');
+            if(nameEl){ nameEl.textContent = emptyLabel; nameEl.classList.remove('is-missing','is-pending'); }
+            if(id > 0) scheduleResolve();
+          }
+          sync();
+        } else if(role === 'item-qty'){
           sync();
         }
       });
@@ -204,11 +401,91 @@
         sync();
       });
 
-      if(!qsa('.massmail-items__row', editor).length){
+      if(clearBtn){
+        clearBtn.addEventListener('click', () => {
+          body.innerHTML = '';
+          createRow();
+          sync();
+        });
+      }
+
+      if(!rowsOf().length){
         createRow();
       }
       sync();
+
+      itemsEditorApi = { sync: sync, repaint: repaintNames, resolve: resolveNames };
     })();
+
+    // 收件人预览：在线 = 实时查询人数；自定义 = 本地按行计数 + 服务端确认
+    const recipientsCountEl = qs('#mmRecipientsCount');
+    const recipientsDetailEl = qs('#mmRecipientsDetail');
+    const recipientsRefreshBtn = qs('#mmRecipientsRefresh');
+    const customListInput = qs('#mmCustomList', f);
+    const customCountEl = qs('#mmCustomCount');
+
+    function localCustomCount(){
+      if(!customListInput) return 0;
+      return (customListInput.value || '')
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .length;
+    }
+
+    function paintRecipients(count, detail, tone){
+      if(recipientsCountEl){
+        recipientsCountEl.textContent = count === null ? '—' : formatNumber(count);
+        recipientsCountEl.classList.remove('is-ok','is-warn','is-over');
+        if(tone){ recipientsCountEl.classList.add(tone); }
+      }
+      if(recipientsDetailEl && detail !== undefined){
+        recipientsDetailEl.textContent = detail;
+      }
+    }
+
+    async function refreshRecipients(options){
+      const opts = options || {};
+      const type = targetSel.value === 'custom' ? 'custom' : 'online';
+
+      if(type === 'custom' && !opts.authoritative){
+        const count = localCustomCount();
+        paintRecipients(count, translate('send.recipients_custom_detail', 'Custom list (:count lines)', { count: count }));
+        if(customCountEl){
+          customCountEl.textContent = translate('send.custom_count', 'Parsed characters: :count', { count: count });
+        }
+        return count;
+      }
+
+      paintRecipients(null, translate('send.recipients_loading', 'Counting…'));
+      const payload = { target_type: type };
+      if(type === 'custom'){ payload.custom_char_list = customListInput ? customListInput.value : ''; }
+
+      const res = await post('/api/targets', payload);
+      if(!res || !res.success){
+        paintRecipients(null, translate('send.recipients_failed', 'Count failed'));
+        if(res && res.message){ toast(res.message, 'error'); }
+        return null;
+      }
+
+      const count = parseInt(res.count, 10) || 0;
+      const limit = parseInt(res.limit, 10) || 0;
+      const sample = Array.isArray(res.sample) ? res.sample : [];
+      const tone = (limit > 0 && count > limit) ? 'is-over' : (count === 0 ? 'is-warn' : 'is-ok');
+      const detail = count === 0
+        ? translate('send.recipients_empty', 'No recipients found')
+        : (sample.length ? sample.slice(0, 3).join(', ') + (count > 3 ? ' …' : '') : '');
+
+      paintRecipients(count, detail, tone);
+
+      if(limit > 0 && count > limit){
+        toast(translate('send.recipients_over_limit', 'Recipients (:count) exceed the batch limit (:limit)', { count: count, limit: limit }), 'error');
+      }
+      if(customCountEl && type === 'custom'){
+        customCountEl.textContent = translate('send.custom_count', 'Parsed characters: :count', { count: count });
+      }
+      return count;
+    }
 
     function updateCond(){
       const action=actionSel.value;
@@ -220,14 +497,62 @@
       });
       const customBox=qs('.massmail-custom',f);
       if(customBox){ customBox.classList.toggle('active',targetSel.value==='custom'); }
+      refreshRecipients();
     }
     updateCond();
+
+    if(recipientsRefreshBtn){
+      recipientsRefreshBtn.addEventListener('click', () => { refreshRecipients({ authoritative: true }); });
+    }
+    if(customListInput){
+      let customTimer = null;
+      customListInput.addEventListener('input', () => {
+        window.clearTimeout(customTimer);
+        customTimer = window.setTimeout(() => { refreshRecipients({ authoritative: true }); }, 500);
+      });
+    }
+
     f.addEventListener('submit', async e=>{ e.preventDefault(); const data={}; if(typeof syncItemsToHidden==='function') syncItemsToHidden(); new FormData(f).forEach((v,k)=> data[k]=v);
+
+      const invalid = validateSendForm(data, f);
+      if(invalid){ toast(invalid, 'error'); return; }
 
       if(await needConfirm(data,f)){
         pendingSendData=data; openConfirm(buildSummary(data,f)); return; }
       await actuallySend(data);
     });
+
+    /** 提交前的本地校验：给出可操作的中文提示，而不是让服务端抛一句错误 */
+    function validateSendForm(data, form){
+      const action = data.action;
+      if(!action){ return translate('send.validation.action', 'Please choose an action'); }
+
+      const subject = String(data.subject || '').trim();
+      if(!subject){ return translate('send.validation.subject', 'Please enter a subject'); }
+
+      if(action === 'send_item' || action === 'send_item_gold'){
+        const items = parseItems(data.items);
+        if(!items.length){
+          return translate('send.validation.items', 'Please add at least one item (ID:quantity)');
+        }
+        const dupes = items.map(it => it.id).filter((id, index, arr) => arr.indexOf(id) !== index);
+        if(dupes.length){
+          return translate('send.validation.duplicate_item', 'Item #:id is listed twice', { id: dupes[0] });
+        }
+      }
+
+      if(action === 'send_gold' || action === 'send_item_gold'){
+        const amount = parseInt(data.amount || '0', 10) || 0;
+        if(amount <= 0){ return translate('send.validation.gold', 'Please enter a gold amount'); }
+      }
+
+      if(data.target_type === 'custom'){
+        const lines = String(data.custom_char_list || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if(!lines.length){ return translate('send.validation.custom_empty', 'Please enter the character list'); }
+      }
+
+      return null;
+    }
   }
 
 
@@ -287,12 +612,16 @@
       : (form.querySelector('[name="items"]')?.value || '');
     const items=parseItems(raw);
     if(!items.length) return '';
+    // 编辑器已经解析出名称时优先用它，未解析则退回 ID
+    if(confirmItemsMirror){ return confirmItemsMirror; }
     return items.map(it=>`${it.id}×${it.count}`).join(', ');
   }
 
   function buildSummary(data,form){
     const tcount=countTargets(data,form);
-    const heading=translate('confirm.heading','You are about to execute <strong>:action</strong>',{ action: esc(data.action||'') });
+    const actionLabel = (qs('#mmAction option:checked')?.textContent || data.action || '').trim();
+    const targetLabel = (qs('#mmTargetType option:checked')?.textContent || data.target_type || '').trim();
+    const heading=translate('confirm.heading','You are about to execute <strong>:action</strong>',{ action: esc(actionLabel) });
     const lines=[];
     lines.push(translate('confirm.subject','Subject: :value',{ value: esc(data.subject||'') }));
     if(data.action==='send_item' || data.action==='send_item_gold'){
@@ -301,14 +630,17 @@
     }
     if(data.action==='send_gold' || data.action==='send_item_gold'){
       const g=parseInt(data.amount||'0',10);
-      lines.push(translate('confirm.gold','Gold (copper): :amount',{ amount:g }));
+      lines.push(translate('confirm.gold','Gold: :amount',{ amount: formatGold(Number.isNaN(g)?0:g) }));
     }
-    lines.push(translate('confirm.target_type','Target type: :value',{ value: esc(data.target_type||'') }));
+    lines.push(translate('confirm.target_type','Target type: :value',{ value: esc(targetLabel) }));
     if(tcount>0){
-      lines.push(translate('confirm.custom_count','Custom characters: :count',{ count:tcount }));
+      lines.push(translate('confirm.custom_count','Custom characters: :count',{ count:formatNumber(tcount) }));
     }
     if(tcount===-1){
-      lines.push(translate('confirm.online','Online characters: real-time count (fetched on send)'));
+      const shown = (recipientsCountEl && recipientsCountEl.textContent) ? recipientsCountEl.textContent.trim() : '';
+      lines.push(shown && shown !== '—'
+        ? translate('confirm.online_count','Online characters: :count',{ count: shown })
+        : translate('confirm.online','Online characters: real-time count (fetched on send)'));
     }
     const footer=translate('confirm.footer','Batch sending (size = 200) is enabled. Please double-check before continuing.');
     return `<p class="mb-2">${heading}</p>`+
@@ -323,8 +655,12 @@
     disableBtn('#btnMassSend',true,translate('status.sending','Sending…'));
     const res=await post('/api/send',data);
     disableBtn('#btnMassSend',false);
-    toast(res.message || translate('feedback.done','Done'));
+
+    const ok = !!(res && res.success);
+    const message = (res && res.message) || translate('feedback.done','Done');
+    toast(message, ok ? 'success' : 'error');
     refreshLogs();
+    refreshRecipients({ authoritative: true });
   }
 
   function disableBtn(sel,dis,text){ const b=qs(sel); if(!b) return; if(text){ if(!b.dataset.orig) b.dataset.orig=b.textContent; if(dis) b.textContent=text; }
@@ -343,12 +679,48 @@
     return parts.join(' ');
   }
 
-  async function refreshLogs(){ const limit=qs('#logLimit')?.value||30; const res=await post('/api/logs',{limit}); if(!res.success) return; renderLogs(res.logs||[]); }
+  async function refreshLogs(){
+    const limit=qs('#logLimit')?.value||30;
+    const res=await post('/api/logs',{limit});
+    if(!res || !res.success){
+      if(res && res.message){ toast(res.message, 'error'); }
+      return;
+    }
+    renderLogs(res.logs||[]);
+  }
+
+  function applyLogFilter(){
+    const input = qs('#logFilter');
+    const tb = qs('#massMailLogTable tbody');
+    if(!input || !tb) return;
+    const query = (input.value || '').trim().toLowerCase();
+    let visible = 0;
+    Array.from(tb.rows).forEach(row => {
+      if(row.classList.contains('js-log-empty')) return;
+      const text = (row.innerText || '').toLowerCase();
+      const match = !query || text.includes(query);
+      row.hidden = !match;
+      if(match) visible++;
+    });
+    let emptyRow = tb.querySelector('.js-log-filter-none');
+    if(!emptyRow){
+      emptyRow = document.createElement('tr');
+      emptyRow.className = 'js-log-filter-none';
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.className = 'text-center muted';
+      td.textContent = translate('logs.filter_no_results','No matching log entries');
+      emptyRow.appendChild(td);
+      tb.appendChild(emptyRow);
+    }
+    emptyRow.hidden = !query || visible !== 0;
+  }
+
   function renderLogs(rows){
     const tb=qs('#massMailLogTable tbody');
     if(!tb) return;
     if(!rows.length){
-      tb.innerHTML=`<tr><td colspan="7" class="text-center muted">${esc(translate('logs.empty','No logs yet'))}</td></tr>`;
+      tb.innerHTML=`<tr class="js-log-empty"><td colspan="7" class="text-center muted">${esc(translate('logs.empty','No logs yet'))}</td></tr>`;
       return;
     }
     const nameSeparator=translate('logs.item_name_separator',' - ');
@@ -390,70 +762,52 @@
         `<td>${rec}</td>`+
       `</tr>`;
     }).join('');
+    applyLogFilter();
   }
   function esc(s){ return (s+'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
   function short(s,len){ if(s.length<=len) return s; return s.slice(0,len)+'…'; }
 
-  function bindLogs(){ qs('#btnLogsRefresh')?.addEventListener('click',()=> refreshLogs()); qs('#logLimit')?.addEventListener('change',()=> refreshLogs()); }
+  const LOG_LIMIT_KEY = 'mm.logLimit';
 
-  function bindBoost(){
-    const form=qs('#massBoostForm'); if(!form) return;
+  function bindLogs(){
+    const limitSel = qs('#logLimit');
+    if(limitSel){
+      // 记住上次选择，避免每次进页面都要重新挑
+      try{
+        const saved = window.localStorage.getItem(LOG_LIMIT_KEY);
+        if(saved && qsa('option', limitSel).some(o => o.value === saved)){ limitSel.value = saved; }
+      }catch(e){ /* 隐私模式下 localStorage 可能不可用 */ }
 
-    const tpl = qs('#boostTemplate', form);
-    const level = qs('#boostTargetLevel', form);
-    const applyTemplate = () => {
-      if(!tpl || !level) return;
-      const templateId = parseInt(tpl.value || '0', 10) || 0;
-      if(templateId > 0){
-        const opt = tpl.selectedOptions && tpl.selectedOptions[0];
-        const t = opt ? (parseInt(opt.getAttribute('data-target-level') || '0', 10) || 0) : 0;
-        level.value = t ? String(t) : '';
-        level.setAttribute('disabled','disabled');
-        level.hidden = true;
-      } else {
-        level.removeAttribute('disabled');
-        level.hidden = false;
-      }
-    };
-    if(tpl){
-      tpl.addEventListener('change', applyTemplate);
-      applyTemplate();
+      limitSel.addEventListener('change',()=>{
+        try{ window.localStorage.setItem(LOG_LIMIT_KEY, limitSel.value); }catch(e){}
+        refreshLogs();
+      });
     }
 
-    form.addEventListener('submit', async e=>{
-      e.preventDefault();
-      const name=form.character_name?.value?.trim();
-      const templateId = parseInt(form.template_id?.value || '0', 10) || 0;
-      const levelRaw=form.target_level?.value || '';
-      const targetLevel=parseInt(levelRaw,10) || 0;
-      if(!name){ alert(translate('boost.validation.name','Please enter a character name')); return; }
-      if(templateId <= 0 && (!targetLevel || targetLevel < 1 || targetLevel > 255)){
-        alert(translate('boost.validation.level','Please choose a target level'));
-        return;
-      }
-      disableBtn('#btnBoostExecute',true,translate('boost.status.executing','Executing…'));
-      try{
-        const payload={ character_name:name, template_id: templateId ? String(templateId) : '', target_level: templateId ? '' : String(targetLevel) };
-        const res=await post('/api/boost',payload);
-        alert(res.message || translate('feedback.done','Done'));
-        if(res.success){
-          form.reset();
-          applyTemplate();
-        }
-      }catch(err){ alert(translate('errors.request_failed_retry','Request failed, please try again later')); }
-      disableBtn('#btnBoostExecute',false);
-    });
+    qs('#btnLogsRefresh')?.addEventListener('click',()=> refreshLogs());
+
+    const filter = qs('#logFilter');
+    if(filter){ filter.addEventListener('input', applyLogFilter); }
   }
 
   function init(){
     bindAnnounce();
     bindMassSend();
     bindLogs();
-    bindBoost();
     const confirmModal=qs('#mmConfirmModal');
     if(confirmModal){ confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) closeConfirm(); }); }
     refreshLogs();
   }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+  // panel.js injects page modules from an immediately-invoked body script, so
+  // this module can execute while the document is still parsing. Defer via the
+  // panel helper (it covers loading AND interactive) instead of the classic
+  // readyState check, which silently skips init() in the interactive state.
+  if (window.Panel && typeof window.Panel.whenDomReady === 'function') {
+    window.Panel.whenDomReady(init);
+  } else if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
 

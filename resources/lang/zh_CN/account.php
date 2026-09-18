@@ -3,21 +3,24 @@ return array (
   'page_title' => '账号管理',
   'search' => 
   array (
+    'type_label' => '搜索方式',
     'type_username' => '按用户名',
     'type_id' => '按ID',
+    'value_label' => '关键字',
     'placeholder' => '搜索…',
     'submit' => '查询',
     'load_all' => '加载全部账号',
+    'clear' => '重置条件',
     'create' => '新增账号',
   ),
   'filters' => 
   array (
     'online' => '在线状态',
-    'online_any' => '全部账号',
+    'online_any' => '全部',
     'online_only' => '仅在线',
     'online_offline' => '仅离线',
     'ban' => '封禁状态',
-    'ban_any' => '全部账号',
+    'ban_any' => '全部',
     'ban_only' => '仅封禁',
     'ban_unbanned' => '未封禁',
     'exclude_username' => '排除字符',
@@ -40,6 +43,7 @@ return array (
     'last_ip' => '最后IP',
     'ip_location' => 'IP归属地',
     'actions' => '操作',
+    'view_characters' => '在角色管理中查看该账号的角色',
   ),
   'status' => 
   array (
@@ -52,6 +56,7 @@ return array (
     'title_not_found' => '账号不存在 (ID :id)',
     'title_default' => '账号详情',
     'back' => '返回列表',
+    'back_to_characters' => '返回角色管理',
     'not_found' => '账号未找到',
     'summary' => 
     array (
@@ -75,6 +80,7 @@ return array (
     array (
       'title' => '角色列表',
       'empty' => '无角色',
+      'view_all' => '在角色管理中查看全部角色',
       'table' => 
       array (
         'guid' => 'GUID',
@@ -96,6 +102,7 @@ return array (
     'same_ip' => '同IP账号',
     'kick' => '踢',
     'delete' => '删除',
+    'more' => '更多',
   ),
   'bulk' => 
   array (
@@ -205,6 +212,7 @@ return array (
     'kick_button' => '踢下线',
     'offline_tooltip' => '角色已离线，无法踢下线',
     'empty' => '无角色',
+    'view_all' => '在角色管理中查看该账号全部角色',
     'ban_badge' => '已封禁',
     'confirm_kick' => '确认踢出角色 :name？',
     'kick_success' => '已发送踢出命令：:name',

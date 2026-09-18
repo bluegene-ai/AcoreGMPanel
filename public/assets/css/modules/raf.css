@@ -1,19 +1,66 @@
 .raf-page{display:flex;flex-direction:column;gap:18px;margin-bottom:32px;}
-.raf-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;}
+
+/* ===== 顶部统一统计区 ===== */
+.raf-stats{background:#0c1520;border:1px solid rgba(109,163,214,.16);border-radius:12px;box-shadow:0 12px 28px rgba(5,14,24,.22);padding:18px 18px 20px;display:flex;flex-direction:column;gap:16px;}
+.raf-stats__head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;}
+.raf-stats__title{margin:0;color:#edf5ff;font-size:18px;}
+.raf-stats__hint{margin:0;color:#8fb0d2;font-size:12.5px;}
+.raf-stats__group{display:flex;flex-direction:column;gap:10px;}
+.raf-stats__group+.raf-stats__group{padding-top:16px;border-top:1px solid rgba(109,163,214,.14);}
+.raf-stats__group-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.raf-stats__group-title{margin:0;color:#cfe3f8;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.raf-stats__badge{padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:rgba(207,73,91,.18);color:#ffb5bd;}
+.raf-stats__grid{display:grid;gap:14px;}
+.raf-stats__grid--bindings{grid-template-columns:repeat(6,minmax(0,1fr));}
+.raf-stats__grid--reward-log{grid-template-columns:repeat(5,minmax(0,1fr));}
+
 .raf-stat-card,.raf-panel{background:#0c1520;border:1px solid rgba(109,163,214,.16);border-radius:12px;box-shadow:0 12px 28px rgba(5,14,24,.22);}
-.raf-stat-card{padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-height:112px;justify-content:space-between;background:linear-gradient(180deg,rgba(18,34,49,.96),rgba(10,18,28,.98));}
+.raf-stat-card{padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-height:118px;justify-content:flex-start;text-align:left;background:linear-gradient(180deg,rgba(18,34,49,.96),rgba(10,18,28,.98));font:inherit;color:inherit;}
+.raf-stat-card.is-clickable{cursor:pointer;transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease;}
+.raf-stat-card.is-clickable:hover{border-color:rgba(109,163,214,.42);transform:translateY(-1px);box-shadow:0 16px 32px rgba(5,14,24,.32);}
+.raf-stat-card.is-clickable:focus-visible{outline:2px solid rgba(109,163,214,.7);outline-offset:2px;}
+.raf-stat-card[disabled]{cursor:not-allowed;opacity:.55;}
 .raf-stat-card__label{font-size:12px;color:#93b6dd;letter-spacing:.04em;text-transform:uppercase;}
-.raf-stat-card__value{font-size:30px;line-height:1;color:#f4f8fd;}
+.raf-stat-card__value{font-size:30px;line-height:1;color:#f4f8fd;font-weight:700;}
+.raf-stat-card__hint{font-size:11.5px;line-height:1.45;color:#7d9cb9;flex:1;}
+.raf-stat-card__action{font-size:11.5px;color:#6ea9e6;letter-spacing:.02em;}
+.raf-stat-card.is-clickable:hover .raf-stat-card__action{color:#9fcbff;}
+.raf-stat-card__value--time{font-size:17px;line-height:1.35;}
+
+/* ===== 工作区（两个数据区块） ===== */
+.raf-workspace{display:flex;flex-direction:column;gap:18px;}
+.raf-workspace__head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.raf-workspace__title{margin:0;color:#edf5ff;font-size:16px;}
+.raf-section{background:#0c1520;border:1px solid rgba(109,163,214,.16);border-radius:12px;box-shadow:0 12px 28px rgba(5,14,24,.22);padding:18px;display:flex;flex-direction:column;gap:14px;}
+.raf-section__head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.raf-section__heading{display:flex;flex-direction:column;gap:4px;}
+.raf-section__title{margin:0;color:#edf5ff;font-size:17px;}
+.raf-section__note{margin:0;font-size:12.5px;}
+.raf-section__actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.raf-section__body{display:flex;flex-direction:column;gap:12px;}
+.raf-section__body--flush{padding-top:2px;}
+.raf-section__body[hidden]{display:none;}
+
 .raf-panel{padding:18px;}
 .raf-panel__head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
 .raf-panel__head h2{margin:0;color:#edf5ff;font-size:18px;}
 .raf-panel__meta{margin:6px 0 0;}
+.raf-panel__head--sub{margin-top:18px;padding-top:16px;border-top:1px solid rgba(109,163,214,.14);}
+.raf-panel__subtitle{margin:0;color:#edf5ff;font-size:15px;}
+
+/* ===== 筛选区 ===== */
 .raf-filter-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;align-items:end;}
 .raf-field{display:flex;flex-direction:column;gap:6px;color:#d8e7f7;font-size:13px;}
 .raf-field input,.raf-field select{background:#071018;border:1px solid rgba(109,163,214,.2);border-radius:8px;color:#edf6ff;padding:9px 10px;font-size:13px;}
 .raf-field--span-2{grid-column:span 2;}
 .raf-filter-actions{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+.raf-filter-state{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0;font-size:12.5px;color:#8fb0d2;}
+.raf-filter-state__label{color:#93b6dd;}
+.raf-chip{padding:3px 9px;border-radius:999px;background:rgba(66,127,185,.18);color:#bcd7f2;font-size:12px;}
+
+/* ===== 表格 ===== */
 .raf-table-wrap{overflow:auto;border:1px solid rgba(109,163,214,.14);border-radius:10px;background:#07111a;}
+.raf-table-wrap--modal{max-height:none;}
 .raf-table{margin:0;min-width:1100px;}
 .raf-table th,.raf-table td{border-color:rgba(109,163,214,.1);vertical-align:top;}
 .raf-table th{background:#102133;color:#eef6ff;}
@@ -29,15 +76,25 @@
 .raf-action-stack{display:flex;flex-direction:column;gap:8px;align-items:flex-start;}
 .raf-pagination{display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;padding-top:14px;}
 .raf-pagination__label{font-size:13px;color:#98badf;}
+
+/* ===== 弹窗 ===== */
 .raf-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
 .raf-modal-note{margin:0 0 14px;color:#6789a9;font-size:13px;line-height:1.5;}
 .raf-modal-field{display:flex;flex-direction:column;gap:6px;color:#d8e7f7;font-size:13px;}
 .raf-modal-field input{background:#071018;border:1px solid rgba(109,163,214,.2);border-radius:8px;color:#edf6ff;padding:9px 10px;font-size:13px;}
 .raf-modal-check{display:flex;align-items:center;gap:8px;margin-top:4px;color:#d8e7f7;font-size:13px;}
-.raf-summary-grid--log{grid-template-columns:repeat(5,minmax(0,1fr));}
-.raf-stat-card__value--time{font-size:18px;line-height:1.3;}
-.raf-panel__head--sub{margin-top:18px;padding-top:16px;border-top:1px solid rgba(109,163,214,.14);}
-.raf-panel__subtitle{margin:0;color:#edf5ff;font-size:15px;}
+
+/* 统计卡下钻弹窗 */
+#modal-raf-card-detail .modal-panel{width:min(1020px,94vw);max-width:min(1020px,94vw);background:#0f1a26;border:1px solid rgba(109,163,214,.24);}
+#modal-raf-card-detail .modal-body{padding:14px 18px 6px;}
+.raf-card-detail{display:flex;flex-direction:column;gap:14px;}
+.raf-card-detail__meta{margin:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+.raf-card-detail__value{font-size:26px;font-weight:700;color:#f4f8fd;line-height:1;}
+.raf-card-detail__hint{font-size:12.5px;color:#8fb0d2;}
+.raf-card-detail__empty{margin:0;padding:10px 0;}
+.raf-card-detail__loading{margin:0;padding:10px 0;}
+.raf-card-detail__pager{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:4px 0 10px;}
+
 .raf-reward-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-width:320px;}
 .raf-reward-item{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
 .raf-reward-item__name{font-weight:600;}
@@ -48,17 +105,18 @@
 .raf-badge--unknown{background:rgba(143,158,178,.18);color:#c8d3df;}
 
 @media (max-width:1280px){
-  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .raf-stats__grid--bindings{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .raf-stats__grid--reward-log{grid-template-columns:repeat(3,minmax(0,1fr));}
   .raf-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
 
 @media (max-width:860px){
-  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .raf-stats__grid--bindings,.raf-stats__grid--reward-log{grid-template-columns:repeat(2,minmax(0,1fr));}
   .raf-filter-grid,.raf-modal-grid{grid-template-columns:1fr;}
   .raf-field--span-2{grid-column:auto;}
   .raf-pagination{justify-content:flex-start;}
 }
 
 @media (max-width:560px){
-  .raf-summary-grid,.raf-summary-grid--log{grid-template-columns:1fr;}
+  .raf-stats__grid--bindings,.raf-stats__grid--reward-log{grid-template-columns:1fr;}
 }

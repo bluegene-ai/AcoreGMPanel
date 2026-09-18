@@ -617,8 +617,8 @@ class AgmpTester:
 
     def exercise_server_pages(self, server_id: int) -> None:
         for name, path, marker in [
-            ("page.account", "/account", "account-search"),
-            ("page.character", "/character", "character"),
+            ("page.account", "/account", "list-filter"),
+            ("page.character", "/character", "list-filter"),
             ("page.aegis", "/aegis", "aegis-layout"),
             ("page.mail", "/mail", "mailTable"),
             ("page.logs", "/logs", "logsForm"),

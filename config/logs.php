@@ -23,13 +23,13 @@ return [
                 ],
             ],
         ],
-        'bag_query' => [
-            'label' => 'lang:app.logs.config.modules.bag_query.label',
-            'description' => 'lang:app.logs.config.modules.bag_query.description',
+        'item_inventory' => [
+            'label' => 'lang:app.logs.config.modules.item_inventory.label',
+            'description' => 'lang:app.logs.config.modules.item_inventory.description',
             'types' => [
                 'actions' => [
-                    'label' => 'lang:app.logs.config.modules.bag_query.types.actions.label',
-                    'file' => 'bag_query_actions.log',
+                    'label' => 'lang:app.logs.config.modules.item_inventory.types.actions.label',
+                    'file' => 'item_inventory_actions.log',
                     'format' => 'json_line',
                 ],
             ],
@@ -51,17 +51,6 @@ return [
                 'deleted' => [
                     'label' => 'lang:app.logs.config.modules.item.types.deleted.label',
                     'file' => 'item_deleted.log',
-                    'format' => 'json_line',
-                ],
-            ],
-        ],
-        'item_owner' => [
-            'label' => 'lang:app.logs.config.modules.item_owner.label',
-            'description' => 'lang:app.logs.config.modules.item_owner.description',
-            'types' => [
-                'actions' => [
-                    'label' => 'lang:app.logs.config.modules.item_owner.types.actions.label',
-                    'file' => 'item_ownership_actions.log',
                     'format' => 'json_line',
                 ],
             ],

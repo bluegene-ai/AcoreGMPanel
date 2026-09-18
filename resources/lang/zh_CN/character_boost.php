@@ -1,5 +1,67 @@
 <?php
 return [
+    'admin' => [
+        'page_title' => '直升管理',
+        'note' => '当前服务器 realm_id=:id，可直接执行直升、查看模板与兑换码概览。',
+        'apply' => [
+            'title' => '执行直升',
+            'note' => '当前服务器 realm_id=:realm。填角色名或 GUID 定位角色，再选模板或直接指定目标等级。',
+            'hint' => '直升会先调整角色等级，再按模板发放物品与金币；模板比手动等级更安全，建议优先使用。',
+        ],
+        'fields' => [
+            'character_name' => '角色名',
+            'character_name_placeholder' => '输入角色名，例如 Arthas',
+            'guid' => '角色 GUID',
+            'guid_placeholder' => '可选，填了优先按 GUID',
+            'template' => '直升模板',
+            'template_none' => '不使用模板（仅调等级）',
+            'target_level' => '目标等级',
+            'target_level_placeholder' => '例如 80',
+            'target_level_from_template' => '由模板决定',
+        ],
+        'actions' => [
+            'preview' => '预览发放内容',
+            'apply' => '执行直升',
+            'working' => '处理中…',
+        ],
+        'preview' => [
+            'title' => '执行后将发放',
+            'character' => '角色',
+            'level' => '等级',
+            'template' => '模板',
+            'items' => '将发放',
+            'items_none' => '仅调整等级，无物品奖励',
+            'money' => '金币',
+        ],
+        'overview' => [
+            'title' => '概览',
+            'templates' => '直升模板',
+            'code_total' => '兑换码总数',
+            'code_unused' => '未使用',
+            'code_used' => '已使用',
+        ],
+        'links' => [
+            'templates' => '管理直升模板',
+            'codes' => '管理兑换码',
+        ],
+        'history' => [
+            'title' => '最近直升记录',
+            'refresh' => '刷新',
+            'empty' => '暂无直升记录',
+            'columns' => [
+                'time' => '时间',
+                'character' => '角色',
+                'rewards' => '发放内容',
+                'status' => '状态',
+            ],
+        ],
+        'applied' => '角色 :name 直升已执行。',
+        'errors' => [
+            'character_required' => '请输入角色名或角色 GUID。',
+            'target_required' => '请选择直升模板或填写目标等级。',
+            'character_missing' => '未找到指定角色。',
+        ],
+    ],
     'codes' => [
         'title' => '直升兑换码生成',
         'fields' => [
@@ -18,9 +80,16 @@ return [
         'actions' => [
             'generate' => '生成兑换码',
         ],
+        'generate' => [
+            'title' => '生成兑换码',
+            'quick' => '快捷数量',
+            'safety' => '生成后立即写入数据库，请先确认模板与数量。',
+        ],
         'generated' => [
             'title' => '生成结果',
-            'hint' => '每行一个兑换码，可直接复制发放。',
+            'hint' => '每行一个兑换码，可直接复制或下载分发。',
+            'copy' => '复制全部',
+            'collapse' => '收起',
         ],
         'success' => '已生成 :count 个兑换码。',
         'errors' => [
@@ -33,6 +102,13 @@ return [
             'hint' => '仅允许删除“未使用”的兑换码；已使用的兑换码仅展示记录。',
             'fields' => [
                 'template' => '直升模板',
+                'status' => '使用状态',
+                'status_all' => '全部状态',
+                'status_unused' => '仅未使用',
+                'status_used' => '仅已使用',
+                'search' => '快速筛选',
+                'search_placeholder' => '在当前页按兑换码 / 使用角色 / IP 筛选',
+                'per_page' => '每页条数',
                 'unused_only' => '筛选',
                 'unused_only_label' => '仅显示未使用',
             ],
@@ -152,8 +228,12 @@ return [
                     ],
                 ],
                 'codes' => [
+                    'generating' => '生成中…',
                     'table' => [
                         'empty' => '暂无兑换码',
+                    ],
+                    'manage' => [
+                        'no_match' => '当前页没有匹配的兑换码',
                     ],
                     'status' => [
                         'used' => '已使用',
@@ -170,13 +250,21 @@ return [
                         'summary' => '第 :page / :pages 页 · 共 :total 条',
                     ],
                     'generated' => [
+                        'count' => '共 :count 个',
                         'download_ok' => '成功',
                         'download_ok_count' => '成功（:count）',
                         'template_named' => ':name (#:id)',
                         'template_fallback' => '模板 #:id',
+                        'copied' => '已复制到剪贴板',
+                        'copy_failed' => '复制失败，请手动选择文本',
+                        'copy_empty' => '暂无可复制的内容',
                     ],
                     'usage' => [
                         'realm_suffix' => '（服务器 :id）',
+                    ],
+                    'errors' => [
+                        'invalid_count' => '请输入有效的生成数量',
+                        'count_too_large' => '单次最多生成 10000 个',
                     ],
                 ],
                 'redeem' => [

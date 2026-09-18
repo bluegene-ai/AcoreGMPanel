@@ -380,6 +380,44 @@
     localeTree: localeStore,
     createModuleTranslator(moduleName){
       return (path, fallback) => moduleLocaleValue(moduleName, path, fallback);
+    },
+    /**
+     * Base path of the panel installation ("/agmp", or "" at the web root).
+     *
+     * The server publishes it ONLY as data-app-base on <body>; window.APP_BASE is
+     * never defined. Any module building an absolute URL must therefore resolve it
+     * through here — reading window.APP_BASE directly yields "" and silently
+     * produces root-relative URLs that 404 on a sub-path install.
+     */
+    basePath(){
+      return resolveBasePath();
+    },
+    /** Absolute URL for a panel-relative path, base path included. */
+    absoluteUrl(path){
+      const base = resolveBasePath();
+      const suffix = String(path ?? '');
+      return base + (suffix.startsWith('/') ? suffix : '/' + suffix);
+    },
+    /**
+     * Runs `fn` once the DOM is available.
+     *
+     * Page modules must use this instead of the classic
+     * `if (document.readyState === 'loading') addEventListener(...) else fn()`:
+     * loadPageModule() injects the module script from an immediately-invoked
+     * body script, so the module frequently executes while the document is still
+     * parsing ("interactive"). In that state DOMContentLoaded has not fired yet
+     * AND the 'loading' test is false, so the classic form silently never runs
+     * the module — which is exactly how the character inventory panel ended up
+     * permanently empty.
+     */
+    whenDomReady(fn){
+      if(typeof fn !== 'function' || typeof document === 'undefined') return;
+      if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', fn, { once: true });
+        return;
+      }
+      // 'interactive' and 'complete' both guarantee the parsed DOM exists.
+      fn();
     }
   };
   window.Panel = PanelContext;

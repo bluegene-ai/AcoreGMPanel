@@ -3,19 +3,26 @@ return [
     'index' => [
         'title' => '角色管理',
         'search' => [
+            'name_label' => '角色名',
             'name_placeholder' => '名称包含',
+            'guid_label' => '角色 GUID',
             'guid_placeholder' => 'GUID',
+            'account_label' => '所属账号',
             'account_placeholder' => '账号用户名',
-            'level_min' => '最低等级',
-            'level_max' => '最高等级',
+            'level_label' => '等级区间',
+            'level_min' => '最低',
+            'level_max' => '最高',
             'submit' => '搜索',
             'load_all' => '加载全部角色',
+            'clear' => '重置条件',
         ],
         'filters' => [
-            'online_any' => '全部账号',
+            'online' => '在线状态',
+            'online_any' => '全部',
             'online_only' => '仅在线',
             'online_offline' => '仅离线',
-            'ban_any' => '全部封禁状态',
+            'ban' => '封禁状态',
+            'ban_any' => '全部',
             'ban_only' => '仅封禁',
             'ban_unbanned' => '未封禁',
         ],
@@ -28,7 +35,7 @@ return [
         'feedback' => [
             'found' => '共 :total 条 · 第 :page/:pages 页',
             'empty' => '没有结果',
-            'enter_search' => '请输入查询条件',
+            'enter_search' => '请输入搜索条件',
         ],
         'table' => [
             'guid' => 'GUID',
@@ -43,6 +50,8 @@ return [
             'last_logout' => '最后下线',
             'actions' => '操作',
             'view' => '查看',
+            'same_account' => '同账号角色',
+            'view_account' => '查看该账号',
         ],
         'status' => [
             'online' => '在线',
@@ -64,6 +73,7 @@ return [
             'level' => '等级',
             'class' => '职业',
             'race' => '种族',
+            'gender' => '性别',
             'online' => '在线',
             'map' => '地图 / 区域',
             'position' => '坐标',
@@ -116,6 +126,16 @@ return [
             'faction' => '阵营',
             'standing' => '声望值',
             'flags' => '标记',
+            'standing_tiers' => [
+                'hated' => '仇恨',
+                'hostile' => '敌对',
+                'unfriendly' => '冷淡',
+                'neutral' => '中立',
+                'friendly' => '友好',
+                'honored' => '尊敬',
+                'revered' => '崇敬',
+                'exalted' => '崇拜',
+            ],
             'flags_labels' => [
                 'visible' => '可见',
                 'at_war' => '交战',
@@ -127,6 +147,11 @@ return [
                 'rival' => '死敌',
             ],
             'empty' => '无声望记录',
+        ],
+        // 物品/任务名称深链到对应管理页时的悬停提示
+        'manage_link' => [
+            'item' => '在物品管理中打开 #:id',
+            'quest' => '在任务管理中打开 #:id',
         ],
         'quests' => [
             'title' => '任务',
@@ -242,6 +267,8 @@ return [
         'boost_manage_codes' => '兑换码生成',
         'boost_success' => '角色直升命令已执行',
     ],
+    // Generic list-control labels (expand/collapse, row filter) shared by the
+    // spells, reputations and auras sections of the character detail page.
     'controls' => [
         'expand_all' => '全部展开',
         'collapse_all' => '全部收起',

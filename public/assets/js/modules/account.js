@@ -192,6 +192,36 @@
 		}
 	}
 
+	/**
+	 * 在弹窗底部追加一个跳转链接（跨模块导航用，例如"到角色管理看该账号的角色"）。
+	 * 已存在时只更新 href/label，避免重复叠加。
+	 */
+	function appendModalFooterLink(modal, path, label){
+		if(!modal) return null;
+		const footer = modal.querySelector('.modal-footer');
+		if(!footer) return null;
+
+		// window.APP_BASE is never published by the server; Panel.url() prepends the
+		// real base path (data-app-base on <body>).
+		const base = (window.Panel && typeof window.Panel.basePath === 'function')
+			? window.Panel.basePath()
+			: ((document.body && document.body.dataset ? document.body.dataset.appBase : '') || '').replace(/\/$/, '');
+		const href = (window.Panel && typeof window.Panel.url === 'function')
+			? window.Panel.url(urlWithServer(path))
+			: (base + urlWithServer(path));
+
+		let link = footer.querySelector('.js-modal-nav-link');
+		if(!link){
+			link = document.createElement('a');
+			link.className = 'btn outline btn-sm js-modal-nav-link';
+			footer.appendChild(link);
+		}
+		link.setAttribute('href', href);
+		link.textContent = label;
+
+		return link;
+	}
+
 	function isPrivateIp(ip){
 		if(!ip) return false;
 		const lower = ip.toLowerCase();
@@ -356,6 +386,39 @@
 				kick: translate('actions.kick', 'Kick'),
 				delete: translate('actions.delete', 'Delete')
 			};
+
+			/**
+			 * 行内操作条：与 account/index.php 的服务端渲染保持完全一致的归组规则 ——
+			 * 每行只平铺"角色 / 封禁"两个高频操作，其余低频与危险操作收进"更多"菜单。
+			 * 两边都输出 button.action[data-action]，由同一个 document 级委托处理。
+			 */
+			const rowActionBarHtml = (inline, menu) => {
+				const button = (item) => {
+					const attrs = [
+						`class="${item.className}"`,
+						`data-action="${item.action}"`
+					];
+					if(item.disabled) attrs.push('disabled');
+					if(item.title) attrs.push(`title="${esc(item.title)}"`);
+					return `<button ${attrs.join(' ')}>${esc(item.label)}</button>`;
+				};
+
+				const inlineHtml = inline.map(button).join('');
+				const moreLabel = translate('actions.more', 'More');
+				const menuHtml = menu.length
+					? `<details class="row-menu">`
+						+ `<summary class="btn-sm btn neutral outline" title="${esc(moreLabel)}">${esc(moreLabel)}</summary>`
+						+ `<div class="row-menu__list">${menu.map(button).join('')}</div>`
+						+ `</details>`
+					: '';
+
+				if(!inlineHtml && !menuHtml){
+					return `<span class="muted small">${esc(translate('readonly.no_actions', 'No actions available'))}</span>`;
+				}
+
+				return `<div class="row-action-bar">${inlineHtml}${menuHtml}</div>`;
+			};
+
 			const rows = (res.items || []).map(row => {
 				const lastIp = row.last_ip || '';
 				const privateIp = isPrivateIp(lastIp);
@@ -374,27 +437,22 @@
 				} else {
 					statusHtml = `<span class="badge status-offline">${esc(statusOffline)}</span>`;
 				}
-				const actionButtons = [
-					hasCap('characters') ? { action: 'chars', className: 'btn-sm btn info action', label: actionLabels.chars } : null,
-					hasCap('gm') ? { action: 'gm', className: 'btn-sm btn warn action', label: actionLabels.gm } : null,
-					hasCap('ban') ? { action: 'ban', className: 'btn-sm btn danger action', label: actionLabels.ban } : null,
-					hasCap('ban') ? { action: 'unban', className: 'btn-sm btn success action', label: actionLabels.unban } : null,
-					hasCap('password') ? { action: 'pass', className: 'btn-sm btn info outline action', label: actionLabels.password } : null,
-					hasCap('update') ? { action: 'email', className: 'btn-sm btn neutral action', label: actionLabels.email } : null,
-					hasCap('update') ? { action: 'rename', className: 'btn-sm btn neutral outline action', label: actionLabels.rename } : null,
-					hasCap('ip') ? { action: 'ip-accounts', className: 'btn-sm btn neutral action', label: actionLabels.sameIp, disabled: privateIp, title: privateIp ? privateIpTitle : '' } : null,
-					hasCap('kick') ? { action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick } : null,
-					hasCap('delete') ? { action: 'delete', className: 'btn-sm btn danger action', label: actionLabels.delete } : null
-				].filter(Boolean);
-				const buttonsHtml = actionButtons.map(btn => {
-					const attrs = [
-						`class="${btn.className}"`,
-						`data-action="${btn.action}"`
-					];
-					if(btn.disabled) attrs.push('disabled');
-					if(btn.title) attrs.push(`title="${esc(btn.title)}"`);
-					return `<button ${attrs.join(' ')}>${esc(btn.label)}</button>`;
-				}).join('');
+				const actionButtons = {
+					inline: [
+						hasCap('characters') ? { action: 'chars', className: 'btn-sm btn info action', label: actionLabels.chars } : null
+					].filter(Boolean),
+					menu: [
+						hasCap('gm') ? { action: 'gm', className: 'btn-sm btn warn action', label: actionLabels.gm } : null,
+						hasCap('ban') ? { action: 'ban', className: 'btn-sm btn danger action', label: actionLabels.ban } : null,
+						hasCap('ban') ? { action: 'unban', className: 'btn-sm btn success action', label: actionLabels.unban } : null,
+						hasCap('password') ? { action: 'pass', className: 'btn-sm btn info outline action', label: actionLabels.password } : null,
+						hasCap('update') ? { action: 'email', className: 'btn-sm btn neutral action', label: actionLabels.email } : null,
+						hasCap('update') ? { action: 'rename', className: 'btn-sm btn neutral outline action', label: actionLabels.rename } : null,
+						hasCap('ip') ? { action: 'ip-accounts', className: 'btn-sm btn neutral action', label: actionLabels.sameIp, disabled: privateIp, title: privateIp ? privateIpTitle : '' } : null,
+						hasCap('kick') ? { action: 'kick', className: 'btn-sm btn outline danger action', label: actionLabels.kick } : null,
+						hasCap('delete') ? { action: 'delete', className: 'btn-sm btn danger action', label: actionLabels.delete } : null
+					].filter(Boolean)
+				};
 				const idValue = row.id ?? '';
 				const usernameValue = row.username || '';
 				const gmValue = row.gmlevel != null ? row.gmlevel : '-';
@@ -404,7 +462,7 @@
 				const selectCell = canBulk
 					? `<td><input type="checkbox" class="js-account-select" value="${esc(idValue)}" aria-label="select"></td>`
 					: '';
-				const actionsHtml = buttonsHtml || `<span class="muted small">${esc(translate('readonly.no_actions', 'No actions available'))}</span>`;
+				const actionsHtml = rowActionBarHtml(actionButtons.inline, actionButtons.menu);
 				return `<tr data-id="${esc(idValue)}" data-username="${esc(usernameValue)}" data-gm="${esc(gmData)}" data-last-ip="${esc(lastIp)}">`
 					+ selectCell
 					+ `<td>${esc(idValue)}</td>`
@@ -414,7 +472,7 @@
 					+ `<td>${esc(lastLogin)}</td>`
 					+ `<td>${esc(lastIpCell)}</td>`
 					+ `<td class="ip-location" data-ip="${esc(lastIp)}">-</td>`
-					+ `<td class="nowrap">${actionsHtml}</td>`
+					+ `<td class="account-table__actions-cell">${actionsHtml}</td>`
 					+ `</tr>`;
 			}).join('');
 			const emptyText = translate('feedback.empty', 'No results');
@@ -430,7 +488,6 @@
 			.map(el => parseInt(el.value, 10))
 			.filter(v => Number.isFinite(v) && v > 0);
 	}
-
 	async function doDeleteAccount(id, username){
 		const confirmMsg = translate('delete.confirm', 'Delete this account?');
 		if(!confirm(confirmMsg)) return;
@@ -533,6 +590,9 @@
 				+ `<th>${esc(tableLabels.level)}</th>`
 				+ `<th>${esc(tableLabels.status)}</th>`
 				+ `</tr></thead><tbody>${rows || emptyRow}</tbody></table>`;
+			// 弹窗内提供"到角色管理看该账号全部角色"的入口，避免用户看完弹窗还要手动去搜
+			const sameAccountLabel = translate('characters.view_all', 'View all in character management');
+			appendModalFooterLink(modal, `/character?account=${encodeURIComponent(username)}&load_all=1`, sameAccountLabel);
 			if(res.ban){
 				const badgeLabel = translate('characters.ban_badge', 'Banned');
 				const remain = res.ban.permanent

@@ -318,6 +318,19 @@ final class GameMaps
         return $fallback ?? (self::isZh() ? ('未知(' . $id . ')') : ('Unknown(' . $id . ')'));
     }
 
+    /**
+     * 性别：0=男 1=女 2=无。字典缺失时回落到 game.fallbacks.gender 文案。
+     */
+    public static function genderName(int $id): string
+    {
+        $genders = Lang::getArray('game.genders', []);
+        if (isset($genders[$id]) && is_string($genders[$id]) && $genders[$id] !== '') {
+            return $genders[$id];
+        }
+
+        return Lang::get('game.fallbacks.gender', ['id' => $id]);
+    }
+
     public static function zoneName(int $zoneId): ?string
     {
         return ZoneNames::name($zoneId);

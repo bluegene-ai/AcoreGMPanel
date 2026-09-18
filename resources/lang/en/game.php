@@ -37,9 +37,15 @@ return [
     6 => 'Artifact',
     7 => 'Heirloom',
   ],
+  'genders' => [
+    0 => 'Male',
+    1 => 'Female',
+    2 => 'None',
+  ],
   'fallbacks' => [
     'class' => 'Unknown #:id',
     'race' => 'Unknown #:id',
     'quality' => 'Quality #:id',
+    'gender' => 'Gender #:id',
   ],
 ];

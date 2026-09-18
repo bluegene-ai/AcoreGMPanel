@@ -54,6 +54,10 @@ return [
       'stats' => 'Mail statistics reads.',
       'logs' => 'Mail SQL and action log reads.',
     ],
+    'inventory' => [
+      'view' => 'Item/inventory search surfaces: character bag reads and item ownership lookups.',
+      'manage' => 'Destructive item/inventory actions: reducing stacks, deleting and replacing item instances.',
+    ],
     'logs' => [
       'catalog' => 'Logs page shell and module/type catalog reads.',
       'read' => 'Log tail reads for a selected module/type.',
@@ -63,7 +67,6 @@ return [
       'announce' => 'Broadcast announcement sending.',
       'send' => 'Mass mail send actions for mail, items, and gold.',
       'logs' => 'Mass mail recent log reads.',
-      'boost' => 'Mass-mail-triggered character boost actions.',
     ],
     'raf' => [
       'list' => 'Recruit-a-friend list, search, and summary reads.',

@@ -58,10 +58,10 @@ return array (
   array (
     'modules' => 
     array (
-      'item_owner' => 
+      'item_inventory' => 
       array (
-        'label' => 'Item Ownership',
-        'description' => 'Bulk delete and replace history.',
+        'label' => 'Items / Inventory',
+        'description' => 'Bag reads, item ownership lookups, bulk delete and replace history.',
         'types' => 
         array (
           'actions' => 

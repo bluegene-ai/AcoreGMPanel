@@ -1,8 +1,4 @@
-.account-search__inline-field{display:flex;align-items:center;gap:6px;}
-.account-search__inline-field--nowrap{white-space:nowrap;}
-.account-search__label-text--nowrap{white-space:nowrap;}
-.account-search__exclude-input{min-width:180px;}
-.account-search__summary{margin-top:10px;font-size:13px;color:#8aa4b8;}
+.account-summary{margin:0 0 14px;font-size:13px;color:#8aa4b8;}
 .account-bulk-toolbar{gap:10px;flex-wrap:wrap;margin:8px 0;}
 .account-bulk-toolbar__actions{gap:10px;flex-wrap:wrap;}
 .account-bulk-toolbar__select-all{display:inline-flex;align-items:center;gap:6px;}

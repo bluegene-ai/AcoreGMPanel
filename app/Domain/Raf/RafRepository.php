@@ -29,6 +29,7 @@ class RafRepository extends MultiServerRepository
 
     public function listLinks(array $filters, int $page, int $perPage): Paginator
     {
+        $filters = $this->filterBindingsForExecution($filters);
         $params = [];
         $where = $this->buildWhere($filters, $params);
         $joinRewards = ' LEFT JOIN ' . $this->table('recruit_a_friend_rewards')
@@ -79,8 +80,41 @@ class RafRepository extends MultiServerRepository
         return new Paginator($rows, $total, $page, $perPage);
     }
 
+    /**
+     * 计算当前条件命中的账号 ID，供 "已产生奖励的绑定" 这类跨表统计使用。
+     *
+     * @return int[]
+     */
+    public function rewardedAccountIds(array $filters): array
+    {
+        $params = [];
+        $where = $this->buildWhere($filters, $params);
+        $joinRewards = ' LEFT JOIN ' . $this->table('recruit_a_friend_rewards')
+            . ' r ON r.recruiter_guid = l.recruiter_guid';
+
+        $where .= ($where === '' ? 'WHERE' : ' AND') . ' COALESCE(r.reward_level, 0) > 0';
+
+        $stmt = $this->characters()->prepare(
+            'SELECT DISTINCT l.account_id FROM '
+            . $this->table('recruit_a_friend_links') . ' l'
+            . $joinRewards . ' ' . $where
+        );
+        $this->bindAll($stmt, $params);
+        $stmt->execute();
+
+        $ids = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) ?: [] as $value) {
+            $accountId = (int) $value;
+            if ($accountId > 0)
+                $ids[$accountId] = $accountId;
+        }
+
+        return array_values($ids);
+    }
+
     public function stats(array $filters): array
     {
+        $filters = $this->filterBindingsForExecution($filters);
         $params = [];
         $where = $this->buildWhere($filters, $params);
         $threshold = $this->permanentBlockThreshold;
@@ -221,6 +255,7 @@ class RafRepository extends MultiServerRepository
      */
     public function listRewardLogs(array $filters, int $page, int $perPage): Paginator
     {
+        $filters = $this->filterRewardLogsForExecution($filters);
         $table = $this->table('recruit_a_friend_reward_log');
         $params = [];
         $where = $this->buildRewardLogWhere($filters, $params);
@@ -271,13 +306,19 @@ class RafRepository extends MultiServerRepository
 
     public function rewardLogStats(array $filters = []): array
     {
+        $filters = $this->filterRewardLogsForExecution($filters);
         $params = [];
         $where = $this->buildRewardLogWhere($filters, $params);
+
+        // 命中 "默认奖励组合" 条件时，全部记录本身即默认组合，无需再叠加 CASE
+        $defaultRewardsColumn = !empty($filters['default_only'])
+            ? 'COUNT(*)'
+            : 'SUM(CASE WHEN used_default = 1 THEN 1 ELSE 0 END)';
 
         $sql = 'SELECT COUNT(*) AS total, '
             . 'COUNT(DISTINCT recruiter_guid) AS recruiters, '
             . 'COUNT(DISTINCT recruit_account_id) AS recruits, '
-            . 'SUM(CASE WHEN used_default = 1 THEN 1 ELSE 0 END) AS default_rewards, '
+            . $defaultRewardsColumn . ' AS default_rewards, '
             . 'MAX(granted_at) AS latest_granted_at '
             . 'FROM ' . $this->table('recruit_a_friend_reward_log') . ' ' . $where;
 
@@ -400,6 +441,31 @@ class RafRepository extends MultiServerRepository
             $params[':recruiter_guid'] = $recruiterGuid;
         }
 
+        // 注意：条件已启用但命中 0 个账号时，必须落成 1 = 0，
+        // 否则 "已产生奖励的绑定" 会静默退化成"全部绑定"
+        if (!empty($filters['rewarded_only'])) {
+            $rewardedAccountIds = is_array($filters['rewarded_account_ids'] ?? null)
+                ? array_values(array_filter(
+                    array_map('intval', $filters['rewarded_account_ids']),
+                    static function (int $accountId): bool {
+                        return $accountId > 0;
+                    }
+                ))
+                : [];
+
+            if ($rewardedAccountIds === []) {
+                $where[] = '1 = 0';
+            } else {
+                $placeholders = [];
+                foreach ($rewardedAccountIds as $index => $accountId) {
+                    $placeholder = ':rewarded_account_' . $index;
+                    $placeholders[] = $placeholder;
+                    $params[$placeholder] = $accountId;
+                }
+                $where[] = 'l.account_id IN (' . implode(', ', $placeholders) . ')';
+            }
+        }
+
         switch ((string) ($filters['status'] ?? 'all')) {
             case 'active':
                 $where[] = 'l.complete = 0';
@@ -430,6 +496,34 @@ class RafRepository extends MultiServerRepository
             return '';
 
         return 'WHERE ' . implode(' AND ', $where);
+    }
+
+    /**
+     * 把 "已产生奖励的绑定" 这类跨表条件落成具体的账号 ID 列表。
+     *
+     * 统计卡与明细必须走同一套口径，否则会出现"卡片显示 12，点开却是全部"的偏差。
+     * 注意：命中 0 个账号时必须留下"已启用该条件"的标记，否则条件会被静默丢弃，
+     * 下钻就会退化成"返回全部绑定"。
+     */
+    protected function filterBindingsForExecution(array $filters): array
+    {
+        if (empty($filters['rewarded_only']))
+            return $filters;
+
+        $filters['rewarded_account_ids'] = $this->rewardedAccountIds($filters);
+
+        return $filters;
+    }
+
+    /**
+     * "默认奖励组合" 在统计卡与明细中必须使用同一套判定。
+     */
+    protected function filterRewardLogsForExecution(array $filters): array
+    {
+        if (!empty($filters['default_only']))
+            $filters['default_only'] = 1;
+
+        return $filters;
     }
 
     private function buildRewardLogWhere(array $filters, array &$params): string
@@ -501,6 +595,10 @@ class RafRepository extends MultiServerRepository
         if ($to > 0) {
             $where[] = 'granted_at <= :log_to';
             $params[':log_to'] = $to;
+        }
+
+        if (!empty($filters['default_only'])) {
+            $where[] = 'used_default = 1';
         }
 
         if ($where === [])

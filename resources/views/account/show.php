@@ -11,7 +11,23 @@ $accountShowCapabilities = $__pageCapabilities ?? [
 ];
 
 include dirname(__DIR__) . '/components/page_header.php';
+
+// 账号 ↔ 角色管理之间的双向跳转：让"这个账号都有哪些角色"一步可达
+$accountShowUsername = (string) ($summary['username'] ?? '');
+$accountShowCharacterListUrl = $accountShowUsername !== ''
+  ? url_with_server('/character?account=' . rawurlencode($accountShowUsername) . '&load_all=1')
+  : url_with_server('/character');
 ?>
+<div class="char-toolbar account-show-toolbar">
+  <a class="btn outline btn-sm" href="<?= htmlspecialchars(url_with_server('/account')) ?>">
+    <?= htmlspecialchars(__('app.account.show.back')) ?>
+  </a>
+  <?php if($summary !== null): ?>
+    <a class="btn outline btn-sm" href="<?= htmlspecialchars($accountShowCharacterListUrl) ?>">
+      <?= htmlspecialchars(__('app.account.show.characters.view_all')) ?>
+    </a>
+  <?php endif; ?>
+</div>
 <?php if(!empty($error)): ?>
   <div class="panel-flash panel-flash--danger panel-flash--inline is-visible"><?= htmlspecialchars($error) ?></div>
 <?php elseif($summary === null): ?>
@@ -40,7 +56,14 @@ include dirname(__DIR__) . '/components/page_header.php';
   </div>
 
   <div class="char-card account-show-card">
-    <h3 class="char-section-header"><?= htmlspecialchars(__('app.account.show.characters.title')) ?></h3>
+    <h3 class="char-section-header">
+      <?= htmlspecialchars(__('app.account.show.characters.title')) ?>
+      <?php if($characters !== []): ?>
+        <a class="link char-inline-link" href="<?= htmlspecialchars($accountShowCharacterListUrl) ?>">
+          <?= htmlspecialchars(__('app.account.show.characters.view_all')) ?>
+        </a>
+      <?php endif; ?>
+    </h3>
     <?php if(!$accountShowCapabilities['characters']): ?>
       <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.common.capabilities.read_only')) ?></div>
     <?php elseif($characters === []): ?>

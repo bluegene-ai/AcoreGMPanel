@@ -53,6 +53,161 @@ class CharacterBoostService
         $classId = (int) ($summary['class'] ?? 0);
         $previousLevel = (int) ($summary['level'] ?? 0);
 
+        // 模板 / 目标等级 / 账号等级要求统一在这里校验，预览与执行走同一套规则
+        $guard = $this->resolveGuard($realmId, $summary, $templateId, $targetLevel);
+        $template = $guard['template'];
+        $resolvedTargetLevel = $guard['target_level'];
+        $accountHighestLevel = $guard['account_highest_level'];
+
+        $soap = new SoapService($this->serverId);
+        $responses = [];
+
+        $levelCmd = sprintf('.character level %s %d', $name, $resolvedTargetLevel);
+        $responses[] = [
+            'command' => $levelCmd,
+            'response' => $soap->execute($levelCmd),
+        ];
+
+        if (!$responses[0]['response']['success']) {
+            $r0 = is_array($responses[0]['response'] ?? null) ? $responses[0]['response'] : [];
+            $detail = $r0['error'] ?? ($r0['message'] ?? null);
+            $suffix = $detail ? ('：' . (string) $detail) : '';
+            throw new CharacterBoostSoapException('角色等级调整命令执行失败' . $suffix . '。');
+        }
+
+        if ($template) {
+            $responses = array_merge($responses, $this->dispatchTemplateRewards($soap, $name, $classId, $template));
+        }
+
+        $itemSummary = $this->summarizeTemplateItems($template, $classId);
+        $this->recordHistory(
+            $name,
+            $resolvedTargetLevel,
+            true,
+            $itemSummary,
+            $itemSummary !== '' ? count(explode(',', $itemSummary)) : 0,
+            $template ? ((int) ($template['money_gold'] ?? 0) * 10000) : 0
+        );
+
+        return [
+            'character' => [
+                'guid' => (int) $summary['guid'],
+                'name' => $name,
+                'class' => $classId,
+                'previous_level' => $previousLevel,
+                'target_level' => $resolvedTargetLevel,
+                'account_highest_level_before' => $accountHighestLevel,
+            ],
+            'commands' => $responses,
+        ];
+    }
+
+    /**
+     * 把模板将要发放的物品汇总成 "entry:qty,entry:qty"，用于历史记录。
+     *
+     * @param array<string,mixed>|null $template
+     */
+    private function summarizeTemplateItems(?array $template, int $classId): string
+    {
+        if ($template === null) {
+            return '';
+        }
+
+        $pairs = [];
+        foreach (is_array($template['items'] ?? null) ? $template['items'] : [] as $item) {
+            $entry = (int) ($item['item_entry'] ?? 0);
+            $qty = (int) ($item['quantity'] ?? 0);
+            if ($entry > 0 && $qty > 0) {
+                $pairs[$entry] = ($pairs[$entry] ?? 0) + $qty;
+            }
+        }
+
+        foreach ($this->classRewardItemsFor($template, $classId) as $item) {
+            $entry = (int) ($item['entry'] ?? 0);
+            $qty = (int) ($item['quantity'] ?? 1);
+            if ($entry > 0 && $qty > 0) {
+                $pairs[$entry] = ($pairs[$entry] ?? 0) + $qty;
+            }
+        }
+
+        if ($pairs === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($pairs as $entry => $qty) {
+            $parts[] = $entry . ':' . $qty;
+        }
+
+        return implode(',', $parts);
+    }
+
+    /**
+     * 只读预览：不发送任何 SOAP 命令，返回将要发放的内容。
+     *
+     * 直升管理页在执行前用它做"这将发放什么"的确认，规则与真正执行完全一致，
+     * 避免预览说能升、执行却被守卫拦下。
+     *
+     * @return array<string,mixed>
+     */
+    public function previewByGuid(int $realmId, int $guid, ?int $templateId, ?int $targetLevel): array
+    {
+        $summary = $this->characters->findSummary($guid);
+        if (!$summary) {
+            throw new CharacterBoostNotFoundException('未找到指定角色。');
+        }
+
+        $guard = $this->resolveGuard($realmId, $summary, $templateId, $targetLevel);
+        $template = $guard['template'];
+        $classId = (int) ($summary['class'] ?? 0);
+
+        $items = [];
+        $moneyGold = 0;
+        $classTiers = [];
+        if ($template) {
+            $moneyGold = (int) ($template['money_gold'] ?? 0);
+            foreach (is_array($template['items'] ?? null) ? $template['items'] : [] as $item) {
+                $entry = (int) ($item['item_entry'] ?? 0);
+                $qty = (int) ($item['quantity'] ?? 0);
+                if ($entry > 0 && $qty > 0) {
+                    $items[] = ['entry' => $entry, 'quantity' => $qty, 'name' => (string) ($item['item_name'] ?? '')];
+                }
+            }
+            $classTiers = $this->classRewardItemsFor($template, $classId);
+        }
+
+        return [
+            'character' => [
+                'guid' => (int) ($summary['guid'] ?? 0),
+                'name' => (string) ($summary['name'] ?? ''),
+                'level' => (int) ($summary['level'] ?? 0),
+                'class' => $classId,
+                'account' => (int) ($summary['account'] ?? 0),
+                'online' => (int) ($summary['online'] ?? 0),
+            ],
+            'template' => $template ? [
+                'id' => (int) ($template['id'] ?? 0),
+                'name' => (string) ($template['name'] ?? ''),
+            ] : null,
+            'target_level' => $guard['target_level'],
+            'previous_level' => (int) ($summary['level'] ?? 0),
+            'account_highest_level' => $guard['account_highest_level'],
+            'money_gold' => $moneyGold,
+            'items' => $items,
+            'class_items' => $classTiers,
+        ];
+    }
+
+    /**
+     * 解析并校验模板 / 目标等级 / 账号等级要求。
+     *
+     * @param array<string,mixed> $summary
+     * @return array{template:?array<string,mixed>,target_level:int,account_highest_level:?int}
+     */
+    private function resolveGuard(int $realmId, array $summary, ?int $templateId, ?int $targetLevel): array
+    {
+        $previousLevel = (int) ($summary['level'] ?? 0);
+
         $template = null;
         if ($templateId !== null && $templateId > 0) {
             $template = $this->templates->findForRealm($realmId, $templateId);
@@ -90,37 +245,50 @@ class CharacterBoostService
             }
         }
 
-        $soap = new SoapService($this->serverId);
-        $responses = [];
-
-        $levelCmd = sprintf('.character level %s %d', $name, $resolvedTargetLevel);
-        $responses[] = [
-            'command' => $levelCmd,
-            'response' => $soap->execute($levelCmd),
-        ];
-
-        if (!$responses[0]['response']['success']) {
-            $r0 = is_array($responses[0]['response'] ?? null) ? $responses[0]['response'] : [];
-            $detail = $r0['error'] ?? ($r0['message'] ?? null);
-            $suffix = $detail ? ('：' . (string) $detail) : '';
-            throw new CharacterBoostSoapException('角色等级调整命令执行失败' . $suffix . '。');
-        }
-
-        if ($template) {
-            $responses = array_merge($responses, $this->dispatchTemplateRewards($soap, $name, $classId, $template));
-        }
-
         return [
-            'character' => [
-                'guid' => (int) $summary['guid'],
-                'name' => $name,
-                'class' => $classId,
-                'previous_level' => $previousLevel,
-                'target_level' => $resolvedTargetLevel,
-                'account_highest_level_before' => $accountHighestLevel,
-            ],
-            'commands' => $responses,
+            'template' => $template,
+            'target_level' => $resolvedTargetLevel,
+            'account_highest_level' => $accountHighestLevel,
         ];
+    }
+
+    /**
+     * 按职业取出模板里的套装奖励（预览用）。
+     *
+     * 复用执行路径上的同一个 resolveClassRewardAttachments()，保证
+     * "预览看到的"和"实际发放的"完全一致。
+     *
+     * @param array<string,mixed> $template
+     * @return array<int, array{entry:int,quantity:int}>
+     */
+    private function classRewardItemsFor(array $template, int $classId): array
+    {
+        $out = [];
+        foreach (is_array($template['class_rewards'] ?? null) ? $template['class_rewards'] : [] as $reward) {
+            $tier = strtolower(trim((string) ($reward['tier'] ?? '')));
+            if ($tier === '') {
+                continue;
+            }
+            foreach ($this->resolveClassRewardAttachments($classId, $tier) as $item) {
+                $entry = (int) ($item['entry'] ?? 0);
+                if ($entry > 0) {
+                    $out[] = ['entry' => $entry, 'quantity' => (int) ($item['quantity'] ?? 1)];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * 写一条直升历史。归属直升模块自己的 panel_boost_log 表，
+     * 不再借用群发的 panel_massmail_log。
+     *
+     * @param array<int, string> $errors
+     */
+    public function recordHistory(string $characterName, int $level, bool $ok, string $itemSummary, int $quantity, int $moneyCopper, array $errors = []): void
+    {
+        (new BoostHistoryService($this->serverId))->record($characterName, $level, $ok, $itemSummary, $quantity, $moneyCopper, $errors);
     }
 
     private function escapeCommandString(string $value): string
@@ -332,7 +500,3 @@ class CharacterBoostService
         return $attachments;
     }
 }
-
-class CharacterBoostGuardException extends \RuntimeException {}
-class CharacterBoostNotFoundException extends \RuntimeException {}
-class CharacterBoostSoapException extends \RuntimeException {}

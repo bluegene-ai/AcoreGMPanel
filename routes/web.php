@@ -10,13 +10,12 @@ use Acme\Panel\Core\Router;
 use Acme\Panel\Http\Controllers\AccountController;
 use Acme\Panel\Http\Controllers\Aegis\AegisController;
 use Acme\Panel\Http\Controllers\AuditController;
-use Acme\Panel\Http\Controllers\BagQuery\BagQueryController;
 use Acme\Panel\Http\Controllers\Boss\BossController;
 use Acme\Panel\Http\Controllers\Character\CharacterController;
 use Acme\Panel\Http\Controllers\Creature\CreatureController;
 use Acme\Panel\Http\Controllers\HomeController;
 use Acme\Panel\Http\Controllers\Item\ItemController;
-use Acme\Panel\Http\Controllers\ItemOwnership\ItemOwnershipController;
+use Acme\Panel\Http\Controllers\ItemInventory\ItemInventoryController;
 use Acme\Panel\Http\Controllers\LogsController;
 use Acme\Panel\Http\Controllers\Mail\MailController;
 use Acme\Panel\Http\Controllers\MassMail\MassMailController;
@@ -26,6 +25,7 @@ use Acme\Panel\Http\Controllers\RealmController;
 use Acme\Panel\Http\Controllers\Setup\SetupController;
 use Acme\Panel\Http\Controllers\SmartAi\SmartAiWizardController;
 use Acme\Panel\Http\Controllers\Soap\SoapWizardController;
+use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostAdminController;
 use Acme\Panel\Http\Controllers\CharacterBoost\PublicCharacterBoostController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostRedeemCodeAdminController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostTemplateAdminController;
@@ -67,6 +67,10 @@ return static function (Router $router): void {
         $router->get('/account/api/characters', [AccountController::class, 'apiCharacters']);
         $router->get('/account/api/characters-status', [AccountController::class, 'apiCharactersStatus']);
         $router->get('/raf', [RafController::class, 'index']);
+        // 招募管理区块的无刷新刷新与统计卡下钻（只读）
+        $router->get('/raf/api/bindings', [RafController::class, 'apiBindings']);
+        $router->get('/raf/api/reward-logs', [RafController::class, 'apiRewardLogs']);
+        $router->get('/raf/api/card', [RafController::class, 'apiCard']);
 
         $router->get('/character', [CharacterController::class, 'index']);
         $router->get('/character/view', [CharacterController::class, 'show']);
@@ -115,29 +119,36 @@ return static function (Router $router): void {
             $router->post('/character-boost/api/templates/save', [CharacterBoostTemplateAdminController::class, 'apiSave']);
             $router->post('/character-boost/api/templates/delete', [CharacterBoostTemplateAdminController::class, 'apiDelete']);
 
+            // 直升管理：执行直升 / 预览 / 历史（原群发页的直升入口已迁移到这里）
+            $router->post('/character-boost/api/apply', [CharacterBoostAdminController::class, 'apiApply']);
+            $router->post('/character-boost/api/history', [CharacterBoostAdminController::class, 'apiHistory']);
+
             $router->post('/raf/api/bind', [RafController::class, 'apiBind']);
             $router->post('/raf/api/unbind', [RafController::class, 'apiUnbind']);
             $router->post('/raf/api/comment', [RafController::class, 'apiComment']);
         });
 
+        $router->get('/character-boost', [CharacterBoostAdminController::class, 'index']);
         $router->get('/character-boost/templates', [CharacterBoostTemplateAdminController::class, 'index']);
         $router->get('/character-boost/templates/edit', [CharacterBoostTemplateAdminController::class, 'edit']);
         $router->get('/character-boost/redeem-codes', [CharacterBoostRedeemCodeAdminController::class, 'index']);
 
-        $router->get('/bag', [BagQueryController::class, 'index']);
-        $router->get('/bag-query', [BagQueryController::class, 'legacyRedirect']);
-        $router->get('/bag/api/characters', [BagQueryController::class, 'apiCharacters']);
-        $router->get('/bag/api/items', [BagQueryController::class, 'apiItems']);
+        // Unified item / inventory module (merged 背包查询 + 物品归属).
+        // Character axis: ?mode=character   Item axis: ?mode=item
+        $router->get('/item-inventory', [ItemInventoryController::class, 'index']);
+        $router->get('/item-inventory/api/characters', [ItemInventoryController::class, 'apiCharacters']);
+        $router->get('/item-inventory/api/character-items', [ItemInventoryController::class, 'apiCharacterItems']);
+        $router->get('/item-inventory/api/search-items', [ItemInventoryController::class, 'apiSearchItems']);
+        $router->get('/item-inventory/api/ownership', [ItemInventoryController::class, 'apiOwnership']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
-            $router->post('/bag/api/reduce', [BagQueryController::class, 'apiReduce']);
+            $router->post('/item-inventory/api/reduce', [ItemInventoryController::class, 'apiReduce']);
+            $router->post('/item-inventory/api/bulk', [ItemInventoryController::class, 'apiBulk']);
         });
 
-        $router->get('/item-ownership', [ItemOwnershipController::class, 'index']);
-        $router->get('/item-ownership/api/search-items', [ItemOwnershipController::class, 'apiSearchItems']);
-        $router->get('/item-ownership/api/ownership', [ItemOwnershipController::class, 'apiOwnership']);
-        $router->group([CsrfMiddleware::class], static function (Router $router): void {
-            $router->post('/item-ownership/api/bulk', [ItemOwnershipController::class, 'apiBulk']);
-        });
+        // Legacy URLs kept alive so existing bookmarks and external links keep working.
+        $router->get('/bag-query', [ItemInventoryController::class, 'legacyRedirect']);
+        $router->get('/bag', [ItemInventoryController::class, 'legacyBagRedirect']);
+        $router->get('/item-ownership', [ItemInventoryController::class, 'legacyOwnershipRedirect']);
 
         $router->get('/creature', [CreatureController::class, 'index']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
@@ -197,7 +208,9 @@ return static function (Router $router): void {
             $router->post('/mass-mail/api/announce', [MassMailController::class, 'apiAnnounce']);
             $router->post('/mass-mail/api/send', [MassMailController::class, 'apiSend']);
             $router->post('/mass-mail/api/logs', [MassMailController::class, 'apiLogs']);
-            $router->post('/mass-mail/api/boost', [MassMailController::class, 'apiBoost']);
+            // 只读辅助：物品名解析与收件人预览
+            $router->post('/mass-mail/api/items', [MassMailController::class, 'apiItems']);
+            $router->post('/mass-mail/api/targets', [MassMailController::class, 'apiPreviewTargets']);
         });
 
         $router->get('/soap', [SoapWizardController::class, 'index']);

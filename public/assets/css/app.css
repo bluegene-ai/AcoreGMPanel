@@ -65,23 +65,8 @@ h1.page-title{margin-top:0;font-size:22px;letter-spacing:.5px;}
 /* bitmask / modal */
 .modal-scroll{max-height:420px;overflow:auto;}
 .bitmask-options-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;}
-.account-search{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
-.account-search__row{display:flex;gap:10px;flex-wrap:nowrap;align-items:center;}
-.account-search__row select{min-width:130px;flex:0 0 auto;}
-.account-search__row input[type=text]{flex:1 1 260px;min-width:200px;}
-.account-search__row .btn{flex:0 0 auto;}
-.account-search .panel-flash{margin:0;}
-@media (max-width:720px){
-	.account-search__row{flex-wrap:wrap;}
-}
-
-.character-search{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
-.character-search__row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-.character-search__row input[type=text]{flex:1 1 220px;min-width:180px;}
-.character-search__row input[type=number]{flex:0 0 auto;}
-.character-search__row select{flex:0 0 auto;}
-.character-search__actions{display:inline-flex;gap:10px;align-items:center;flex:0 0 auto;white-space:nowrap;}
-
+/* 注意：本文件当前未被任何页面引用（核心样式走 app-core.css）。
+   旧版 .account-search / .character-search 横向工具条样式已删除，避免被误抄回去。 */
 .table-sort{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
 .table-sort:hover{text-decoration:underline;}
 .table-sort.is-active{color:var(--c-accent);}

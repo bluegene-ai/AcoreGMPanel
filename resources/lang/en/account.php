@@ -3,21 +3,24 @@ return array (
   'page_title' => 'Account Management',
   'search' => 
   array (
+    'type_label' => 'Search by',
     'type_username' => 'By username',
     'type_id' => 'By ID',
+    'value_label' => 'Keyword',
     'placeholder' => 'Search…',
     'submit' => 'Search',
     'load_all' => 'Load all accounts',
+    'clear' => 'Reset filters',
     'create' => 'Create account',
   ),
   'filters' => 
   array (
     'online' => 'Online status',
-    'online_any' => 'All accounts',
+    'online_any' => 'Any',
     'online_only' => 'Online only',
     'online_offline' => 'Offline only',
     'ban' => 'Ban status',
-    'ban_any' => 'All accounts',
+    'ban_any' => 'Any',
     'ban_only' => 'Banned only',
     'ban_unbanned' => 'Not banned',
     'exclude_username' => 'Exclude text',
@@ -40,6 +43,7 @@ return array (
     'last_ip' => 'Last IP',
     'ip_location' => 'IP location',
     'actions' => 'Actions',
+    'view_characters' => 'View this account\'s characters in character management',
   ),
   'status' => 
   array (
@@ -52,6 +56,7 @@ return array (
     'title_not_found' => 'Account not found (ID :id)',
     'title_default' => 'Account details',
     'back' => 'Back to list',
+    'back_to_characters' => 'Back to character management',
     'not_found' => 'Account not found',
     'summary' => 
     array (
@@ -75,6 +80,7 @@ return array (
     array (
       'title' => 'Characters',
       'empty' => 'No characters',
+      'view_all' => 'View all characters in character management',
       'table' => 
       array (
         'guid' => 'GUID',
@@ -96,6 +102,23 @@ return array (
     'same_ip' => 'Accounts on IP',
     'kick' => 'Kick',
     'delete' => 'Delete',
+    'more' => 'More',
+  ),
+  'bulk' => 
+  array (
+    'select_all' => 'Select all',
+    'delete' => 'Bulk delete',
+    'ban' => 'Bulk ban',
+    'unban' => 'Bulk unban',
+    'no_selection' => 'Select at least one account first',
+  ),
+  'delete' => 
+  array (
+    'confirm' => 'Delete this account? All characters on the account are removed as well and this cannot be undone.',
+    'success' => 'Deleted',
+    'blocked_online' => 'The account still has an online character (:name); kick it offline first.',
+    'characters_failed' => 'Failed to delete characters: :message',
+    'account_failed' => 'Failed to delete the account: :message',
   ),
   'ban' => 
   array (
@@ -146,6 +169,7 @@ End: :end',
     'kick_button' => 'Kick offline',
     'offline_tooltip' => 'Character offline, cannot kick',
     'empty' => 'No characters',
+    'view_all' => 'View all characters of this account in character management',
     'ban_badge' => 'Banned',
     'confirm_kick' => 'Kick character :name?',
     'kick_success' => 'Kick command dispatched: :name',

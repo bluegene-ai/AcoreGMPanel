@@ -882,7 +882,7 @@
 
   function sendPreview(payload){
     const body = { payload: JSON.stringify(payload) };
-    const runner = window.Panel && Panel.api ? Panel.api.post('/smart-ai/api/preview', body) : fetch(window.APP_BASE + '/smart-ai/api/preview', {
+    const runner = window.Panel && Panel.api ? Panel.api.post('/smart-ai/api/preview', body) : fetch((window.Panel && Panel.absoluteUrl ? Panel.absoluteUrl('/smart-ai/api/preview') : '/smart-ai/api/preview'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
       body: new URLSearchParams(body)

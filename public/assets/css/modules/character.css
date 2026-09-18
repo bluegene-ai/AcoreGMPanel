@@ -1,6 +1,4 @@
 /* ==== Character (Tabs/Cards/Actions) ==== */
-.character-search__guid{width:140px;}
-.character-search__level{width:120px;}
 .char-feedback--hidden{display:none;}
 .char-results-meta{margin-top:10px;font-size:13px;color:#8aa4b8;}
 .char-bulk-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;}
@@ -40,6 +38,18 @@
 .char-scroll-600{max-height:600px;}
 .char-scroll-mb{margin-bottom:20px;}
 .char-empty-cell{text-align:center;}
+/* 列表/详情页顶部的跨模块跳转条 */
+.char-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px;}
+.char-toolbar .btn{text-decoration:none;}
+.char-inline-link{margin-left:6px;font-size:.82em;opacity:.75;white-space:nowrap;}
+.char-inline-link:hover{opacity:1;}
+/* 游戏对象名称映射：主名称 + 小号原始 ID，缺失时只显示 ID */
+.char-name-cell{display:inline-flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.char-name-cell__name{color:var(--c-text);}
+.char-name-cell__id{font-size:.78em;opacity:.5;font-variant-numeric:tabular-nums;}
+.char-standing{display:inline-block;min-width:44px;padding:2px 8px;border-radius:999px;font-size:.82em;font-weight:600;text-align:center;background:rgba(143,158,178,.18);color:#c8d3df;}
+.char-standing--positive{background:rgba(77,128,216,.2);color:#b9d5ff;}
+.char-standing--negative{background:rgba(207,73,91,.18);color:#ffb5bd;}
 .char-quests-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;}
 .char-achievements-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;}
 .char-list{margin:0;padding-left:20px;}

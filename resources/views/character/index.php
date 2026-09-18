@@ -28,31 +28,67 @@
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
-<form class="character-search" method="get" action="">
-  <div class="character-search__row">
-    <input type="text" name="name" value="<?= htmlspecialchars($name) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.name_placeholder')) ?>">
-    <input type="number" name="guid" value="<?= $guid>0?(int)$guid:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.guid_placeholder')) ?>" class="character-search__guid">
-    <input type="text" name="account" value="<?= htmlspecialchars($account) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.account_placeholder')) ?>">
-    <input type="number" name="level_min" value="<?= $levelMin>0?(int)$levelMin:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_min')) ?>" class="character-search__level">
-    <input type="number" name="level_max" value="<?= $levelMax>0?(int)$levelMax:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_max')) ?>" class="character-search__level">
-    <select name="online">
-      <option value="any" <?= $filter_online==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_any')) ?></option>
-      <option value="online" <?= $filter_online==='online'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_only')) ?></option>
-      <option value="offline" <?= $filter_online==='offline'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_offline')) ?></option>
-    </select>
-    <select name="ban">
-      <option value="any" <?= $filter_ban==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_any')) ?></option>
-      <option value="banned" <?= $filter_ban==='banned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_only')) ?></option>
-      <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_unbanned')) ?></option>
-    </select>
-    <span class="character-search__actions">
+<?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any' || $filter_ban!=='any'; ?>
+<form class="list-filter" method="get" action="">
+  <div class="list-filter__grid list-filter__grid--fit">
+    <label class="list-filter__field list-filter__field--fit-name">
+      <span><?= htmlspecialchars(__('app.character.index.search.name_label')) ?></span>
+      <input type="text" name="name" maxlength="12" value="<?= htmlspecialchars($name) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.name_placeholder')) ?>">
+    </label>
+
+    <label class="list-filter__field list-filter__field--fit-id">
+      <span><?= htmlspecialchars(__('app.character.index.search.guid_label')) ?></span>
+      <input type="number" name="guid" min="1" value="<?= $guid>0?(int)$guid:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.guid_placeholder')) ?>">
+    </label>
+
+    <label class="list-filter__field list-filter__field--fit-account">
+      <span><?= htmlspecialchars(__('app.character.index.search.account_label')) ?></span>
+      <input type="text" name="account" maxlength="16" value="<?= htmlspecialchars($account) ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.account_placeholder')) ?>">
+    </label>
+
+    <label class="list-filter__field list-filter__field--fit-level">
+      <span><?= htmlspecialchars(__('app.character.index.search.level_label')) ?></span>
+      <div class="list-filter__range">
+        <input type="number" name="level_min" min="1" max="255" value="<?= $levelMin>0?(int)$levelMin:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_min')) ?>">
+        <span class="list-filter__range-sep">~</span>
+        <input type="number" name="level_max" min="1" max="255" value="<?= $levelMax>0?(int)$levelMax:'' ?>" placeholder="<?= htmlspecialchars(__('app.character.index.search.level_max')) ?>">
+      </div>
+    </label>
+
+    <label class="list-filter__field list-filter__field--fit-select">
+      <span><?= htmlspecialchars(__('app.character.index.filters.online')) ?></span>
+      <select name="online">
+        <option value="any" <?= $filter_online==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_any')) ?></option>
+        <option value="online" <?= $filter_online==='online'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_only')) ?></option>
+        <option value="offline" <?= $filter_online==='offline'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.online_offline')) ?></option>
+      </select>
+    </label>
+
+    <label class="list-filter__field list-filter__field--fit-select">
+      <span><?= htmlspecialchars(__('app.character.index.filters.ban')) ?></span>
+      <select name="ban">
+        <option value="any" <?= $filter_ban==='any'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_any')) ?></option>
+        <option value="banned" <?= $filter_ban==='banned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_only')) ?></option>
+        <option value="unbanned" <?= $filter_ban==='unbanned'?'selected':'' ?>><?= htmlspecialchars(__('app.character.index.filters.ban_unbanned')) ?></option>
+      </select>
+    </label>
+  </div>
+
+  <div class="list-filter__footer">
+    <div class="list-filter__status">
+      <div id="char-feedback" class="panel-flash panel-flash--inline char-feedback--hidden"></div>
+      <?php if(!$hasCriteria): ?>
+      <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.character.index.feedback.enter_search')) ?></div>
+      <?php endif; ?>
+    </div>
+
+    <div class="list-filter__actions">
       <button class="btn" type="submit"><?= htmlspecialchars(__('app.character.index.search.submit')) ?></button>
       <button class="btn outline" type="submit" name="load_all" value="1"><?= htmlspecialchars(__('app.character.index.search.load_all')) ?></button>
-    </span>
+      <a class="btn outline" href="<?= htmlspecialchars(url_with_server('/character')) ?>"><?= htmlspecialchars(__('app.character.index.search.clear')) ?></a>
+    </div>
   </div>
 </form>
-<div id="char-feedback" class="panel-flash panel-flash--inline char-feedback--hidden"></div>
-<?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any' || $filter_ban!=='any'; ?>
 <?php if($hasCriteria): ?>
   <?php
     $sortUrl = static function(?string $value): string {
@@ -172,7 +208,17 @@
         <td><?= (int)$row['guid'] ?></td>
         <td><?= character_link((int)$row['guid'], (string)$row['name']) ?></td>
         <?php $accName = (string)($row['account_username'] ?? ''); ?>
-        <td><?= account_link((int)($row['account'] ?? 0), $accName) ?></td>
+        <?php $accId = (int)($row['account'] ?? 0); ?>
+        <td>
+          <?= account_link($accId, $accName) ?>
+          <?php if($accName !== ''): ?>
+            <a
+              class="link char-inline-link"
+              href="<?= htmlspecialchars(url_with_server('/character?account=' . rawurlencode($accName) . '&load_all=1')) ?>"
+              title="<?= htmlspecialchars(__('app.account.table.view_characters')) ?>"
+            ><?= htmlspecialchars(__('app.character.index.table.same_account')) ?></a>
+          <?php endif; ?>
+        </td>
         <td><?= (int)$row['level'] ?></td>
         <?php $rowClassId = (int)($row['class'] ?? 0); ?>
         <td><span data-class-id="<?= $rowClassId ?>"><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::className($rowClassId)) ?></span></td>
@@ -205,15 +251,17 @@
         <td><?= htmlspecialchars(format_datetime($row['logout_time'] ?? null)) ?></td>
         <?php $viewUrl = character_view_url((int)$row['guid']); ?>
         <td class="char-action-cell">
-          <?php if($characterCapabilities['details']): ?>
-          <a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a>
-          <?php endif; ?>
-          <?php if($characterCapabilities['delete']): ?>
-          <button class="btn-sm btn danger js-char-delete" type="button" data-guid="<?= (int)$row['guid'] ?>" data-name="<?= htmlspecialchars($row['name']) ?>"><?= htmlspecialchars(__('app.character.actions.delete')) ?></button>
-          <?php endif; ?>
-          <?php if(!$__canAny(['characters.details', 'characters.delete'])): ?>
-          <span class="muted small"><?= htmlspecialchars(__('app.common.capabilities.no_actions')) ?></span>
-          <?php endif; ?>
+          <div class="row-action-bar">
+            <?php if($characterCapabilities['details']): ?>
+            <a class="btn-sm btn info" href="<?= htmlspecialchars($viewUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.view')) ?></a>
+            <?php endif; ?>
+            <?php if($characterCapabilities['delete']): ?>
+            <button class="btn-sm btn danger js-char-delete" type="button" data-guid="<?= (int)$row['guid'] ?>" data-name="<?= htmlspecialchars($row['name']) ?>"><?= htmlspecialchars(__('app.character.actions.delete')) ?></button>
+            <?php endif; ?>
+            <?php if(!$__canAny(['characters.details', 'characters.delete'])): ?>
+            <span class="muted small"><?= htmlspecialchars(__('app.common.capabilities.no_actions')) ?></span>
+            <?php endif; ?>
+          </div>
         </td>
       </tr>
     <?php endforeach; ?>
@@ -229,6 +277,4 @@
     }
     include __DIR__.'/../components/pagination.php';
   ?>
-<?php else: ?>
-  <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.character.index.feedback.enter_search')) ?></div>
 <?php endif; ?>

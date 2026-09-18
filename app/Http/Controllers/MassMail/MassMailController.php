@@ -10,21 +10,15 @@
  *   - apiAnnounce()
  *   - apiSend()
  *   - apiLogs()
- *   - apiBoost()
+ *   - apiItems()
+ *   - apiPreviewTargets()
  */
 
 namespace Acme\Panel\Http\Controllers\MassMail;
 
 use Acme\Panel\Core\{Config,Controller,Lang,Request,Response};
 use Acme\Panel\Domain\MassMail\MassMailService;
-use Acme\Panel\Domain\CharacterBoost\BoostTemplateRepository;
-use Acme\Panel\Domain\CharacterBoost\CharacterBoostService;
-use Acme\Panel\Domain\CharacterBoost\CharacterBoostGuardException;
-use Acme\Panel\Domain\CharacterBoost\CharacterBoostNotFoundException;
-use Acme\Panel\Domain\CharacterBoost\CharacterBoostSoapException;
-use Acme\Panel\Domain\Character\CharacterRepository;
-use Acme\Panel\Support\{Auth,ServerContext,ServerList};
-use Acme\Panel\Support\Audit;
+use Acme\Panel\Support\{ServerContext};
 
 class MassMailController extends Controller
 {
@@ -66,11 +60,6 @@ class MassMailController extends Controller
         $this->requireCapability('mass_mail.logs');
     }
 
-    private function requireBoostCapability(): void
-    {
-        $this->requireCapability('mass_mail.boost');
-    }
-
     public function __construct()
     {
         $this->refreshService();
@@ -84,19 +73,16 @@ class MassMailController extends Controller
                 $logs = $this->svc->recentLogs(30);
                 $serverCfg = ServerContext::server();
                 $realmId = (int)($serverCfg['realm_id'] ?? 1);
-                $boostTemplates = (new BoostTemplateRepository(ServerContext::currentId()))->listForRealm($realmId);
 
         return $this->pageView('mass_mail.index', $this->serverViewData([
             'logs'=>$logs,
             'realm_id' => $realmId,
-            'boost_templates' => $boostTemplates,
         ]), [
             'capabilities' => [
                 'compose' => 'mass_mail.compose',
                 'announce' => 'mass_mail.announce',
                 'send' => 'mass_mail.send',
                 'logs' => 'mass_mail.logs',
-                'boost' => 'mass_mail.boost',
             ],
         ]);
     }
@@ -132,103 +118,57 @@ class MassMailController extends Controller
     public function apiLogs(Request $request): Response
     { $this->requireLogsCapability(); $this->switchServerAndRefresh($request, function (): void { $this->refreshService(); }); $limit=(int)$request->input('limit',30); $rows=$this->svc->recentLogs($limit); return $this->json(['success'=>true,'logs'=>$rows]); }
 
-    public function apiBoost(Request $request): Response
+    /**
+     * 物品名解析：只读，供发送界面的物品编辑器即时显示名称。
+     */
+    public function apiItems(Request $request): Response
     {
-    $this->requireBoostCapability();
-                $this->switchServerAndRefresh($request, function (): void { $this->refreshService(); });
-                $characterName=trim((string)$request->input('character_name', (string)$request->input('character','')));
-                $templateIdRaw = $request->input('template_id', null);
-                $templateId = $templateIdRaw === null || $templateIdRaw === '' ? null : (int)$templateIdRaw;
-                $targetLevelRaw = $request->input('target_level', null);
-                $targetLevel = $targetLevelRaw === null || $targetLevelRaw === '' ? null : (int)$targetLevelRaw;
+        $this->requireSendCapability();
+        $this->switchServerAndRefresh($request, function (): void { $this->refreshService(); });
 
-                if($characterName===''){
-                    return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
-                }
+        $raw = (string) $request->input('ids', '');
+        $parts = preg_split('/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $ids = [];
+        foreach ($parts as $part) {
+            $id = (int) $part;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        if (count($ids) > 200) {
+            $ids = array_slice($ids, 0, 200, true);
+        }
 
-                $serverCfg = ServerContext::server();
-                $realmId = (int)($serverCfg['realm_id'] ?? 1);
+        try {
+            $names = $this->svc->resolveItemNames(array_values($ids));
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => Lang::get('app.common.errors.query_failed', ['message' => $e->getMessage()])], 500);
+        }
 
-                $serverCfg = ServerContext::server();
-                $realmId = (int)($serverCfg['realm_id'] ?? 1);
+        return $this->json(['success' => true, 'names' => $names]);
+    }
 
-                try{
-                    $charRepo = new CharacterRepository(ServerContext::currentId());
-                    $summary = $charRepo->findSummaryByName($characterName);
-                    if(!$summary){
-                        throw new CharacterBoostNotFoundException('未找到指定角色。');
-                    }
+    /**
+     * 收件人预览：返回数量、上限与少量样本，避免把整份名单回传浏览器。
+     */
+    public function apiPreviewTargets(Request $request): Response
+    {
+        $this->requireSendCapability();
+        $this->switchServerAndRefresh($request, function (): void { $this->refreshService(); });
 
-                    $svc = new CharacterBoostService(ServerContext::currentId());
-                    $payload = $svc->boostByGuid(
-                        $realmId,
-                        (int)($summary['guid'] ?? 0),
-                        $templateId,
-                        $targetLevel,
-                        [
-                            'name' => (string)($_SESSION['panel_user'] ?? 'system'),
-                            'ip' => (string)$request->ip(),
-                            'source' => 'mass_mail',
-                        ]
-                    );
-                }catch(CharacterBoostNotFoundException $e){
-                    Audit::log('character','boost_failed','mass_mail',[
-                        'realm_id' => $realmId,
-                        'server_id' => ServerContext::currentId(),
-                        'character_name' => $characterName,
-                        'template_id' => $templateId,
-                        'target_level' => $targetLevel,
-                        'error' => $e->getMessage(),
-                    ]);
-                    return $this->json(['success'=>false,'message'=>$e->getMessage()],404);
-                }catch(CharacterBoostGuardException $e){
-                    Audit::log('character','boost_failed','mass_mail',[
-                        'realm_id' => $realmId,
-                        'server_id' => ServerContext::currentId(),
-                        'character_name' => $characterName,
-                        'template_id' => $templateId,
-                        'target_level' => $targetLevel,
-                        'error' => $e->getMessage(),
-                    ]);
-                    return $this->json(['success'=>false,'message'=>$e->getMessage()],422);
-                }catch(CharacterBoostSoapException $e){
-                    Audit::log('character','boost_failed','mass_mail',[
-                        'realm_id' => $realmId,
-                        'server_id' => ServerContext::currentId(),
-                        'character_name' => $characterName,
-                        'template_id' => $templateId,
-                        'target_level' => $targetLevel,
-                        'error' => $e->getMessage(),
-                    ]);
-                    return $this->json(['success'=>false,'message'=>$e->getMessage()],500);
-                }catch(\Throwable $e){
-                    Audit::log('character','boost_failed','mass_mail',[
-                        'realm_id' => $realmId,
-                        'server_id' => ServerContext::currentId(),
-                        'character_name' => $characterName,
-                        'template_id' => $templateId,
-                        'target_level' => $targetLevel,
-                        'error' => $e->getMessage(),
-                    ]);
-                    return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.request_failed_retry')],500);
-                }
+        $type = (string) $request->input('target_type', 'online');
+        if (!in_array($type, ['online', 'custom'], true)) {
+            $type = 'online';
+        }
+        $custom = (string) $request->input('custom_char_list', '');
 
-                $ch = $payload['character'] ?? [];
-                $commands = $payload['commands'] ?? [];
-                Audit::log('character','boost', 'mass_mail', [
-                    'realm_id' => $realmId,
-                    'character' => $ch,
-                    'template_id' => $templateId,
-                    'target_level' => $targetLevel,
-                    'commands' => array_map(static function($c){
-                        return [
-                            'command' => $c['command'] ?? null,
-                            'success' => $c['response']['success'] ?? null,
-                        ];
-                    }, is_array($commands) ? $commands : []),
-                ]);
+        try {
+            $preview = $this->svc->previewTargets($type, $custom);
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => Lang::get('app.common.errors.query_failed', ['message' => $e->getMessage()])], 500);
+        }
 
-                return $this->json(['success'=>true,'message'=>Lang::get('app.character.actions.boost_success'),'payload'=>$payload],200);
+        return $this->json(['success' => true] + $preview);
     }
 }
 

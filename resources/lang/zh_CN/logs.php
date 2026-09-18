@@ -64,10 +64,10 @@ return array (
           ),
         ),
       ),
-      'bag_query' => 
+      'item_inventory' => 
       array (
-        'label' => '背包查询',
-        'description' => '背包/物品查询模块操作记录。',
+        'label' => '物品/库存',
+        'description' => '背包查询、物品归属、删除与替换操作记录。',
         'types' => 
         array (
           'actions' => 
@@ -93,18 +93,6 @@ return array (
           'deleted' => 
           array (
             'label' => '删除记录',
-          ),
-        ),
-      ),
-      'item_owner' => 
-      array (
-        'label' => '物品归属',
-        'description' => '批量删除与替换历史。',
-        'types' => 
-        array (
-          'actions' => 
-          array (
-            'label' => '操作记录',
           ),
         ),
       ),

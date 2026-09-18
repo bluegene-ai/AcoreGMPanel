@@ -44,6 +44,9 @@ final class PageHeaderData
             'logs.index' => [
                 'intro' => Lang::get('app.logs.intro'),
             ],
+            'item_inventory.index' => [
+                'intro' => Lang::get('app.item_inventory.character.chars.subtitle'),
+            ],
             'smartai.index' => [
                 'intro' => Lang::get('app.smartai.intro'),
             ],
@@ -70,6 +73,32 @@ final class PageHeaderData
             ],
             'quest.edit' => [
                 'intro' => self::normalizeString($data['quest']['LogTitle'] ?? null),
+            ],
+            'character_boost.index' => [
+                'note' => Lang::get('app.character_boost.admin.note', [
+                    'id' => (int) ($data['realm_id'] ?? 1),
+                ]),
+                'actions' => [
+                    [
+                        'label' => Lang::get('app.character_boost.templates.title'),
+                        'url' => Url::to('/character-boost/templates'),
+                        'class' => 'btn',
+                        'capability' => 'boost.templates',
+                    ],
+                    [
+                        'label' => Lang::get('app.character_boost.codes.title'),
+                        'url' => Url::to('/character-boost/redeem-codes'),
+                        'class' => 'btn',
+                        'capability' => 'boost.codes',
+                    ],
+                    [
+                        'label' => Lang::get('app.character_boost.templates.actions.public_redeem'),
+                        'url' => Url::to('/public/character-boost'),
+                        'class' => 'btn',
+                        'target' => '_blank',
+                        'rel' => 'noopener noreferrer',
+                    ],
+                ],
             ],
             'character_boost.templates' => [
                 'note' => Lang::get('app.character_boost.templates.hint.realm', [

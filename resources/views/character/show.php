@@ -15,6 +15,71 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
     'boost_templates' => $__can('boost.templates'),
     'boost_codes' => $__can('boost.codes'),
   ];
+
+/**
+ * 是否把物品/任务 ID 深链到对应管理页。目标页同样以 content.view 为门槛，
+ * 因此无权限时只渲染纯文本，避免给出必然被拒的链接。
+ */
+$canEditContent = (bool) ($characterShowCapabilities['content_view'] ?? $__can('content.view'));
+
+/**
+ * 游戏对象 ID → 文本映射：由 CharacterController::resolveDetailNames() 从
+ * world 库 / 客户端 DBC 解析得到，取不到时回退显示原始 ID。
+ */
+$gameNames = is_array($game_names ?? null) ? $game_names : [];
+$gameName = static function (string $type, int $id) use ($gameNames): ?string {
+  $name = $gameNames[$type][$id] ?? null;
+
+  return is_string($name) && $name !== '' ? $name : null;
+};
+
+/** 名称 + 小号 ID 单元格（名称缺失时只显示 ID，保持信息不丢失） */
+$gameNameCell = static function (string $type, int $id, string $class = '') use ($gameName, $canEditContent): string {
+  $name = $gameName($type, $id);
+  $classAttr = $class !== '' ? ' class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '"' : '';
+
+  // 内容 ID 直接深链到物品/任务管理页的编辑入口；目标页自行校验 content.view。
+  // 纯 GET 拼接，不产生任何额外查询，因此不会影响详情页性能。
+  $url = $canEditContent ? \Acme\Panel\Support\ContentLink::url($type, $id) : null;
+  $title = '';
+  if ($url !== null && \Acme\Panel\Support\ContentLink::supports($type)) {
+    $title = ' title="' . htmlspecialchars(
+      __('app.character.show.manage_link.' . $type, ['id' => $id]),
+      ENT_QUOTES,
+      'UTF-8'
+    ) . '"';
+  }
+
+  if ($name === null) {
+    $inner = htmlspecialchars((string) $id);
+  } else {
+    $inner = '<span class="char-name-cell__name">' . htmlspecialchars($name) . '</span>'
+      . ' <span class="char-name-cell__id">#' . htmlspecialchars((string) $id) . '</span>';
+  }
+
+  if ($url !== null) {
+    return '<a class="char-name-cell char-name-cell--linked"' . $classAttr . $title
+      . ' href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $inner . '</a>';
+  }
+
+  return '<span class="char-name-cell"' . $classAttr . '>' . $inner . '</span>';
+};
+
+/** 声望数值 → 等级文案（-42000 以下到 42000 共 8 档） */
+$reputationStandingLabel = static function (int $standing): string {
+  $tier = match (true) {
+    $standing >= 42000 => 'exalted',
+    $standing >= 21000 => 'revered',
+    $standing >= 9000 => 'honored',
+    $standing >= 3000 => 'friendly',
+    $standing >= 0 => 'neutral',
+    $standing > -3000 => 'unfriendly',
+    $standing > -6000 => 'hostile',
+    default => 'hated',
+  };
+
+  return __('app.character.show.reputations.standing_tiers.' . $tier);
+};
 ?>
 
 <?php if(!empty($error)): ?>
@@ -22,6 +87,24 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
 <?php elseif(empty($summary)): ?>
   <div class="panel-flash panel-flash--info panel-flash--inline is-visible"><?= htmlspecialchars(__('app.character.show.not_found')) ?></div>
 <?php else: ?>
+
+  <?php
+  // 角色 ↔ 账号之间的双向跳转：从角色页能一步回到该账号（及其全部角色）
+  $showAccountId = (int) ($summary['account'] ?? 0);
+  $showAccountName = (string) ($summary['account_username'] ?? '');
+  $showAccountCharactersUrl = $showAccountName !== ''
+    ? url_with_server('/character?account=' . rawurlencode($showAccountName) . '&load_all=1')
+    : '';
+  ?>
+  <div class="char-toolbar">
+    <a class="btn outline btn-sm" href="<?= htmlspecialchars($charBase) ?>"><?= htmlspecialchars(__('app.account.show.back_to_characters')) ?></a>
+    <?php if($showAccountId > 0): ?>
+      <a class="btn outline btn-sm" href="<?= htmlspecialchars(account_view_url($showAccountId)) ?>"><?= htmlspecialchars(__('app.character.index.table.view_account')) ?></a>
+    <?php endif; ?>
+    <?php if($showAccountCharactersUrl !== ''): ?>
+      <a class="btn outline btn-sm" href="<?= htmlspecialchars($showAccountCharactersUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.same_account')) ?></a>
+    <?php endif; ?>
+  </div>
 
   <div class="char-tabs">
     <div class="char-tab-item active" data-tab="summary"><?= htmlspecialchars(__('app.character.show.summary.title')) ?></div>
@@ -50,12 +133,19 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <tbody>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.guid')) ?></th><td><?= (int)$summary['guid'] ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.name')) ?></th><td><?= htmlspecialchars($summary['name']) ?></td></tr>
-              <tr><th><?= htmlspecialchars(__('app.character.show.summary.account')) ?></th><td><?= account_link((int)($summary['account'] ?? 0), (string)($summary['account_username'] ?? '')) ?></td></tr>
+              <tr><th><?= htmlspecialchars(__('app.character.show.summary.account')) ?></th><td>
+                <?= account_link((int)($summary['account'] ?? 0), (string)($summary['account_username'] ?? '')) ?>
+                <?php if($showAccountCharactersUrl !== ''): ?>
+                  <a class="link char-inline-link" href="<?= htmlspecialchars($showAccountCharactersUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.same_account')) ?></a>
+                <?php endif; ?>
+              </td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.level')) ?></th><td><?= (int)$summary['level'] ?></td></tr>
               <?php $classId = (int)($summary['class'] ?? 0); ?>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.class')) ?></th><td><span data-class-id="<?= $classId ?>"><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::className($classId)) ?></span> (#<?= $classId ?>)</td></tr>
               <?php $raceId = (int)($summary['race'] ?? 0); ?>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.race')) ?></th><td><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::raceName($raceId)) ?> (#<?= $raceId ?>)</td></tr>
+              <?php $genderId = (int)($summary['gender'] ?? 0); ?>
+              <tr><th><?= htmlspecialchars(__('app.character.show.summary.gender')) ?></th><td><?= htmlspecialchars(\Acme\Panel\Support\GameMaps::genderName($genderId)) ?> (#<?= $genderId ?>)</td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.online')) ?></th><td><?= (int)$summary['online'] ? __('app.character.show.status.online') : __('app.character.show.status.offline') ?></td></tr>
               <?php $mapId = (int)($summary['map'] ?? 0); $mapName = \Acme\Panel\Support\GameMaps::mapName($mapId); $zoneId = (int)($summary['zone'] ?? 0); $zoneName = \Acme\Panel\Support\GameMaps::zoneName($zoneId); ?>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.map')) ?></th><td><?= $mapName ? (htmlspecialchars($mapName) . ' (#' . $mapId . ')') : (string)$mapId ?> / <?= $zoneName ? (htmlspecialchars($zoneName) . ' (#' . $zoneId . ')') : (string)$zoneId ?></td></tr>
@@ -257,8 +347,13 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
   <!-- Tab: Inventory -->
   <div id="inventory" class="char-tab-content">
     <div id="char-bag-query" data-guid="<?= (int)$summary['guid'] ?>" data-name="<?= htmlspecialchars($summary['name']) ?>"></div>
-    <?php $bagQueryItemsTitle = __('app.character.show.inventory.title'); ?>
-    <?php include __DIR__.'/../bag_query/_items_panel.php'; ?>
+    <?php
+      // The item/inventory module boots itself in embedded mode from data-guid above.
+      $iiItemsTitle = __('app.character.show.inventory.title');
+      $iiEmbedded = true;
+      $iiShowDelete = ($__can('inventory.manage') ?? false);
+      include __DIR__.'/../components/inventory_items_panel.php';
+    ?>
   </div>
 
   <!-- Tab: Spells & Skills -->
@@ -278,7 +373,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <?php foreach(($skills ?? []) as $s): ?>
               <tr>
                 <?php $skillId = (int)($s['skill'] ?? 0); ?>
-                <td><span class="js-nfuwow" data-nfuwow-type="skill" data-nfuwow-id="<?= $skillId ?>"><?= $skillId ?></span><span class="js-nfuwow-name"></span></td>
+                <td><?= $gameNameCell('skill', $skillId) ?></td>
                 <td><?= (int)$s['value'] ?></td>
                 <td><?= (int)$s['max'] ?></td>
               </tr>
@@ -290,10 +385,10 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
 
       <h3 class="char-section-header"><?= htmlspecialchars(__('app.character.show.spells.title')) ?></h3>
       <div class="char-filter-bar">
-        <input type="search" class="js-table-filter char-filter-input" data-target="#spells-table" placeholder="<?= htmlspecialchars(__('app.character.show.controls.filter_placeholder')) ?>">
+        <input type="search" class="js-table-filter char-filter-input" data-target="#spells-table" placeholder="<?= htmlspecialchars(__('app.character.controls.filter_placeholder')) ?>">
       </div>
       <div class="char-table-scroll char-scroll-400 char-scroll-mb">
-        <table class="table table--compact" id="spells-table" data-filter-empty="<?= htmlspecialchars(__('app.character.show.controls.filter_no_results')) ?>">
+        <table class="table table--compact" id="spells-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
               <th><?= htmlspecialchars(__('app.character.show.spells.spell')) ?></th>
@@ -305,7 +400,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <?php foreach(($spells ?? []) as $sp): ?>
               <tr>
                 <?php $spellId = (int)($sp['spell'] ?? 0); ?>
-                <td><span class="js-nfuwow" data-nfuwow-type="spell" data-nfuwow-id="<?= $spellId ?>"><?= $spellId ?></span><span class="js-nfuwow-name"></span></td>
+                <td><?= $gameNameCell('spell', $spellId) ?></td>
                 <td><?= ((int)($sp['active'] ?? 0)) ? htmlspecialchars(__('app.character.show.bool.yes')) : htmlspecialchars(__('app.character.show.bool.no')) ?></td>
                 <td><?= ((int)($sp['disabled'] ?? 0)) ? htmlspecialchars(__('app.character.show.bool.yes')) : htmlspecialchars(__('app.character.show.bool.no')) ?></td>
               </tr>
@@ -329,8 +424,10 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
           <tbody>
             <?php foreach(($cooldowns ?? []) as $cd): ?>
               <tr>
-                <td><?= (int)$cd['spellid'] ?></td>
-                <td><?= (int)$cd['itemid'] ?></td>
+                <?php $cdSpellId = (int)$cd['spellid']; ?>
+                <?php $cdItemId = (int)$cd['itemid']; ?>
+                <td><?= $gameNameCell('spell', $cdSpellId) ?></td>
+                <td><?= $cdItemId > 0 ? $gameNameCell('item', $cdItemId) : '<span class="small muted">-</span>' ?></td>
                 <td><?= htmlspecialchars(format_datetime($cd['time'] ?? null)) ?></td>
                 <td><?= htmlspecialchars($cd['category'] ?? '') ?></td>
               </tr>
@@ -388,7 +485,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
               <?php $itemCounts = [(int)$q['itemcount1'],(int)$q['itemcount2'],(int)$q['itemcount3'],(int)$q['itemcount4']]; ?>
               <tr>
                 <?php $questId = (int)($q['quest'] ?? 0); ?>
-                <td><span class="js-nfuwow" data-nfuwow-type="quest" data-nfuwow-id="<?= $questId ?>"><?= $questId ?></span><span class="js-nfuwow-name"></span></td>
+                <td><?= $gameNameCell('quest', $questId) ?></td>
                 <?php $questStatus = (int)($q['status'] ?? 0); $questStatusText = $questStatusLabel($questStatus); ?>
                 <td><?= $questStatus ?><?= $questStatusText !== (string)$questStatus ? ' - '.htmlspecialchars($questStatusText) : '' ?></td>
                 <td><?= htmlspecialchars(format_datetime($q['timer'] ?? null)) ?></td>
@@ -408,7 +505,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <ul class="char-list">
               <?php foreach($quests['daily'] as $dq): ?>
                 <?php $dailyQuestId = (int)($dq['quest'] ?? 0); ?>
-                <li><span class="js-nfuwow" data-nfuwow-type="quest" data-nfuwow-id="<?= $dailyQuestId ?>"><?= $dailyQuestId ?></span><span class="js-nfuwow-name"></span></li>
+                <li><?= $gameNameCell('quest', $dailyQuestId) ?></li>
               <?php endforeach; ?>
             </ul>
           <?php else: ?>
@@ -421,7 +518,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <ul class="char-list">
               <?php foreach($quests['weekly'] as $wq): ?>
                 <?php $weeklyQuestId = (int)($wq['quest'] ?? 0); ?>
-                <li><span class="js-nfuwow" data-nfuwow-type="quest" data-nfuwow-id="<?= $weeklyQuestId ?>"><?= $weeklyQuestId ?></span><span class="js-nfuwow-name"></span></li>
+                <li><?= $gameNameCell('quest', $weeklyQuestId) ?></li>
               <?php endforeach; ?>
             </ul>
           <?php else: ?>
@@ -432,10 +529,10 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
 
       <h3 class="char-section-header char-section-header--spaced"><?= htmlspecialchars(__('app.character.show.reputations.title')) ?></h3>
       <div class="char-filter-bar">
-        <input type="search" class="js-table-filter char-filter-input" data-target="#reps-table" placeholder="<?= htmlspecialchars(__('app.character.show.controls.filter_placeholder')) ?>">
+        <input type="search" class="js-table-filter char-filter-input" data-target="#reps-table" placeholder="<?= htmlspecialchars(__('app.character.controls.filter_placeholder')) ?>">
       </div>
       <div class="char-table-scroll char-scroll-300">
-        <table class="table table--compact" id="reps-table" data-filter-empty="<?= htmlspecialchars(__('app.character.show.controls.filter_no_results')) ?>">
+        <table class="table table--compact" id="reps-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
               <th><?= htmlspecialchars(__('app.character.show.reputations.faction')) ?></th>
@@ -447,8 +544,14 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
             <?php foreach(($reputations ?? []) as $rep): ?>
               <tr>
                 <?php $factionId = (int)($rep['faction'] ?? 0); ?>
-                <td><span class="js-nfuwow" data-nfuwow-type="faction" data-nfuwow-id="<?= $factionId ?>"><?= $factionId ?></span><span class="js-nfuwow-name"></span></td>
-                <td><?= (int)$rep['standing'] ?></td>
+                <td><?= $gameNameCell('faction', $factionId) ?></td>
+                <?php $repStanding = (int)$rep['standing']; ?>
+                <td>
+                  <span class="char-standing char-standing--<?= htmlspecialchars($repStanding >= 0 ? 'positive' : 'negative') ?>">
+                    <?= htmlspecialchars($reputationStandingLabel($repStanding)) ?>
+                  </span>
+                  <span class="small muted"><?= $repStanding ?></span>
+                </td>
                 <?php $repFlags = (int)($rep['flags'] ?? 0); ?>
                 <td><span title="<?= htmlspecialchars((string)$repFlags) ?>"><?= htmlspecialchars($repFlagsLabel($repFlags)) ?></span></td>
               </tr>
@@ -465,10 +568,10 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
     <div class="char-card">
       <h3 class="char-section-header"><?= htmlspecialchars(__('app.character.show.auras.title')) ?></h3>
       <div class="char-filter-bar">
-        <input type="search" class="js-table-filter char-filter-input" data-target="#auras-table" placeholder="<?= htmlspecialchars(__('app.character.show.controls.filter_placeholder')) ?>">
+        <input type="search" class="js-table-filter char-filter-input" data-target="#auras-table" placeholder="<?= htmlspecialchars(__('app.character.controls.filter_placeholder')) ?>">
       </div>
       <div class="char-table-scroll char-scroll-500">
-        <table class="table table--compact" id="auras-table" data-filter-empty="<?= htmlspecialchars(__('app.character.show.controls.filter_no_results')) ?>">
+        <table class="table table--compact" id="auras-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
               <th><?= htmlspecialchars(__('app.character.show.auras.spell')) ?></th>
@@ -486,7 +589,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
               <?php $amounts = [(int)$au['amount0'],(int)$au['amount1'],(int)$au['amount2']]; ?>
               <tr>
                 <?php $auraSpellId = (int)($au['spell'] ?? 0); ?>
-                <td><span class="js-nfuwow" data-nfuwow-type="spell" data-nfuwow-id="<?= $auraSpellId ?>"><?= $auraSpellId ?></span><span class="js-nfuwow-name"></span></td>
+                <td><?= $gameNameCell('spell', $auraSpellId) ?></td>
                 <td><?= htmlspecialchars($au['caster_guid'] ?? '') ?></td>
                 <td><?= htmlspecialchars($au['item_guid'] ?? '') ?></td>
                 <td><?= (int)$au['effect_mask'] ?></td>
@@ -522,7 +625,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
                 <?php foreach(($achievements['unlocks'] ?? []) as $a): ?>
                   <tr>
                     <?php $achId = (int)($a['achievement'] ?? 0); ?>
-                    <td><span class="js-nfuwow" data-nfuwow-type="achievement" data-nfuwow-id="<?= $achId ?>"><?= $achId ?></span><span class="js-nfuwow-name"></span></td>
+                    <td><?= $gameNameCell('achievement', $achId) ?></td>
                     <td><?= htmlspecialchars(format_datetime($a['date'] ?? null)) ?></td>
                   </tr>
                 <?php endforeach; ?>
@@ -546,7 +649,7 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
                 <?php foreach(($achievements['progress'] ?? []) as $p): ?>
                   <tr>
                     <?php $critId = (int)($p['criteria'] ?? 0); ?>
-                    <td><span class="js-nfuwow" data-nfuwow-type="achievementcriteria" data-nfuwow-id="<?= $critId ?>"><?= $critId ?></span><span class="js-nfuwow-name"></span></td>
+                    <td><?= $gameNameCell('achievementcriteria', $critId) ?></td>
                     <td><?= (int)$p['counter'] ?></td>
                     <td><?= htmlspecialchars(format_datetime($p['date'] ?? null)) ?></td>
                   </tr>

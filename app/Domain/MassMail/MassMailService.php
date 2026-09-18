@@ -7,21 +7,17 @@
  * Functions:
  *   - __construct()
  *   - resolveTargets()
+ *   - previewTargets()
  *   - sendAnnounce()
  *   - sendBulk()
- *   - boostCharacter()
  *   - recentLogs()
- *   - buildBoostItems()
- *   - resolveClassKeyByName()
- *   - boostClassLabel()
- *   - logBoost()
  *   - getOnline()
  *   - parseCustom()
  *   - ensureLogTable()
  *   - logAnnounce()
  *   - logBulk()
+ *   - resolveItemNames()
  *   - resolveItemName()
- *   - fetchExternalItemName()
  *   - loadItemCache()
  *   - persistItemCache()
  *   - appendActionLog()
@@ -31,7 +27,7 @@
 
 namespace Acme\Panel\Domain\MassMail;
 
-use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\Audit; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
+use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\Audit; use Acme\Panel\Support\GameNameResolver; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
 
 
 
@@ -54,36 +50,6 @@ class MassMailService
     private int $targetMax = 2000;
     private int $batchSize = 200;
 
-
-    private const BOOST_ALLOWED_LEVELS = [60,70,80];
-    private const BOOST_GOLD_COPPER = 500 * 10000;
-    private const BOOST_EXTRA_ITEMS = [
-        ['id'=>21841,'count'=>3],
-
-        ['id'=>23720,'count'=>1],
-    ];
-    private const BOOST_CLASS_ITEMS = [
-        'mage'    => [16912,16913,16914,16915,16916,16917,16918,16818],
-        'warrior' => [16959,16960,16961,16962,16963,16964,16965,16966],
-        'priest'  => [16919,16920,16921,16922,16923,16924,16925,16926],
-        'shaman'  => [16943,16944,16945,16946,16947,16948,16949,16950],
-        'druid'   => [16897,16898,16899,16900,16901,16902,16903,16904],
-        'warlock' => [16927,16928,16929,16930,16931,16932,16933,16934],
-        'paladin' => [16951,16952,16953,16954,16955,16956,16957,16958],
-        'hunter'  => [16935,16936,16937,16938,16939,16940,16941,16942],
-        'rogue'   => [16905,16906,16907,16908,16909,16910,16911,16832],
-    ];
-    private const BOOST_CLASS_LOOKUP = [
-        1=>'warrior',
-        2=>'paladin',
-        3=>'hunter',
-        4=>'rogue',
-        5=>'priest',
-        7=>'shaman',
-        8=>'mage',
-        9=>'warlock',
-        11=>'druid'
-    ];
 
     public function __construct(array $soapConf, ?int $serverId=null)
     {
@@ -108,6 +74,26 @@ class MassMailService
         if($type==='online') return $this->getOnline();
         if($type==='custom') return $this->parseCustom($customList??'');
         return [];
+    }
+
+    /**
+     * 目标预览：给界面用的计数 + 少量样本，避免把几千个名字全丢回浏览器。
+     *
+     * @return array{type:string,count:int,limit:int,truncated:bool,sample:string[]}
+     */
+    public function previewTargets(string $type, ?string $customList, int $sampleSize = 20): array
+    {
+        $targets = $this->resolveTargets($type, $customList);
+        $count = count($targets);
+        $sampleSize = max(1, min($sampleSize, 50));
+
+        return [
+            'type' => $type,
+            'count' => $count,
+            'limit' => $this->targetMax,
+            'truncated' => $count > $this->targetMax,
+            'sample' => array_slice($targets, 0, $sampleSize),
+        ];
     }
 
     public function sendAnnounce(string $message): array
@@ -244,122 +230,9 @@ class MassMailService
         return ['success'=>$ok,'message'=>$msg,'success_count'=>$success,'fail_count'=>$fail,'batches'=>$batchTotal,'batch_size'=>$this->batchSize];
     }
 
-    public function boostCharacter(string $name,int $level): array
-    {
-        $name=trim($name);
-        if($name==='') return ['success'=>false,'message'=>__('app.mass_mail.service.boost.name_required')];
-        if(!in_array($level,self::BOOST_ALLOWED_LEVELS,true)) return ['success'=>false,'message'=>__('app.mass_mail.service.boost.level_unsupported')];
-
-        $classKey = $this->resolveClassKeyByName($name);
-        if(!$classKey){
-            return ['success'=>false,'message'=>__('app.mass_mail.service.boost.character_missing')];
-        }
-
-        $items=$this->buildBoostItems($classKey);
-        if(!$items) return ['success'=>false,'message'=>__('app.mass_mail.service.boost.config_empty')];
-        $itemString=implode(' ',array_map(fn($item)=>$item['id'].':'.$item['count'],$items));
-        $subject=__('app.mass_mail.service.boost.mail.subject');
-        $classLabel=$this->boostClassLabel($classKey);
-        $bodyItems=__('app.mass_mail.service.boost.mail.body_items');
-        $bodyGold=__('app.mass_mail.service.boost.mail.body_gold');
-
-        $commands=[
-            'items'=>[
-                'label'=>__('app.mass_mail.service.boost.commands.items'),
-                'command'=>sprintf('.send items %s "%s" "%s" %s',$name,$subject,$bodyItems,$itemString)
-            ],
-            'gold'=>[
-                'label'=>__('app.mass_mail.service.boost.commands.gold'),
-                'command'=>sprintf('.send money %s "%s" "%s" %d',$name,$subject,$bodyGold,self::BOOST_GOLD_COPPER)
-            ],
-            'level'=>[
-                'label'=>__('app.mass_mail.service.boost.commands.level'),
-                'command'=>sprintf('.character level %s %d',$name,$level)
-            ]
-        ];
-
-        $results=[]; $errors=[];
-        foreach($commands as $key=>$meta){
-            $res=$this->soapExec->execute($meta['command'],['server_id'=>$this->serverId,'audit'=>true]);
-            $results[$key]=$res;
-            if(!$res['success']){
-                $reason=$res['message'] ?? $res['code'] ?? __('app.mass_mail.service.boost.unknown_error');
-                $errors[]=__('app.mass_mail.service.boost.command_failed',['label'=>$meta['label'],'reason'=>$reason]);
-            }
-        }
-
-        $ok=empty($errors);
-        $summaryItems=implode(',',array_map(fn($item)=>$item['id'].':'.$item['count'],$items));
-        $message=$ok
-            ? __('app.mass_mail.service.boost.success',['name'=>$name,'level'=>$level])
-            : __('app.mass_mail.service.boost.partial',['errors'=>implode(' | ',array_slice($errors,0,3))]);
-
-        $this->logBoost($name,$classKey,$level,$ok,$summaryItems,$errors);
-        Audit::log('massmail','boost',$name,[
-            'level'=>$level,
-            'class'=>$classKey,
-            'success'=>$ok,
-            'errors'=>array_slice($errors,0,3),
-            'items'=>$summaryItems,
-            'server_id'=>$this->serverId
-        ]);
-        $this->appendActionLog('boost',$ok?1:0,count($errors),0,self::BOOST_GOLD_COPPER,$subject);
-
-        return ['success'=>$ok,'message'=>$message,'errors'=>$errors,'results'=>$results,'class_label'=>$classLabel,'items'=>$summaryItems];
-    }
-
     public function recentLogs(int $limit=30): array
     { $limit=max(1,min($limit,100)); $st=$this->chars->prepare("SELECT id,created_at,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors FROM {$this->logTable} ORDER BY id DESC LIMIT :lim"); $st->bindValue(':lim',$limit,PDO::PARAM_INT); $st->execute(); return $st->fetchAll(PDO::FETCH_ASSOC)?:[]; }
 
-
-    private function buildBoostItems(string $classKey): array
-    {
-        $items=[];
-        foreach(self::BOOST_CLASS_ITEMS[$classKey] ?? [] as $id){ $items[]=['id'=>$id,'count'=>1]; }
-        foreach(self::BOOST_EXTRA_ITEMS as $extra){ $items[]=$extra; }
-        return $items;
-    }
-
-    private function resolveClassKeyByName(string $name): ?string
-    {
-        $st=$this->chars->prepare('SELECT class FROM characters WHERE name=:name LIMIT 1');
-        $st->execute([':name'=>$name]);
-        $cls=$st->fetchColumn();
-        if($cls===false) return null;
-        $clsId=(int)$cls;
-        return self::BOOST_CLASS_LOOKUP[$clsId] ?? null;
-    }
-
-    private function boostClassLabel(string $classKey): string
-    {
-        return __('app.mass_mail.service.boost.class_labels.'.$classKey, [], $classKey);
-    }
-
-    private function logBoost(string $name,string $classKey,int $level,bool $ok,string $itemSummary,array $errors): void
-    {
-        $subject=__('app.mass_mail.service.boost.log_subject',['name'=>mb_substr($name,0,60)]);
-        $classLabel=$this->boostClassLabel($classKey);
-        $itemLabel=__('app.mass_mail.service.boost.log_item_label',['class'=>$classLabel]);
-        $quantity=count(self::BOOST_CLASS_ITEMS[$classKey] ?? []);
-        $recipients=$ok? $name : ($name.'!');
-        $sample=$errors? implode(' | ',array_slice($errors,0,3)) : null;
-        $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-        $st->execute([
-            $this->serverId,
-            'boost',
-            mb_substr($subject,0,120),
-            null,
-            mb_substr($itemLabel.': '.$itemSummary,0,160),
-            $quantity,
-            self::BOOST_GOLD_COPPER,
-            1,
-            $ok?1:0,
-            $ok?0:1,
-            $ok?1:0,
-            mb_substr($recipients,0,160),
-            $sample
-        ]);
-    }
 
     private function getOnline(): array
     { $st=$this->chars->query('SELECT name FROM characters WHERE online=1'); return $st->fetchAll(PDO::FETCH_COLUMN)?:[]; }
@@ -472,13 +345,27 @@ class MassMailService
         $itemId = null;
         $qty = null;
         $itemName = null;
-        // Best-effort: keep legacy columns for single-item sends
+        $itemsDisplay = $items ? mb_substr($items, 0, 800) : null;
+
+        // 解析全部物品名，并把带名称的摘要写回 items 字段：
+        // 日志列表里直接显示"霜之哀伤 ×1"，不再是一行裸 ID
         if($items){
-            $first = preg_split('/\s+/', trim($items))[0] ?? '';
-            if(preg_match('/^(\d+):(\d+)$/', $first, $m)){
-                $itemId = (int)$m[1];
-                $qty = (int)$m[2];
-                $itemName = $this->resolveItemName($itemId);
+            $parsed = $this->parseItems($items);
+            if($parsed !== []){
+                $names = $this->resolveItemNames(array_column($parsed, 'id'));
+                $described = [];
+                foreach($parsed as $entry){
+                    $id = (int)$entry['id'];
+                    $count = (int)$entry['qty'];
+                    $name = $names[$id] ?? null;
+                    $described[] = ($name !== null ? $name : ('#'.$id)).' ×'.$count;
+                }
+                $itemsDisplay = mb_substr(implode('、', $described), 0, 800);
+
+                // 兼容历史"单物品"列
+                $itemId = (int)$parsed[0]['id'];
+                $qty = (int)$parsed[0]['qty'];
+                $itemName = $names[$itemId] ?? null;
             }
         }
     $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
@@ -486,19 +373,79 @@ class MassMailService
         if(in_array($action,['send_mail','send_item','send_gold','send_item_gold'],true)){
             $markFailed=array_map(fn($n)=>$n.'!',$failed); $list=array_merge($sent,$markFailed); $list=array_values(array_unique($list)); $recipients=implode(',',$list); if(mb_strlen($recipients)>800){ $recipients=mb_substr($recipients,0,800); $pos=mb_strrpos($recipients,','); if($pos!==false) $recipients=mb_substr($recipients,0,$pos).',...'; }
         }
-    $st->execute([$this->serverId,$action,mb_substr($subject,0,120),$items?mb_substr($items,0,800):null,$itemId,$itemName,$qty,$amount,$targets,$success,$fail,$fail===0?1:0,$recipients,$sample]);
+    $st->execute([$this->serverId,$action,mb_substr($subject,0,120),$itemsDisplay,$itemId,$itemName,$qty,$amount,$targets,$success,$fail,$fail===0?1:0,$recipients,$sample]);
+    }
+
+    /**
+     * 批量解析物品名（world 库 item_template / locales_item，缺失时回退客户端 DBC）。
+     *
+     * 早期的实现是去 db.nfuwow.com 抓 <title>，该站在服务器网络下不可达，
+     * 结果日志里的 item_name 一直是 NULL；这里改为完全本地解析。
+     *
+     * @param int[] $itemIds
+     * @return array<int, string> id => 名称
+     */
+    public function resolveItemNames(array $itemIds): array
+    {
+        $wanted = [];
+        foreach ($itemIds as $itemId) {
+            $itemId = (int) $itemId;
+            if ($itemId > 0) {
+                $wanted[$itemId] = $itemId;
+            }
+        }
+        if ($wanted === []) {
+            return [];
+        }
+
+        // 1) 先看本地缓存文件里已经解析过的
+        $resolved = [];
+        $missing = [];
+        foreach ($wanted as $itemId) {
+            $cached = $this->itemNameCache[$itemId] ?? null;
+            if (is_string($cached) && $cached !== '') {
+                $resolved[$itemId] = $cached;
+            } else {
+                $missing[] = $itemId;
+            }
+        }
+
+        if ($missing === []) {
+            return $resolved;
+        }
+
+        // 2) 未命中再走 GameNameResolver（内部有按 realm+语言的磁盘缓存）
+        try {
+            $names = GameNameResolver::resolveMany('item', $missing);
+        } catch (Throwable $exception) {
+            $names = [];
+        }
+
+        if ($names !== []) {
+            foreach ($names as $itemId => $name) {
+                $this->itemNameCache[(int) $itemId] = $name;
+            }
+            $this->persistItemCache();
+        }
+
+        return $resolved + $names;
     }
 
     private function resolveItemName(?int $itemId): ?string
-    { if(!$itemId || $itemId<=0) return null; if(isset($this->itemNameCache[$itemId])) return $this->itemNameCache[$itemId]; $name=$this->fetchExternalItemName($itemId); $this->itemNameCache[$itemId]=$name; $this->persistItemCache(); return $name; }
+    {
+        if (!$itemId || $itemId <= 0) {
+            return null;
+        }
 
-    private function fetchExternalItemName(int $itemId): ?string
-    { $base='https://db.nfuwow.com/80/?item='; $ctx=stream_context_create(['http'=>['timeout'=>3,'ignore_errors'=>true,'header'=>"Accept-Language: zh-CN,zh;q=0.9,en;q=0.5\r\nUser-Agent: PanelMassMail/1.0"]]); $html=@file_get_contents($base.$itemId,false,$ctx); if($html && preg_match('/<title>(.*?)<\\/title>/i',$html,$m)){ $raw=html_entity_decode($m[1],ENT_QUOTES,'UTF-8'); $title=trim(preg_split('/\s+-\s+/',$raw)[0]??$raw); return $title!==''?$title:null; } return null; }
+        $names = $this->resolveItemNames([$itemId]);
+
+        return $names[$itemId] ?? null;
+    }
 
     private function loadItemCache(): void
     { if(is_file($this->itemCacheFile)){ $json=@file_get_contents($this->itemCacheFile); $data=json_decode($json,true); if(is_array($data)) $this->itemNameCache=$data; } }
     private function persistItemCache(): void
-    { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>3000){ $this->itemNameCache=array_slice($this->itemNameCache,-2500,null,true); } $dir=dirname($this->itemCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
+    { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>8000){ $this->itemNameCache=array_slice($this->itemNameCache,-6500,null,true); } $dir=dirname($this->itemCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
 
     private function appendActionLog(string $action,int $successOrCount,int $fail,int $itemId,int $amount,string $subject): void
     { $user=$_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); \Acme\Panel\Support\LogPath::appendTo($this->actionLogFile, $line, true, 0777); }
