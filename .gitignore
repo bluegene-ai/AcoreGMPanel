@@ -35,3 +35,6 @@ Thumbs.db
 
 #Docs
 /docs
+
+# Local preview / scratch artifacts
+/storage/tmp/

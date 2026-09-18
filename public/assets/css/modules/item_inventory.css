@@ -1,0 +1,101 @@
+/* Item / inventory module (unified 背包查询 + 物品归属) */
+
+/* ---------- shell ---------- */
+.ii-tabs{display:flex;gap:8px;margin-bottom:18px;border-bottom:1px solid rgba(52,70,82,.55);}
+.ii-tab{background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 18px;color:#8b96a1;font-size:14px;font-weight:600;letter-spacing:.3px;cursor:pointer;transition:color .18s ease,border-color .18s ease;}
+.ii-tab:hover{color:#cbd6e2;}
+.ii-tab.is-active{color:#e7f4ff;border-bottom-color:#3fa8ff;}
+.ii-layout{display:flex;flex-direction:column;gap:22px;margin-bottom:18px;}
+.ii-layout[data-mode="character"] .ii-mode-panel[data-mode-panel="item"],
+.ii-layout[data-mode="item"] .ii-mode-panel[data-mode-panel="character"]{display:none;}
+
+/* ---------- cards ---------- */
+.ii-toolbar,
+.ii-card{background:#141b1f;border:1px solid rgba(52,70,82,.55);border-radius:12px;padding:20px 22px;box-shadow:0 14px 36px rgba(0,0,0,.28);}
+.ii-card{display:flex;flex-direction:column;}
+.ii-toolbar{margin-bottom:22px;}
+.ii-card__header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;}
+.ii-card__header--actions{align-items:center;}
+.ii-card__title{margin:0;font-size:18px;font-weight:600;letter-spacing:.4px;color:#e7f4ff;}
+.ii-card__subtitle{font-size:12px;margin-top:4px;color:#8b96a1;}
+.ii-card__actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end;}
+.ii-card__body{display:flex;flex-direction:column;gap:16px;}
+
+/* ---------- forms ---------- */
+.ii-form{display:flex;flex-wrap:nowrap;gap:16px;align-items:flex-end;}
+.ii-field{display:flex;flex-direction:column;gap:6px;min-width:140px;}
+.ii-field--grow{flex:1 1 220px;max-width:420px;}
+.ii-field--submit{flex:0 0 auto;min-width:120px;}
+.ii-field--submit button{min-width:120px;padding:10px 18px;}
+
+/* ---------- tables ---------- */
+.ii-table-wrap{flex:1 1 auto;overflow:auto;border:1px solid rgba(52,70,82,.45);border-radius:10px;background:rgba(20,28,36,.55);}
+.ii-table-wrap .table{margin:0;font-size:13px;}
+.ii-table-wrap .table th{position:sticky;top:0;background:#1e2832;z-index:2;}
+.ii-table-wrap .table th,
+.ii-table-wrap .table td{white-space:nowrap;vertical-align:middle;}
+.ii-card--chars .ii-table-wrap{max-height:460px;}
+.ii-card--search-results .ii-table-wrap{max-height:340px;}
+.ii-card--items .ii-table-wrap,
+.ii-card--owners .ii-table-wrap{max-height:520px;}
+.ii-row{transition:background .18s ease,box-shadow .18s ease;}
+.ii-row--active{background:rgba(63,168,255,.16)!important;}
+.ii-table-wrap tbody tr:hover{background:rgba(63,168,255,.1);}
+.ii-name{display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+
+/* class colours, kept from the former bag-query module */
+.ii-row.ii-row--class{box-shadow:inset 4px 0 0 var(--ii-class-color,#3fa8ff);}
+.ii-row.ii-row--class td:nth-child(2){color:var(--ii-class-color,#3fa8ff);font-weight:600;}
+.ii-row.ii-row--class td:nth-child(1){font-weight:600;color:#cbd6e2;}
+.ii-row--active.ii-row--class td:nth-child(2){color:#fff;}
+.ii-class--warrior{--ii-class-color:#c79c6e;}
+.ii-class--paladin{--ii-class-color:#f58cba;}
+.ii-class--hunter{--ii-class-color:#abd473;}
+.ii-class--rogue{--ii-class-color:#fff569;}
+.ii-class--priest{--ii-class-color:#f0f0f0;}
+.ii-class--death-knight{--ii-class-color:#c41f3b;}
+.ii-class--shaman{--ii-class-color:#0070de;}
+.ii-class--mage{--ii-class-color:#40c7eb;}
+.ii-class--warlock{--ii-class-color:#8787ed;}
+.ii-class--monk{--ii-class-color:#00ff96;}
+.ii-class--druid{--ii-class-color:#ff7d0a;}
+.ii-class--demon-hunter{--ii-class-color:#a330c9;}
+.ii-class--default{--ii-class-color:#94a3b8;}
+a.ii-class--warrior{color:#c79c6e;} a.ii-class--paladin{color:#f58cba;}
+a.ii-class--hunter{color:#abd473;} a.ii-class--rogue{color:#fff569;}
+a.ii-class--priest{color:#f0f0f0;} a.ii-class--death-knight{color:#c41f3b;}
+a.ii-class--shaman{color:#0070de;} a.ii-class--mage{color:#40c7eb;}
+a.ii-class--warlock{color:#8787ed;} a.ii-class--monk{color:#00ff96;}
+a.ii-class--druid{color:#ff7d0a;} a.ii-class--demon-hunter{color:#a330c9;}
+
+/* ---------- misc UI ---------- */
+.ii-filter{width:220px;}
+/* Item ids that deep-link into the item editor */
+.ii-entry-link{color:#7fb2e5;font-variant-numeric:tabular-nums;text-decoration:none;border-bottom:1px dotted rgba(127,178,229,.5);}
+.ii-entry-link:hover{color:#a8cdf5;border-bottom-color:#a8cdf5;}
+/* Item / quest names on the character detail page that link to their editor */
+a.char-name-cell--linked{text-decoration:none;}
+a.char-name-cell--linked .char-name-cell__name{border-bottom:1px dotted rgba(127,178,229,.5);}
+a.char-name-cell--linked:hover .char-name-cell__name{color:#a8cdf5;border-bottom-color:#a8cdf5;}
+a.char-name-cell--linked:hover .char-name-cell__id{opacity:.8;}
+.ii-badge{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:9px;font-size:11px;background:rgba(63,168,255,.16);color:#9dc9f2;border:1px solid rgba(63,168,255,.3);}
+.ii-pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;}
+.ii-failure-list{max-height:220px;overflow:auto;margin-top:10px;font-size:12px;}
+.ii-failure-list ul{margin:6px 0 0;padding-left:18px;}
+.ii-failure-list li{margin-bottom:4px;color:#f0a4a4;}
+.ii-check-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:12px;color:#c8d4e0;cursor:pointer;}
+.ii-check-row input{margin-top:2px;}
+.ii-del-row{display:flex;align-items:center;gap:16px;margin-bottom:10px;}
+.ii-del-row label{margin:0;font-weight:600;color:#c8d4e0;min-width:56px;}
+.ii-del-row input[type=number]{width:140px;}
+
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .ii-form{flex-wrap:wrap;}
+  .ii-field--grow{flex-basis:100%;max-width:none;}
+  .ii-card__actions{justify-content:flex-start;}
+  .ii-filter{width:180px;}
+  .ii-del-row{flex-wrap:wrap;gap:10px;}
+  .ii-del-row label{min-width:0;}
+  .ii-del-row input[type=number]{width:100%;max-width:200px;}
+}
