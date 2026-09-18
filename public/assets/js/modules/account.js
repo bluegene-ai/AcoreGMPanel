@@ -1244,7 +1244,159 @@
 		}
 	});
 
+	/**
+	 * 行内"更多"菜单的浮层定位。
+	 *
+	 * 原因：.row-menu__list 是 position:absolute，而外层容器链上存在
+	 * .app-shell-panel{overflow:hidden}（还有 .app-shell-panel > *{z-index:1}），
+	 * 因此菜单会被页面框架直接裁掉——表格越靠下越明显。
+	 *
+	 * 解法：打开时把菜单临时挂到 <body> 下并改用 position:fixed，按触发按钮的
+	 * 位置计算坐标；关闭（toggle / 点击别处 / Esc）时放回 <details> 内。这样不需要
+	 * 改动 overflow，面板的装饰性光晕仍按原样裁剪。
+	 *
+	 * 目前只有账号页使用 .row-menu（服务端渲染 + 本模块渲染各一处），所以先放在
+	 * 本模块内；若后续其他模块也用，再提取到 panel.js 作为公共能力。
+	 */
+	function isRowMenuListVisible(list){
+		return !!list && !list.hidden && list.style.display !== 'none';
+	}
+
+	function placeRowMenu(details, list, measured){
+		const summary = details.querySelector('summary');
+		// The list may already have been moved to <body> (that is the whole point
+		// of the portal), so accept it as an argument instead of re-querying the
+		// <details> — otherwise this silently returns without positioning.
+		if(!list) list = details.querySelector('.row-menu__list');
+		if(!summary || !list) return;
+
+		const rect = summary.getBoundingClientRect();
+		const gap = 6;
+		const margin = 8;
+
+		const menuWidth = (measured && measured.width) || list.offsetWidth || 160;
+		const menuHeight = (measured && measured.height) || list.offsetHeight || 0;
+
+		// 右对齐触发按钮；横向越界时贴边
+		let left = rect.right - menuWidth;
+		left = Math.max(margin, Math.min(left, window.innerWidth - menuWidth - margin));
+
+		// 下方空间不足则翻到按钮上方
+		const spaceBelow = window.innerHeight - rect.bottom;
+		const openUp = spaceBelow < menuHeight + gap + margin && rect.top > spaceBelow;
+		let top = openUp ? rect.top - menuHeight - gap : rect.bottom + gap;
+		top = Math.max(margin, top);
+
+		list.style.top = top + 'px';
+		list.style.left = left + 'px';
+	}
+
+	/**
+	 * 把浮层态还原回 <details> 内的默认绝对定位。
+	 *
+	 * 必须接收 list 引用：浮层打开时它挂在 <body> 下，此时
+	 * details.querySelector('.row-menu__list') 已经找不到它（与 placeRowMenu 同一坑）。
+	 */
+	function restoreRowMenuList(details, list){
+		if(!list) list = details.querySelector('.row-menu__list');
+		if(!list) return;
+		if(list.parentElement !== details){
+			details.appendChild(list);
+		}
+		delete list.__rowMenuOwner;
+		list.classList.remove('row-menu__list--portal');
+		list.style.position = '';
+		list.style.top = '';
+		list.style.left = '';
+		list.style.right = '';
+		list.style.zIndex = '';
+		list.style.display = '';
+	}
+
+	/** 关闭所有浮层菜单；except 为需要保留的那一个（可为 null）。 */
+	function closeAllRowMenus(except){
+		document.querySelectorAll('.row-menu__list--portal').forEach(list => {
+			const owner = list.__rowMenuOwner;
+			if(!owner || owner === except) return;
+			restoreRowMenuList(owner, list);
+			owner.open = false;
+		});
+	}
+
+	function openRowMenu(details){
+		const list = details.querySelector('.row-menu__list');
+		if(!list) return;
+
+		// Measure first: once the list is under <body> it is no longer reachable
+		// through the <details>, and its size must be known to place it.
+		list.style.position = 'fixed';
+		list.style.top = '0px';
+		list.style.left = '0px';
+		const rect = list.getBoundingClientRect();
+		const size = {
+			width: rect.width || list.offsetWidth || 160,
+			height: rect.height || list.offsetHeight || 0
+		};
+
+		list.classList.add('row-menu__list--portal');
+		list.style.right = 'auto';
+		list.style.zIndex = '6000';
+		list.style.display = 'flex';
+		// 记住归属，浮层期间 details.querySelector() 已找不到它
+		list.__rowMenuOwner = details;
+		details.__openRowMenuList = list;
+		document.body.appendChild(list);
+		placeRowMenu(details, list, size);
+	}
+
+	function closeRowMenu(details){
+		restoreRowMenuList(details, details.__openRowMenuList || null);
+		details.__openRowMenuList = null;
+		details.open = false;
+	}
+
+	function initRowMenus(){
+		// 打开/关闭：details 的 toggle 事件会冒泡到 document
+		document.addEventListener('toggle', event => {
+			const details = event.target;
+			if(!details || !details.classList || !details.classList.contains('row-menu')) return;
+			if(details.open){
+				closeAllRowMenus(details);
+				openRowMenu(details);
+			} else {
+				closeRowMenu(details);
+			}
+		}, true);
+
+		// 点击菜单以外区域关闭
+		document.addEventListener('click', event => {
+			const insideMenu = event.target.closest && event.target.closest('.row-menu');
+			const insideList = event.target.closest && event.target.closest('.row-menu__list');
+			if(insideMenu || insideList) return;
+			closeAllRowMenus(null);
+		});
+
+		// Esc 关闭
+		document.addEventListener('keydown', event => {
+			if(event.key === 'Escape') closeAllRowMenus(null);
+		});
+
+		// 浮层脱离文档流后需要跟随滚动/缩放重新定位。
+		// 注意：不能再用 details.querySelector('.row-menu__list') 取回列表——浮层期间
+		// 它挂在 <body> 下，details 内已查不到（会拿到 null 而抛错）。用打开时记录的引用。
+		const reposition = () => {
+			document.querySelectorAll('details.row-menu[open]').forEach(details => {
+				const list = details.__openRowMenuList || details.querySelector('.row-menu__list');
+				if(!list) return;
+				if(isRowMenuListVisible(list)) placeRowMenu(details, list);
+			});
+		};
+		window.addEventListener('scroll', reposition, true);
+		window.addEventListener('resize', reposition);
+	}
+
 	console.log('[account] module ready');
+	initRowMenus();
 	fillIpLocations(document);
 })();
 

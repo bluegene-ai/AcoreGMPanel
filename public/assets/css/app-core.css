@@ -212,6 +212,22 @@ body.modal-open{overflow:hidden;}
 /* 下拉菜单不能被单元格裁掉 */
 .table td,.table th{overflow:visible;}
 
+/*
+ * "更多"菜单的浮层态。
+ *
+ * .row-menu__list 默认是 position:absolute，但祖先链上有
+ * .app-shell-panel{overflow:hidden}，单元格里的 overflow:visible 无法突破它，
+ * 因此菜单会被页面框架裁掉（表格越靠下越明显）。account.js 在菜单打开时会把它
+ * 临时挂到 <body> 下并加上本类，坐标由脚本按触发按钮计算。
+ */
+.row-menu__list--portal{
+  position:fixed;
+  right:auto;
+  z-index:6000;
+  display:flex;
+  min-width:160px;
+}
+
 @media (max-width:960px){
   .list-filter__actions{justify-content:flex-start;}
 }
