@@ -75,6 +75,27 @@ class CharacterRepository extends MultiServerRepository
             ? 'LEFT JOIN ' . $accountTempTable . ' account_filter ON account_filter.account_id = c.account'
             : '';
 
+        try {
+            // Clamp here: runCharacterSearch no longer receives pre-sanitised input.
+            return $this->runCharacterSearch($pdo, $accountJoinSql, $whereSql, $params, max(1, $page), max(1, $perPage), $sort);
+        } finally {
+            $this->dropAccountFilterTempTable($accountTempTable);
+        }
+    }
+
+    /**
+     * The actual character query, split out so search() can guarantee the
+     * account-filter temp table is dropped even when the query throws.
+     */
+    private function runCharacterSearch(
+        PDO $pdo,
+        string $accountJoinSql,
+        string $whereSql,
+        array $params,
+        int $page,
+        int $perPage,
+        string $sort
+    ): Paginator {
         $sortMap = [
             'guid_desc' => 'c.guid DESC',
             'guid_asc' => 'c.guid ASC',
@@ -784,30 +805,41 @@ class CharacterRepository extends MultiServerRepository
 
             return array_values(array_unique(array_filter(array_map('intval', $rows), static fn (int $id): bool => $id > 0)));
         });
-            $guid = (int) $guid;
-            if ($guid <= 0)
-                return 0;
 
-            $cacheKey = 'server_' . $this->serverId . '_guid_' . $guid . '_mail_count';
+        return is_array($ids) ? array_values(array_map('intval', $ids)) : [];
+    }
 
-            try {
-                $count = TransientCache::remember('character_summary', $cacheKey, 15, function () use ($guid) {
-                    $pdo = $this->characters();
-                    $st = $pdo->prepare('SELECT COUNT(*) FROM mail WHERE receiver=:g');
-                    $st->execute([':g' => $guid]);
-                    return (int) $st->fetchColumn();
-                });
+    /**
+     * Materialise the account id set into a session-local MEMORY table so the
+     * character query can filter on it without a huge IN (...) list.
+     *
+     * The characters connection is pooled per server, so the temporary table is
+     * visible to the follow-up queries issued by search(). It is dropped again
+     * via dropAccountFilterTempTable() once the search is done.
+     */
+    private function prepareAccountFilterTempTable(array $accountIds): string
+    {
+        $pdo = $this->characters();
+        $table = 'account_filter_' . bin2hex(random_bytes(8));
 
-                return is_numeric($count) ? (int) $count : 0;
-            } catch(\Throwable $e){
-                return 0;
-            }
         $pdo->exec('CREATE TEMPORARY TABLE ' . $table . ' (account_id INT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=MEMORY');
 
         foreach (array_chunk($accountIds, 500) as $batch)
             $this->insertAccountFilterBatch($pdo, $table, $batch);
 
         return $table;
+    }
+
+    private function dropAccountFilterTempTable(?string $table): void
+    {
+        if ($table === null || $table === '')
+            return;
+
+        try {
+            $this->characters()->exec('DROP TEMPORARY TABLE IF EXISTS ' . $table);
+        } catch(\Throwable $e){
+            // The table is session-local; a failed drop must not break the page.
+        }
     }
 
     private function insertAccountFilterBatch(PDO $pdo, string $table, array $accountIds): void
