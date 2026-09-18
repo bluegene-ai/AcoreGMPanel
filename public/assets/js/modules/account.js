@@ -1181,11 +1181,26 @@
 			return;
 		}
 		const row = button.closest('tr');
-		if(!row) return;
-		const id = parseInt(row.dataset.id, 10);
-		const username = row.dataset.username;
-		const gmLevel = row.dataset.gm;
-		const lastIp = row.dataset.lastIp || '';
+		let id;
+		let username;
+		let gmLevel;
+		let lastIp;
+		if(row){
+			id = parseInt(row.dataset.id, 10);
+			username = row.dataset.username;
+			gmLevel = row.dataset.gm;
+			lastIp = row.dataset.lastIp || '';
+		} else {
+			// 浮层态：菜单已被移到 <body> 下，按钮不再是 <tr> 的后代。
+			// 行标识由 openRowMenu() 快照在列表元素上。
+			const list = button.closest('.row-menu__list');
+			if(!list) return;
+			id = parseInt(list.dataset.accountId, 10);
+			username = list.dataset.accountUsername;
+			gmLevel = list.dataset.accountGm;
+			lastIp = list.dataset.accountLastIp || '';
+			if(!Number.isFinite(id) || id <= 0) return;
+		}
 		switch(action){
 			case 'chars':
 				doCharacters(id, username);
@@ -1327,26 +1342,41 @@
 		const list = details.querySelector('.row-menu__list');
 		if(!list) return;
 
-		// Measure first: once the list is under <body> it is no longer reachable
-		// through the <details>, and its size must be known to place it.
-		list.style.position = 'fixed';
-		list.style.top = '0px';
-		list.style.left = '0px';
-		const rect = list.getBoundingClientRect();
-		const size = {
-			width: rect.width || list.offsetWidth || 160,
-			height: rect.height || list.offsetHeight || 0
-		};
+		// 浮层期间按钮不再位于 <tr> 内，`button.closest('tr')` 会返回 null，
+		// 导致所有菜单操作静默失效。所以打开时把所属行的标识快照到列表上，
+		// 由点击委托回退读取（见文件下方的 button.action 处理器）。
+		const row = details.closest('tr');
+		if(row){
+			list.dataset.accountId = row.dataset.id || '';
+			list.dataset.accountUsername = row.dataset.username || '';
+			list.dataset.accountGm = row.dataset.gm || '';
+			list.dataset.accountLastIp = row.dataset.lastIp || '';
+		}
+		// 同样记录归属，浮层期间 details 内已查不到该 list
+		list.__rowMenuOwner = details;
+		details.__openRowMenuList = list;
 
 		list.classList.add('row-menu__list--portal');
 		list.style.right = 'auto';
 		list.style.zIndex = '6000';
 		list.style.display = 'flex';
-		// 记住归属，浮层期间 details.querySelector() 已找不到它
-		list.__rowMenuOwner = details;
-		details.__openRowMenuList = list;
+		list.style.visibility = 'hidden';
+
+		// 先入 <body> 再量尺寸：在 <details> 内它是被子元素撑开的，量不出菜单
+		// 应有的宽度；fixed 定位后才是它在视口中的真实尺寸。
 		document.body.appendChild(list);
-		placeRowMenu(details, list, size);
+
+		// 强制一次布局，确保离屏尺寸已可读；若环境未刷新布局则回退到菜单
+		// 已知的常用宽度，避免用 0 造成定位错乱。
+		const offsetWidth = list.offsetWidth;
+		const rect = list.getBoundingClientRect();
+		const measured = {
+			width: offsetWidth > 20 ? offsetWidth : (rect.width > 20 ? rect.width : 180),
+			height: list.offsetHeight > 0 ? list.offsetHeight : rect.height
+		};
+
+		placeRowMenu(details, list, measured);
+		list.style.visibility = '';
 	}
 
 	function closeRowMenu(details){
