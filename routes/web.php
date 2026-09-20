@@ -25,6 +25,7 @@ use Acme\Panel\Http\Controllers\RealmController;
 use Acme\Panel\Http\Controllers\Setup\SetupController;
 use Acme\Panel\Http\Controllers\SmartAi\SmartAiWizardController;
 use Acme\Panel\Http\Controllers\Soap\SoapWizardController;
+use Acme\Panel\Http\Controllers\Supervisor\SupervisorController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostAdminController;
 use Acme\Panel\Http\Controllers\CharacterBoost\PublicCharacterBoostController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostRedeemCodeAdminController;
@@ -215,5 +216,13 @@ return static function (Router $router): void {
 
         $router->get('/soap', [SoapWizardController::class, 'index']);
         $router->get('/smart-ai', [SmartAiWizardController::class, 'index']);
+
+        // 守护管理：查看/控制 acore_supervisor.exe（worldserver + authserver）
+        $router->get('/supervisor', [SupervisorController::class, 'index']);
+        $router->get('/supervisor/api/status', [SupervisorController::class, 'apiStatus']);
+        $router->get('/supervisor/api/log', [SupervisorController::class, 'apiLog']);
+        $router->group([CsrfMiddleware::class], static function (Router $router): void {
+            $router->post('/supervisor/api/command', [SupervisorController::class, 'apiCommand']);
+        });
     });
 };

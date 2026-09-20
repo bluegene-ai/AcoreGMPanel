@@ -104,6 +104,7 @@ AcoreGMPanel/
 | Items / Inventory | `/item-inventory` | Two search axes: per-character bag/bank/equipment reads, and item-to-owner lookup with stack reduction, bulk delete and bulk replace. The legacy `/bag`, `/item-ownership` and `/bag-query` URLs 301-redirect here. |
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
+| Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. |
 
 ## Further Reading
 

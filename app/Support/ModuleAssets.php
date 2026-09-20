@@ -26,6 +26,7 @@ final class ModuleAssets
         'raf.' => 'raf',
         'smartai.' => 'smart_ai_wizard',
         'soap.' => 'soap_wizard',
+        'supervisor.' => 'supervisor',
     ];
 
     private const PAGE_MODULE_ALIASES = [
@@ -129,6 +130,12 @@ final class ModuleAssets
             'capability' => 'aegis.dashboard',
         ],
         [
+            'path' => '/supervisor',
+            'label' => 'app.nav.supervisor',
+            'activePrefixes' => ['/supervisor'],
+            'capability' => 'supervisor.view',
+        ],
+        [
             'path' => '/logs',
             'label' => 'app.nav.logs',
             'activePrefixes' => ['/logs'],
@@ -152,6 +159,7 @@ final class ModuleAssets
         'raf' => ['raf'],
         'smartai' => ['smartai'],
         'soap' => ['soap'],
+        'supervisor' => ['supervisor'],
     ];
 
     private const JS_LOCALE_BUNDLES = [
@@ -170,6 +178,7 @@ final class ModuleAssets
         'raf' => ['raf'],
         'smartai' => ['smartai'],
         'soap' => ['soap'],
+        'supervisor' => ['supervisor'],
     ];
 
     private const SPLIT_LANG_SECTIONS = [
@@ -193,6 +202,7 @@ final class ModuleAssets
         'smartai',
         'soap',
         'setup',
+        'supervisor',
     ];
 
     private const SPLIT_JS_MODULES = [
@@ -210,6 +220,7 @@ final class ModuleAssets
         'raf',
         'smartai',
         'soap',
+        'supervisor',
     ];
 
     private const JS_LOCALE_TRANSLATION_KEYS = [

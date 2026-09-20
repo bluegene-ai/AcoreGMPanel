@@ -44,6 +44,9 @@ final class PageHeaderData
             'logs.index' => [
                 'intro' => Lang::get('app.logs.intro'),
             ],
+            'supervisor.index' => [
+                'intro' => Lang::get('app.supervisor.intro'),
+            ],
             'item_inventory.index' => [
                 'intro' => Lang::get('app.item_inventory.character.chars.subtitle'),
             ],

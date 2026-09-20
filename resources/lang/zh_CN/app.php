@@ -26,6 +26,7 @@ return array (
     'smart_ai' => 'SmartAI',
     'aegis' => 'Aegis 反作弊',
     'logs' => '日志',
+    'supervisor' => '守护管理',
   ),
   'common' => 
   array (

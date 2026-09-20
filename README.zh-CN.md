@@ -104,6 +104,7 @@ AcoreGMPanel/
 | 物品/库存 | `/item-inventory` | 双轴查询：按角色看背包/银行/装备，按物品定位所有拥有者；支持减少堆叠、批量删除与替换。旧地址 `/bag`、`/item-ownership`、`/bag-query` 会 301 重定向到此页。 |
 | SmartAI 向导 | `/smart-ai` | 分步生成 `smart_scripts` SQL 并支持导出。 |
 | SOAP 向导 | `/soap` | 浏览 SOAP 命令、填写动态表单、预览并安全执行。 |
+| 守护管理 | `/supervisor` | 查看并控制 `acore_supervisor.exe`（worldserver / authserver 守护程序）：运行状态、世界循环心跳、登录服探活、重启次数，以及按服务启停/重启。 |
 
 ## 延伸阅读
 

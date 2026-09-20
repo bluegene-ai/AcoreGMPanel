@@ -105,6 +105,10 @@ final class PageMetadata
                 'title' => Lang::get('app.logs.index.page_title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.logs.page_title', '/logs'),
             ],
+            'supervisor.index' => [
+                'title' => Lang::get('app.supervisor.page_title'),
+                'breadcrumbs' => self::moduleBreadcrumbs('app.supervisor.page_title', '/supervisor'),
+            ],
             'aegis.index' => [
                 'title' => Lang::get('app.aegis.page_title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.aegis.page_title', '/aegis'),

@@ -26,6 +26,7 @@ return array (
     'smart_ai' => 'SmartAI',
     'aegis' => 'Aegis Anti-Cheat',
     'logs' => 'Logs',
+    'supervisor' => 'Supervisor',
   ),
   'common' => 
   array (
