@@ -20,7 +20,9 @@
     healthMultiplierInput: document.getElementById('bossHealthMultiplierInput'),
     estimatedHp: document.querySelector('[data-boss-hp-preview]'),
     configForm: document.getElementById('bossConfigForm'),
-    configSaveBtn: document.getElementById('bossConfigSaveBtn')
+    configSaveBtn: document.getElementById('bossConfigSaveBtn'),
+    extConfigForm: document.getElementById('bossExtConfigForm'),
+    extConfigSaveBtn: document.getElementById('bossExtConfigSaveBtn')
   };
 
   function t(path, fallback){
@@ -57,18 +59,19 @@
   }
 
   function setBusy(disabled){
-    [dom.spawnBtn, dom.killBtn, dom.clearBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn].forEach(function(node){
+    [dom.spawnBtn, dom.killBtn, dom.clearBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn, dom.extConfigSaveBtn].forEach(function(node){
       if(node) node.disabled = !!disabled;
     });
     if(dom.presetSelect) dom.presetSelect.disabled = !!disabled;
     if(dom.difficultySelect) dom.difficultySelect.disabled = !!disabled;
     if(dom.tierSelect) dom.tierSelect.disabled = !!disabled;
     if(dom.healthMultiplierInput) dom.healthMultiplierInput.disabled = !!disabled;
-    if(dom.configForm){
-      dom.configForm.querySelectorAll('input, textarea, select').forEach(function(node){
+    [dom.configForm, dom.extConfigForm].forEach(function(form){
+      if(!form) return;
+      form.querySelectorAll('input, textarea, select').forEach(function(node){
         node.disabled = !!disabled;
       });
-    }
+    });
   }
 
   function formatHp(value){
@@ -150,6 +153,108 @@
     window.setTimeout(function(){ window.location.reload(); }, 600);
   }
 
+  // 扩展配置（boss_activity_config_ext）：字段较多，全部在扩展配置 Tab 的二级 Tab 里；
+  // 开关型字段页面里带一个 hidden=0，未勾选时提交 0（Object.fromEntries 取最后一个同名值）。
+  async function saveExtConfig(){
+    if(!dom.extConfigForm) return;
+
+    const payload = Object.fromEntries(new FormData(dom.extConfigForm).entries());
+
+    setBusy(true);
+    const json = await post('/boss/api/ext-config', payload);
+    setBusy(false);
+
+    if(!json || !json.success){
+      show('error', (json && json.message) || t('feedback.ext_failure', 'Extended configuration save failed.'));
+      return;
+    }
+
+    show('success', json.message || t('feedback.ext_success', 'Extended configuration saved.'));
+    window.setTimeout(function(){ window.location.reload(); }, 600);
+  }
+
+  /* ------------------------------------------------------------------ Tab 分页
+   * 每个 [data-boss-tabs] 容器管自己的按钮与面板（面板必须是容器的直接子节点），
+   * 因此「顶层 Tab」与「扩展配置里的二级 Tab」可以共用同一套逻辑；
+   * 当前 Tab 记进 URL hash（顶层 tab=…，其它组用组名当键），刷新/保存后回到同一页。 */
+  function tabGroups(){
+    return Array.prototype.slice.call(document.querySelectorAll('[data-boss-tabs]'));
+  }
+
+  function groupButtons(group){
+    return Array.prototype.slice.call(group.querySelectorAll(':scope > .boss-tabs__nav [data-boss-tab]'));
+  }
+
+  function groupPanels(group){
+    return Array.prototype.slice.call(group.querySelectorAll(':scope > [data-boss-tabpanel]'));
+  }
+
+  function hashKeyFor(groupName){
+    return groupName === 'main' ? 'tab' : groupName;
+  }
+
+  function readHashParams(){
+    const params = {};
+    String(window.location.hash || '').replace(/^#/, '').split('&').forEach(function(chunk){
+      const index = chunk.indexOf('=');
+      if(index <= 0) return;
+      params[chunk.slice(0, index)] = chunk.slice(index + 1);
+    });
+    return params;
+  }
+
+  function rememberTab(groupName, tabName){
+    const params = readHashParams();
+    params[hashKeyFor(groupName)] = tabName;
+    const hash = Object.keys(params).map(function(key){ return key + '=' + params[key]; }).join('&');
+    const url = new URL(window.location.href);
+    url.hash = hash;
+    // replaceState：避免每次点 Tab 都往浏览器历史里塞一条
+    window.history.replaceState(null, '', url.toString());
+  }
+
+  function activateTab(group, name, remember){
+    const panels = groupPanels(group);
+    if(!panels.length) return;
+
+    const available = panels.map(function(panel){ return panel.dataset.bossTabpanel; });
+    if(available.indexOf(name) < 0) name = available[0];
+
+    groupButtons(group).forEach(function(button){
+      const active = button.dataset.bossTab === name;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    panels.forEach(function(panel){
+      panel.classList.toggle('is-active', panel.dataset.bossTabpanel === name);
+    });
+
+    if(remember) rememberTab(group.dataset.bossTabs || 'main', name);
+  }
+
+  function initTabs(){
+    const params = readHashParams();
+    tabGroups().forEach(function(group){
+      const groupName = group.dataset.bossTabs || 'main';
+      activateTab(group, params[hashKeyFor(groupName)] || '', false);
+    });
+  }
+
+  initTabs();
+
+  document.addEventListener('click', function(event){
+    const button = event.target.closest('[data-boss-tab]');
+    if(!button) return;
+
+    const group = button.closest('[data-boss-tabs]');
+    if(!group) return;
+
+    event.preventDefault();
+    activateTab(group, button.dataset.bossTab, true);
+  });
+
+  window.addEventListener('hashchange', initTabs);
+
   if(dom.spawnBtn){
     dom.spawnBtn.addEventListener('click', function(){ runAction('spawn'); });
   }
@@ -199,6 +304,13 @@
     dom.configForm.addEventListener('submit', function(event){
       event.preventDefault();
       saveConfig();
+    });
+  }
+
+  if(dom.extConfigForm){
+    dom.extConfigForm.addEventListener('submit', function(event){
+      event.preventDefault();
+      saveExtConfig();
     });
   }
 })();

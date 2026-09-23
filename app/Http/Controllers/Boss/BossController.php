@@ -77,6 +77,7 @@ class BossController extends Controller
                 'tiers' => $this->tierPayload($config),
                 'supported' => $this->repo()->serverSupported(),
             ],
+            'boss_ext' => $this->extViewData($dashboard),
             'event_limit' => $eventLimit,
             'contributor_limit' => $contributorLimit,
         ]), [
@@ -475,6 +476,255 @@ class BossController extends Controller
                 'reload' => $reloadResult,
             ],
         ], $reloadResult['success'] ? 200 : 422);
+    }
+
+    /**
+     * 扩展配置（ac_eluna.boss_activity_config_ext）的表单数据：
+     * 当前值 + 字段 schema + 二级 Tab 分组；schema 与保存校验共用一份定义。
+     */
+    private function extViewData(array $dashboard): array
+    {
+        $config = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
+
+        return [
+            'config' => $config,
+            'tabs' => (array) Config::get('boss.ext_tabs', []),
+            'fields' => (array) Config::get('boss.ext_fields', []),
+            'available' => $this->repo()->extConfigAvailable(),
+        ];
+    }
+
+    /**
+     * 保存扩展配置（脚本私有列），随后热加载。
+     *
+     * 与主表保存的差别：这里用 INSERT ... ON DUPLICATE KEY UPDATE（脚本新增的列不会被 reset），
+     * 空值语义也按 Lua 侧的约定处理（keep_default_when_empty 的字段留空 = 不改）。
+     */
+    public function apiExtConfigSave(Request $request): Response
+    {
+        $this->requireActionCapability();
+        $this->maybeSwitchServer($request);
+
+        if (!$this->repo()->serverSupported()) {
+            return $this->json([
+                'success' => false,
+                'message' => $this->serverNotSupportedMessage(),
+            ], 422);
+        }
+
+        try {
+            $config = $this->normalizeExtPayload($request);
+        } catch (Throwable $exception) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.ext_save_failed'),
+            ], 422);
+        }
+
+        try {
+            $savedConfig = $this->repo()->saveExtConfig($config);
+        } catch (Throwable $exception) {
+            $message = $exception->getMessage() === 'boss_ext_storage_missing'
+                ? Lang::get('app.boss.errors.ext_storage_missing')
+                : Lang::get('app.boss.errors.ext_save_failed');
+
+            return $this->json([
+                'success' => false,
+                'message' => $message,
+            ], 422);
+        }
+
+        try {
+            $reloadResult = $this->runBossCommand('.boss config reload');
+        } catch (Throwable $exception) {
+            $reloadResult = [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'output' => '',
+                'execution' => [],
+            ];
+        }
+
+        Audit::log('boss', 'save_ext_config', 'boss_activity_config_ext', [
+            'server_id' => ServerContext::currentId(),
+            'fields' => count($savedConfig),
+            'success' => $reloadResult['success'],
+            'reload_message' => $reloadResult['message'] ?? '',
+            'reload_output' => $reloadResult['output'] ?? '',
+        ]);
+
+        $reloadMessage = trim((string) ($reloadResult['message'] ?? ''));
+        if ($reloadMessage === '') {
+            $reloadMessage = trim((string) ($reloadResult['output'] ?? ''));
+        }
+
+        return $this->json([
+            'success' => $reloadResult['success'],
+            'message' => $reloadResult['success']
+                ? Lang::get('app.boss.feedback.ext_saved')
+                : Lang::get('app.boss.feedback.ext_saved_reload_failed', [
+                    'message' => $reloadMessage !== ''
+                        ? $reloadMessage
+                        : Lang::get('app.boss.errors.reload_failed'),
+                ]),
+            'payload' => [
+                'saved' => true,
+                'reload_success' => $reloadResult['success'],
+                'config' => $savedConfig,
+                'reload' => $reloadResult,
+            ],
+        ], $reloadResult['success'] ? 200 : 422);
+    }
+
+    /**
+     * 按 schema 归一化扩展配置表单：逐字段按 kind 处理，只保留能安全落库的值。
+     */
+    private function normalizeExtPayload(Request $request): array
+    {
+        $payload = [];
+
+        foreach ($this->repo()->extFieldSchema() as $name => $spec) {
+            $kind = (string) ($spec['kind'] ?? 'text');
+
+            if ($kind === 'bool') {
+                $payload[$name] = $this->normalizedBoolFlag($request, $name) ? 1 : 0;
+                continue;
+            }
+
+            if ($kind === 'int') {
+                $min = (int) ($spec['min'] ?? 0);
+                $max = (int) ($spec['max'] ?? 2000000000);
+                $payload[$name] = $this->boundedInt($request, $name, $min, $min, $max);
+                continue;
+            }
+
+            $raw = $request->input($name, '');
+            $text = is_string($raw) ? $raw : (string) ($raw ?? '');
+
+            switch ($kind) {
+                case 'lines':
+                    $value = $this->normalizedLineList($text);
+                    break;
+                case 'keyedlines':
+                    $value = $this->normalizedKeyedLines($text);
+                    break;
+                case 'keyedintlist':
+                    $value = $this->normalizedKeyedIntegerLists($text);
+                    break;
+                case 'intlist':
+                    $value = $this->normalizedIntegerListString($text);
+                    break;
+                default:
+                    $value = $this->limitedSingleLine($text, (int) ($spec['maxlength'] ?? 255));
+            }
+
+            // 留空 = 不改（Lua 侧对空值会回退到脚本默认值，写空只会让两边显示不一致）
+            if (!empty($spec['keep_default_when_empty']) && $value === '') {
+                continue;
+            }
+
+            $payload[$name] = $value;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * 多行文案：一行一条，去掉空行（喊话/嘲讽允许整体留空 = 不喊）。
+     */
+    private function normalizedLineList(string $value, int $limit = 200): string
+    {
+        $lines = [];
+        foreach (preg_split('/\r\n|\r|\n/', $value) ?: [] as $row) {
+            $row = trim((string) $row);
+            if ($row === '')
+                continue;
+
+            $lines[] = $row;
+            if (count($lines) >= $limit)
+                break;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "键=值" 多行（技能名/连招名 → 喊话）：丢掉没有 =、键或值为空、键重复的行。
+     */
+    private function normalizedKeyedLines(string $value, int $limit = 200): string
+    {
+        $lines = [];
+        $seen = [];
+
+        foreach (preg_split('/\r\n|\r|\n/', $value) ?: [] as $row) {
+            $row = trim((string) $row);
+            if ($row === '' || !str_contains($row, '='))
+                continue;
+
+            [$key, $rest] = explode('=', $row, 2);
+            $key = trim($key);
+            $rest = trim($rest);
+
+            if ($key === '' || $rest === '' || isset($seen[$key]))
+                continue;
+
+            $seen[$key] = true;
+            $lines[] = $key . '=' . $rest;
+
+            if (count($lines) >= $limit)
+                break;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "职业ID=物品ID,物品ID" 多行：键取正整数，值走整数列表归一。
+     */
+    private function normalizedKeyedIntegerLists(string $value, int $limit = 100): string
+    {
+        $lines = [];
+        $seen = [];
+
+        foreach (preg_split('/\r\n|\r|\n/', $value) ?: [] as $row) {
+            $row = trim((string) $row);
+            if ($row === '' || !str_contains($row, '='))
+                continue;
+
+            [$key, $rest] = explode('=', $row, 2);
+            $key = (int) trim($key);
+            if ($key <= 0 || isset($seen[$key]))
+                continue;
+
+            $list = $this->normalizedIntegerListString($rest);
+            if ($list === '')
+                continue;
+
+            $seen[$key] = true;
+            $lines[] = $key . '=' . $list;
+
+            if (count($lines) >= $limit)
+                break;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * 单行文本：换行折成空格（列是 VARCHAR），按列宽截断。
+     * 不做 trim：Lua 默认的生成喊话带前导空格，面板保存应保持原样。
+     */
+    private function limitedSingleLine(string $value, int $maxLength): string
+    {
+        $value = str_replace(["\r\n", "\r", "\n"], ' ', $value);
+
+        if ($maxLength <= 0)
+            return $value;
+
+        if (function_exists('mb_substr'))
+            return mb_substr($value, 0, $maxLength);
+
+        return substr($value, 0, $maxLength);
     }
 
     /**

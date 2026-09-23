@@ -38,6 +38,7 @@ class BossRepository extends MultiServerRepository
     private string $customDbName;
     private string $runtimeKey;
     private string $configTable;
+    private string $extTable;
     private int $decimalScale;
     private ?array $tableAvailability = null;
 
@@ -56,6 +57,7 @@ class BossRepository extends MultiServerRepository
             ?? Config::get('boss.runtime_key', 'current')
         );
         $this->configTable = (string) Config::get('boss.config_table', 'boss_activity_config');
+        $this->extTable = (string) Config::get('boss.ext_table', 'boss_activity_config_ext');
         $this->decimalScale = max(1, (int) Config::get('boss.decimal_scale', 100));
     }
 
@@ -131,6 +133,7 @@ class BossRepository extends MultiServerRepository
             return [
                 'runtime' => $this->defaultRuntime(),
                 'config' => $this->normalizeConfigRow($defaults, $defaults),
+                'ext' => $this->normalizeExtRow($this->defaultExtStorage(), $this->defaultExtStorage()),
                 'stats' => [
                     'events_24h' => 0,
                     'kills_7d' => 0,
@@ -161,6 +164,7 @@ class BossRepository extends MultiServerRepository
         $missingTables = $this->missingTables([
             'boss_activity_runtime',
             $this->configTable,
+            $this->extTable,
             'boss_activity_events',
             'boss_activity_contributors',
         ]);
@@ -174,6 +178,7 @@ class BossRepository extends MultiServerRepository
         return [
             'runtime' => $this->loadRuntime($warnings),
             'config' => $this->loadConfig($warnings),
+            'ext' => $this->loadExtConfig($warnings),
             'stats' => $this->loadStats($warnings),
             'events' => $this->loadEvents($eventLimit, $warnings),
             'contributors' => $this->loadContributors($contributorLimit, $warnings),
@@ -301,6 +306,214 @@ class BossRepository extends MultiServerRepository
 
             return $this->normalizeConfigRow($defaults, $defaults);
         }
+    }
+
+    /**
+     * 扩展配置（脚本私有列）的字段 schema：列名 → 规格。
+     * 来源是 config/boss.php 的 boss.ext_fields，是 boss.lua §3 描述表的镜像。
+     * 面板的渲染/校验与这里共用同一份 schema。
+     */
+    public function extFieldSchema(): array
+    {
+        $schema = [];
+        $groups = Config::get('boss.ext_fields', []);
+
+        if (!is_array($groups))
+            return $schema;
+
+        foreach ($groups as $fields) {
+            if (!is_array($fields))
+                continue;
+
+            foreach ($fields as $field) {
+                if (!is_array($field))
+                    continue;
+
+                $name = trim((string) ($field['name'] ?? ''));
+                if ($name === '')
+                    continue;
+
+                $schema[$name] = $field;
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * 扩展配置表是否已由 boss.lua 创建；没有就没法保存（只能看默认值）。
+     */
+    public function extConfigAvailable(): bool
+    {
+        return $this->tableExists($this->extTable);
+    }
+
+    /**
+     * 读取扩展配置：表/行缺失或读取异常时回退到内置默认值并记一条 warning。
+     */
+    private function loadExtConfig(array &$warnings): array
+    {
+        $defaults = $this->defaultExtStorage();
+
+        if (!$this->tableExists($this->extTable)) {
+            $this->warn($warnings, Lang::get('app.boss.warnings.ext_unavailable'));
+
+            return $this->normalizeExtRow($defaults, $defaults);
+        }
+
+        try {
+            $row = $this->loadExtStorageRow();
+
+            if (!is_array($row))
+                return $this->normalizeExtRow($defaults, $defaults);
+
+            return $this->normalizeExtRow($row, $defaults);
+        } catch (Throwable $exception) {
+            $this->logWarning('ext_config_unavailable', $exception);
+            $this->warn($warnings, Lang::get('app.boss.warnings.ext_unavailable'));
+
+            return $this->normalizeExtRow($defaults, $defaults);
+        }
+    }
+
+    /**
+     * 保存扩展配置。语义与主表一致：只覆盖显式提交的字段，其余保留数据库现值。
+     *
+     * 用 INSERT ... ON DUPLICATE KEY UPDATE（而不是 REPLACE INTO）：REPLACE 会先删行，
+     * 脚本新增的列会被重置为建表默认值。
+     */
+    public function saveExtConfig(array $config): array
+    {
+        if (!$this->tableExists($this->extTable))
+            throw new \RuntimeException('boss_ext_storage_missing');
+
+        $currentRow = $this->loadExtStorageRow() ?? [];
+        $defaults = $this->defaultExtStorage();
+
+        $normalized = array_replace($defaults, $currentRow, $config, [
+            'state_key' => $this->runtimeKey,
+            'updated_at' => time(),
+        ]);
+
+        $this->storeExtConfig($normalized);
+
+        return $this->normalizeExtRow($normalized, $defaults);
+    }
+
+    private function loadExtStorageRow(): ?array
+    {
+        $columns = array_keys($this->extFieldSchema());
+        if ($columns === [])
+            return null;
+
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT ' . $this->quoteColumns($columns)
+                . ' FROM ' . $this->table($this->extTable)
+                . ' WHERE state_key = :state_key LIMIT 1'
+            );
+            $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
+            $stmt->execute();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            return is_array($row) ? $row : null;
+        } catch (Throwable $exception) {
+            $this->logWarning('ext_config_row_unavailable', $exception);
+
+            return null;
+        }
+    }
+
+    private function storeExtConfig(array $config): void
+    {
+        $schema = $this->extFieldSchema();
+        if ($schema === [])
+            return;
+
+        $columns = array_keys($schema);
+        $quoted = [];
+        $placeholders = [];
+        $updates = [];
+
+        foreach ($columns as $column) {
+            $quoted[] = '`' . $column . '`';
+            $placeholders[] = ':' . $column;
+            $updates[] = '`' . $column . '` = VALUES(`' . $column . '`)';
+        }
+
+        $stmt = $this->characters()->prepare(
+            'INSERT INTO ' . $this->table($this->extTable)
+            . ' (state_key, ' . implode(', ', $quoted) . ', updated_at)'
+            . ' VALUES (:state_key, ' . implode(', ', $placeholders) . ', :updated_at)'
+            . ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updates)
+            . ', updated_at = VALUES(updated_at)'
+        );
+
+        $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
+        $stmt->bindValue(':updated_at', (int) ($config['updated_at'] ?? time()), PDO::PARAM_INT);
+
+        foreach ($schema as $column => $spec) {
+            $kind = (string) ($spec['kind'] ?? 'text');
+            $value = $config[$column] ?? null;
+
+            if ($kind === 'int' || $kind === 'bool') {
+                $stmt->bindValue(':' . $column, (int) $value, PDO::PARAM_INT);
+                continue;
+            }
+
+            $stmt->bindValue(':' . $column, (string) $value, PDO::PARAM_STR);
+        }
+
+        $stmt->execute();
+    }
+
+    /**
+     * 扩展配置的类型归一（整数/开关转 int，其余转 string），键序与 schema 一致。
+     */
+    private function normalizeExtRow(array $row, array $defaults): array
+    {
+        $resolved = array_replace($defaults, $row);
+        $normalized = [];
+
+        foreach ($this->extFieldSchema() as $name => $spec) {
+            $kind = (string) ($spec['kind'] ?? 'text');
+            $value = $resolved[$name] ?? null;
+
+            $normalized[$name] = ($kind === 'int' || $kind === 'bool')
+                ? (int) ($value ?? 0)
+                : (string) ($value ?? '');
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * 出厂默认值：先按 schema 给零值兜底，再用 config/boss.php 的 ext_defaults 覆盖。
+     */
+    private function defaultExtStorage(): array
+    {
+        $defaults = [];
+
+        foreach ($this->extFieldSchema() as $name => $spec) {
+            $kind = (string) ($spec['kind'] ?? 'text');
+            $defaults[$name] = ($kind === 'int' || $kind === 'bool') ? 0 : '';
+        }
+
+        $configured = Config::get('boss.ext_defaults', []);
+        if (is_array($configured))
+            $defaults = array_replace($defaults, $configured);
+
+        return $defaults;
+    }
+
+    private function quoteColumns(array $columns): string
+    {
+        $quoted = [];
+        foreach ($columns as $column) {
+            $quoted[] = '`' . $column . '`';
+        }
+
+        return implode(', ', $quoted);
     }
 
     private function loadStats(array &$warnings): array

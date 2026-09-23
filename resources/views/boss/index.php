@@ -51,6 +51,19 @@ $bossInstanceId = (int) ($bossRuntime['instance_id'] ?? 0);
 $bossHomeX = number_format((float) ($bossRuntime['home_x'] ?? 0), 3, '.', '');
 $bossHomeY = number_format((float) ($bossRuntime['home_y'] ?? 0), 3, '.', '');
 $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
+$bossExt = is_array($boss_ext ?? null) ? $boss_ext : [];
+
+// 顶层 Tab：运行控制/配置相关 Tab 需要 boss.actions 权限；事件与贡献 Tab 始终可见
+// （其内部仍按 boss.events / boss.contributors 权限位决定是否渲染表格）。
+$bossTabs = [
+    'status' => __('app.boss.tabs.status'),
+];
+if ($bossCanAct) {
+    $bossTabs['actions'] = __('app.boss.tabs.actions');
+    $bossTabs['config'] = __('app.boss.tabs.config');
+    $bossTabs['ext'] = __('app.boss.tabs.ext');
+}
+$bossTabs['log'] = __('app.boss.tabs.log');
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -70,6 +83,32 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
     </div>
   <?php endforeach; ?>
 
+  <?php if (!$bossCanAct): ?>
+    <section class="boss-panel">
+      <div class="panel-flash panel-flash--info panel-flash--inline is-visible">
+        <?php if ($bossServerSupported): ?>
+          <?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.boss.actions.title')])) ?>
+        <?php else: ?>
+          <?= htmlspecialchars(__('app.boss.warnings.server_not_supported')) ?>
+        <?php endif; ?>
+      </div>
+    </section>
+  <?php endif; ?>
+
+  <div class="boss-tabs" data-boss-tabs="main">
+    <nav class="boss-tabs__nav" role="tablist" aria-label="<?= htmlspecialchars(__('app.boss.tabs.label')) ?>">
+      <?php $bossFirstTab = true; foreach ($bossTabs as $bossTabKey => $bossTabLabel): ?>
+        <button type="button" class="boss-tab<?= $bossFirstTab ? ' is-active' : '' ?>" role="tab"
+                aria-selected="<?= $bossFirstTab ? 'true' : 'false' ?>"
+                data-boss-tab="<?= htmlspecialchars((string) $bossTabKey, ENT_QUOTES, 'UTF-8') ?>">
+          <?= htmlspecialchars((string) $bossTabLabel) ?>
+        </button>
+      <?php $bossFirstTab = false; endforeach; ?>
+    </nav>
+
+    <!-- Tab 面板用 div 而不是 section：面板里可能再嵌一层 Tab（扩展配置），
+         section 嵌套在非 HTML5 解析器里会被隐式闭合，div 更稳妥 -->
+    <div class="boss-tabpanel is-active" role="tabpanel" data-boss-tabpanel="status">
   <section class="boss-top-grid">
     <article class="boss-panel boss-panel--runtime">
       <div class="boss-panel__head">
@@ -156,8 +195,10 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
       </div>
     </article>
   </section>
+    </div>
 
   <?php if ($bossCanAct): ?>
+    <div class="boss-tabpanel" role="tabpanel" data-boss-tabpanel="actions">
     <section class="boss-panel">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.actions.title')) ?></h2>
@@ -251,7 +292,9 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
         </div>
       </div>
     </section>
+    </div>
 
+    <div class="boss-tabpanel" role="tabpanel" data-boss-tabpanel="config">
     <section class="boss-panel boss-panel--config">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.config.title')) ?></h2>
@@ -508,18 +551,14 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
         </div>
       </form>
     </section>
-  <?php else: ?>
-    <section class="boss-panel">
-      <div class="panel-flash panel-flash--info panel-flash--inline is-visible">
-        <?php if ($bossServerSupported): ?>
-          <?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.boss.actions.title')])) ?>
-        <?php else: ?>
-          <?= htmlspecialchars(__('app.boss.warnings.server_not_supported')) ?>
-        <?php endif; ?>
-      </div>
-    </section>
+    </div>
+
+    <div class="boss-tabpanel" role="tabpanel" data-boss-tabpanel="ext">
+      <?php include __DIR__ . '/_ext_config.php'; ?>
+    </div>
   <?php endif; ?>
 
+  <div class="boss-tabpanel" role="tabpanel" data-boss-tabpanel="log">
   <section class="boss-bottom-grid">
     <?php if ($bossCapabilities['events']): ?>
       <article class="boss-panel boss-panel--table">
@@ -639,4 +678,6 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
       </article>
     <?php endif; ?>
   </section>
+  </div>
+  </div>
 </div>

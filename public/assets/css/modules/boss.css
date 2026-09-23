@@ -52,6 +52,23 @@
 .badge--warn{background:rgba(220,168,82,.18);color:#ffd89a;}
 .badge--danger{background:rgba(205,87,101,.18);color:#ffc3cc;}
 
+/* ---- Tab 分页：顶层（运行状态/控制/配置/扩展配置/事件与贡献） ---- */
+/* 扩展配置里的二级 Tab 复用同一套类名（.boss-tabs--sub），由 boss.js 按容器作用域切换 */
+.boss-tabs{display:flex;flex-direction:column;gap:16px;min-width:0;}
+.boss-tabs__nav{display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid rgba(220,168,82,.16);padding-bottom:10px;}
+.boss-tab{background:#101b27;border:1px solid rgba(220,168,82,.18);border-radius:999px;color:#e8d9bf;padding:8px 16px;font-size:13px;line-height:1.1;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease;}
+.boss-tab:hover{background:#16232f;color:#fff3df;}
+.boss-tab:focus-visible{outline:2px solid rgba(220,168,82,.6);outline-offset:2px;}
+.boss-tab.is-active{background:linear-gradient(180deg,rgba(220,168,82,.3),rgba(220,168,82,.14));border-color:rgba(220,168,82,.55);color:#fff6e6;font-weight:600;}
+.boss-tabpanel{display:none;min-width:0;}
+.boss-tabpanel.is-active{display:block;}
+.boss-tabs--sub{gap:14px;}
+.boss-tabs--sub .boss-tabs__nav{border-bottom-style:dashed;padding-bottom:8px;gap:6px;}
+.boss-tabs--sub .boss-tab{padding:6px 13px;font-size:12px;}
+.boss-muted{color:#d7c3a1;font-size:12px;}
+.boss-check{flex-wrap:wrap;}
+.boss-check__hint{flex-basis:100%;}
+
 @media (max-width:1280px){
   .boss-runtime-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .boss-config-grid,.boss-config-columns{grid-template-columns:1fr;}
@@ -59,4 +76,5 @@
 
 @media (max-width:980px){
   .boss-top-grid,.boss-bottom-grid,.boss-action-grid,.boss-stats-grid,.boss-runtime-grid{grid-template-columns:1fr;}
+  .boss-tabs__nav{overflow-x:auto;flex-wrap:nowrap;}
 }
