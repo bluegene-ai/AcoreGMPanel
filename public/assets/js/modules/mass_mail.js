@@ -136,6 +136,19 @@
     });
   }
 
+  /**
+   * "群发"提交链路跨越了两个作用域：绑定事件的 bindMassSend()，以及位于模块
+   * 作用域的 buildSummary() / summarizeItems() / actuallySend()。
+   *
+   * 这三个函数以前直接读取 bindMassSend() 内用 const/let 声明的东西，而模块
+   * 作用域看不到它们 —— 点击"群发"时抛 ReferenceError。因为提交处理器是 async
+   * 的，异常只会变成一条没人处理的 Promise 拒绝，浏览器不显示任何提示：按钮
+   * 看起来完全失效。共享状态统一提升到这里。
+   */
+  let recipientsCountEl = null;   // #mmRecipientsCount —— buildSummary() 用它显示在线人数
+  let confirmItemsMirror = '';    // 物品编辑器同步过来的"名称 ×数量"摘要，供 summarizeItems() 使用
+  let previewRecipients = null;   // bindMassSend() 注入的 refreshRecipients()，发送完成后重新统计收件人
+
   function bindMassSend(){ const f=qs('#massSendForm'); if(!f) return; const actionSel=qs('#mmAction',f); const targetSel=qs('#mmTargetType',f); const goldInput=qs('#goldAmount',f); const preview=qs('#goldPreview',f);
     actionSel.addEventListener('change',()=> updateCond()); targetSel.addEventListener('change',()=> updateCond());
   if(goldInput){ goldInput.addEventListener('input',()=>{ const v=parseInt(goldInput.value||'0',10); preview.textContent=v? formatGold(v):translate('send.gold_preview_placeholder','—'); }); }
@@ -144,12 +157,6 @@
     // 同时按 ID 解析物品名（world 库 / DBC），并在行内提示重复与缺失
     let syncItemsToHidden = null;
     let itemsEditorApi = null;
-
-    /**
-     * 确认弹窗里用"物品名 ×数量"来展示，比一行裸 ID 更容易核对。
-     * 由物品编辑器的 updateSummary() 实时同步过来。
-     */
-    let confirmItemsMirror = '';
 
     (function initItemsEditor(){
       const editor = qs('#mmItemsEditor', f);
@@ -418,7 +425,7 @@
     })();
 
     // 收件人预览：在线 = 实时查询人数；自定义 = 本地按行计数 + 服务端确认
-    const recipientsCountEl = qs('#mmRecipientsCount');
+    recipientsCountEl = qs('#mmRecipientsCount'); // 提升到模块作用域，buildSummary() 也要读
     const recipientsDetailEl = qs('#mmRecipientsDetail');
     const recipientsRefreshBtn = qs('#mmRecipientsRefresh');
     const customListInput = qs('#mmCustomList', f);
@@ -486,6 +493,8 @@
       }
       return count;
     }
+    // actuallySend() 位于模块作用域，无法直接引用这里的 refreshRecipients
+    previewRecipients = refreshRecipients;
 
     function updateCond(){
       const action=actionSel.value;
@@ -660,7 +669,7 @@
     const message = (res && res.message) || translate('feedback.done','Done');
     toast(message, ok ? 'success' : 'error');
     refreshLogs();
-    refreshRecipients({ authoritative: true });
+    if(typeof previewRecipients === 'function'){ previewRecipients({ authoritative: true }); }
   }
 
   function disableBtn(sel,dis,text){ const b=qs(sel); if(!b) return; if(text){ if(!b.dataset.orig) b.dataset.orig=b.textContent; if(dis) b.textContent=text; }
