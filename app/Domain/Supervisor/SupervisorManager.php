@@ -6,12 +6,22 @@
  *   - SupervisorManager
  * Functions:
  *   - __construct()
+ *   - enabled()
+ *   - isValidInstance()
+ *   - instanceId()
+ *   - instanceLabel()
+ *   - instances()
+ *   - summaries()
  *   - paths()
  *   - status()
  *   - logTail()
  *   - dispatch()
  *   - startSupervisor()
  *   - isControlAllowed()
+ *   - instanceDefinitions()
+ *   - effectiveConfig()
+ *   - labelFor()
+ *   - summaryTone()
  *   - resolveDirectory()
  *   - decodeStatus()
  *   - normalizeService()
@@ -39,6 +49,9 @@ final class SupervisorManager
     public const ACTION_PING = 'ping';
     public const ACTION_SHUTDOWN = 'shutdown';
 
+    /** Id of the single instance described by the flat config keys (today's behaviour). */
+    public const DEFAULT_INSTANCE = 'default';
+
     private const SERVICE_ACTIONS = [
         self::ACTION_START,
         self::ACTION_STOP,
@@ -49,15 +62,55 @@ final class SupervisorManager
 
     private const TARGETS = ['all', 'worldserver', 'authserver'];
 
-    /** @var array<string,mixed> */
+    /**
+     * Keys that may be overridden per instance (everything else in the config file is global).
+     */
+    private const INSTANCE_KEYS = [
+        'enabled',
+        'label',
+        'dir',
+        'exe',
+        'config_file',
+        'status_file',
+        'control_file',
+        'log_file',
+        'status_stale_seconds',
+        'log_tail_lines',
+        'poll_seconds',
+        'allow_start',
+        'start_task_name',
+        'schtasks_path',
+    ];
+
+    /** @var array<string,mixed> whole config file: flat keys = defaults, "instances" = extra instances */
+    private array $root;
+
+    private string $instanceId;
+
+    /** @var array<string,mixed> effective config of the selected instance */
     private array $config;
 
     private ?string $resolvedDir = null;
 
-    public function __construct()
+    /**
+     * One manager instance represents ONE supervisor instance (one acore_supervisor.exe).
+     *
+     * @param string|null $instance instance id from the config ("instances" key); null/'' = the first
+     *                              configured instance; unknown ids are kept and reported by
+     *                              isValidInstance() so a command is never sent to the wrong realm.
+     * @param array<string,mixed>|null $config inject a config array instead of Config::get('supervisor')
+     */
+    public function __construct(?string $instance = null, ?array $config = null)
     {
-        $config = Config::get('supervisor', []);
-        $this->config = is_array($config) ? $config : [];
+        $root = $config ?? Config::get('supervisor', []);
+        $this->root = is_array($root) ? $root : [];
+
+        $definitions = $this->instanceDefinitions();
+        $requested = trim((string) $instance);
+        $this->instanceId = $requested !== ''
+            ? $requested
+            : (string) (array_key_first($definitions) ?? self::DEFAULT_INSTANCE);
+        $this->config = $this->effectiveConfig($this->instanceId);
     }
 
     public function enabled(): bool
@@ -66,10 +119,206 @@ final class SupervisorManager
     }
 
     /**
+     * False when the requested instance id is not configured (the caller must refuse the request).
+     */
+    public function isValidInstance(): bool
+    {
+        return array_key_exists($this->instanceId, $this->instanceDefinitions());
+    }
+
+    public function instanceId(): string
+    {
+        return $this->instanceId;
+    }
+
+    public function instanceLabel(): string
+    {
+        return $this->labelFor($this->instanceId, $this->config);
+    }
+
+    /**
+     * Configured instances, in config order - enough for the page switcher.
+     *
+     * @return array<int,array{id:string,label:string,enabled:bool}>
+     */
+    public function instances(): array
+    {
+        $list = [];
+        foreach (array_keys($this->instanceDefinitions()) as $id) {
+            $id = (string) $id;
+            $config = $this->effectiveConfig($id);
+            $list[] = [
+                'id' => $id,
+                'label' => $this->labelFor($id, $config),
+                'enabled' => (bool) ($config['enabled'] ?? true),
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * Compact state of every configured instance (switcher badges). Each entry reads its own status
+     * file, so the page can show "which realm's supervisor is alive" at a glance.
+     *
+     * @return array<int,array{id:string,label:string,enabled:bool,running:bool,available:bool,reason:string,tone:string,services:array<string,string>}>
+     */
+    public function summaries(): array
+    {
+        $out = [];
+        foreach ($this->instances() as $entry) {
+            $other = new self($entry['id'], $this->root);
+            $state = $other->status();
+
+            $services = [];
+            foreach ((array) ($state['services'] ?? []) as $service) {
+                if (!is_array($service)) {
+                    continue;
+                }
+                $services[(string) ($service['name'] ?? '')] = (string) ($service['tone'] ?? 'muted');
+            }
+
+            $out[] = [
+                'id' => $entry['id'],
+                'label' => $entry['label'],
+                'enabled' => $entry['enabled'],
+                'running' => (bool) ($state['running'] ?? false),
+                'available' => (bool) ($state['available'] ?? false),
+                'reason' => (string) ($state['reason'] ?? ''),
+                'tone' => $this->summaryTone($state, $services),
+                'services' => $services,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string,mixed>|null overrides of the instance, or null when it is not configured
+     */
+    private function instanceOverrides(string $id): ?array
+    {
+        $definitions = $this->instanceDefinitions();
+
+        return array_key_exists($id, $definitions) ? $definitions[$id] : null;
+    }
+
+    /**
+     * Instance table from the config file.
+     *
+     * Without an "instances" key the whole file describes ONE instance (id "default") - exactly the
+     * behaviour before multi-instance support. With "instances", every entry is an instance and the
+     * flat keys act as defaults for all of them; an entry may be a plain string (the supervisor
+     * directory) as a shorthand.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function instanceDefinitions(): array
+    {
+        $declared = $this->root['instances'] ?? null;
+        if (!is_array($declared) || $declared === []) {
+            return [self::DEFAULT_INSTANCE => []];
+        }
+
+        $definitions = [];
+        foreach ($declared as $id => $overrides) {
+            $id = trim((string) $id);
+            if ($id === '') {
+                continue;
+            }
+            if (is_string($overrides)) {
+                $overrides = ['dir' => $overrides];
+            }
+            $definitions[$id] = is_array($overrides) ? $overrides : [];
+        }
+
+        return $definitions === [] ? [self::DEFAULT_INSTANCE => []] : $definitions;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function effectiveConfig(string $id): array
+    {
+        $defaults = [];
+        foreach (self::INSTANCE_KEYS as $key) {
+            if (array_key_exists($key, $this->root)) {
+                $defaults[$key] = $this->root[$key];
+            }
+        }
+
+        $overrides = $this->instanceOverrides($id) ?? [];
+
+        // An instance that declares its OWN directory derives exe/status/control/log from there: the
+        // flat file paths described the flat instance's directory and must not leak into it (otherwise
+        // every instance would read and write the same status/command files). A file path given
+        // inside the instance entry still wins.
+        $ownDir = trim((string) ($overrides['dir'] ?? ''));
+        if ($id !== self::DEFAULT_INSTANCE && $ownDir !== '') {
+            foreach (['exe', 'config_file', 'status_file', 'control_file', 'log_file'] as $key) {
+                if (!array_key_exists($key, $overrides)) {
+                    unset($defaults[$key]);
+                }
+            }
+        }
+
+        $config = array_replace($defaults, $overrides);
+        $config['id'] = $id;
+
+        return $config;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function labelFor(string $id, array $config): string
+    {
+        $label = trim((string) ($config['label'] ?? ''));
+
+        return $label !== '' ? $label : $id;
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @param array<string,string> $services
+     */
+    private function summaryTone(array $state, array $services): string
+    {
+        if (!($state['enabled'] ?? true)) {
+            return 'muted';
+        }
+        if (!($state['running'] ?? false)) {
+            return 'error';
+        }
+
+        $worst = 'ok';
+        $rank = ['ok' => 0, 'muted' => 1, 'warn' => 2, 'error' => 3];
+        foreach ($services as $tone) {
+            if (($rank[$tone] ?? 0) > ($rank[$worst] ?? 0)) {
+                $worst = $tone;
+            }
+        }
+
+        return $worst;
+    }
+
+    /**
      * @return array{dir:string,exe:string,config_file:string,status_file:string,control_file:string,log_file:string}
      */
     public function paths(): array
     {
+        // an id that is not configured must not resolve to another instance's files
+        if (!$this->isValidInstance()) {
+            return [
+                'dir' => '',
+                'exe' => '',
+                'config_file' => '',
+                'status_file' => '',
+                'control_file' => '',
+                'log_file' => '',
+            ];
+        }
+
         $dir = $this->resolveDirectory();
 
         $pick = static function (string $configured, string $dir, string $relative): string {
@@ -130,6 +379,10 @@ final class SupervisorManager
 
         return [
             'enabled' => $enabled,
+            'instance' => [
+                'id' => $this->instanceId,
+                'label' => $this->instanceLabel(),
+            ],
             'available' => $available,
             'running' => $running,
             'reason' => $reason,
@@ -360,11 +613,18 @@ final class SupervisorManager
         $panelRoot = dirname(__DIR__, 3);
         $serverRoot = dirname(__DIR__, 6);
 
-        $candidates = [
-            $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor',
-            dirname($panelRoot, 2) . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor',
-            $panelRoot . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor',
-        ];
+        $candidates = [];
+
+        // a declared instance that does not spell out its directory: try the conventional
+        // per-instance folders first (release/supervisor-<id>, release/<id>/supervisor)
+        if ($this->instanceId !== self::DEFAULT_INSTANCE) {
+            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor-' . $this->instanceId;
+            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor';
+        }
+
+        $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+        $candidates[] = dirname($panelRoot, 2) . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+        $candidates[] = $panelRoot . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
 
         $resolved = [];
         foreach ($candidates as $candidate) {

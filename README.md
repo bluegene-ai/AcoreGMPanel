@@ -104,12 +104,43 @@ AcoreGMPanel/
 | Items / Inventory | `/item-inventory` | Two search axes: per-character bag/bank/equipment reads, and item-to-owner lookup with stack reduction, bulk delete and bulk replace. The legacy `/bag`, `/item-ownership` and `/bag-query` URLs 301-redirect here. |
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
-| Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. |
+| Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. On a multi-realm machine the page gets an **instance switcher** (see below). |
 | Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event: live round state (via SOAP `.trivia api`), start / stop / pause / enable controls, pacing + answer-channel + label settings, question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
 
 ## Further Reading
 
 Additional focused guides live in the `docs/` directory and project root:
+
+### Several supervisors (one per realm)
+
+One `acore_supervisor.exe` supervises exactly one worldserver + one authserver, so a multi-realm
+machine runs one supervisor process per realm. List them in `config/supervisor.php` (or the
+untracked `config/generated/supervisor.php`); every other key in that file becomes the **default**
+for these entries:
+
+```php
+'instances' => [
+    // id => overrides; a plain string is shorthand for ['dir' => …]
+    'realm-a' => ['label' => 'Realm A', 'dir' => 'D:\AzerothCore\release\supervisor'],
+    'realm-b' => [
+        'label' => 'Realm B',
+        'dir' => 'D:\AzerothCore\release\supervisor-b',
+        'allow_start' => true,                  // one scheduled task per supervisor
+        'start_task_name' => 'AcoreSupervisorB',
+    ],
+    // the instance the flat keys above describe (auto-detected release/supervisor):
+    'default' => [],
+],
+```
+
+- Giving an instance its own `dir` makes it **derive** `exe / status_file / control_file / log_file`
+  from that directory instead of inheriting the flat file paths (otherwise two instances would read
+  and write the same status and command files).
+- The page renders a switcher (each button carries a state dot); switching sends `?instance=<id>` on
+  every API call and is reflected in the URL, so a refresh keeps the selection.
+- An **unlisted instance id is refused** by the APIs (404) rather than silently falling back to
+  another realm; the audit entry (`panel_audit`) records the instance.
+- Without `instances` (or with an empty array) nothing changes: one implicit instance `default`.
 
 
 

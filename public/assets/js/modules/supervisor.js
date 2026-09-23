@@ -1,8 +1,15 @@
 /**
  * File: public/assets/js/modules/supervisor.js
  * Purpose: Live state + start/stop/restart controls for acore_supervisor.exe.
+ *          One supervisor per realm: the switcher at the top selects which instance this page
+ *          talks to (?instance=<id> on every API call).
  * Functions:
  *   - boot()
+ *   - withInstance()
+ *   - updateInstanceUrl()
+ *   - setActiveInstance()
+ *   - renderInstances()
+ *   - switchInstance()
  *   - refreshStatus()
  *   - renderState()
  *   - renderService()
@@ -54,9 +61,76 @@ function boot(){
   const resultBox = svQs('#sv-result');
   const refreshBtn = svQs('#sv-refresh');
   const autoBox = svQs('#sv-autorefresh');
+  const instancesBox = svQs('#sv-instances');
   const statusUrl = config.statusUrl || '/supervisor/api/status';
   const logUrl = config.logUrl || '/supervisor/api/log';
   const commandUrl = config.commandUrl || '/supervisor/api/command';
+
+  // ---- which supervisor instance this page talks to (one acore_supervisor.exe per realm) --------
+  let currentInstance = String(config.instance || '');
+
+  function withInstance(url, params){
+    const query = new URLSearchParams(params || {});
+    if(currentInstance !== '') query.set('instance', currentInstance);
+    const suffix = query.toString();
+    return suffix === '' ? url : `${url}${url.includes('?') ? '&' : '?'}${suffix}`;
+  }
+
+  function updateInstanceUrl(id){
+    if(!window.history || typeof window.history.replaceState !== 'function') return;
+    try{
+      const url = new URL(window.location.href);
+      if(id === '') url.searchParams.delete('instance');
+      else url.searchParams.set('instance', id);
+      window.history.replaceState({}, '', url.toString());
+    }catch(error){ /* ignore */ }
+  }
+
+  function setActiveInstance(id){
+    svQsa('[data-sv-instance]').forEach((node) => {
+      const active = node.dataset.svInstance === id;
+      node.classList.toggle('sv-instance--active', active);
+      node.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+
+    const labelNode = svQs('[data-sv-field="panel_instance"]');
+    if(labelNode){
+      const entry = (config.instances || []).find((item) => item.id === id);
+      labelNode.textContent = entry && entry.label ? entry.label : id;
+    }
+  }
+
+  function renderInstances(list){
+    if(!Array.isArray(list) || list.length === 0) return;
+
+    // keep the labels/tone of the switcher in sync with the polled state
+    config.instances = list;
+    list.forEach((item) => {
+      const node = svQs(`[data-sv-instance="${String(item.id).replace(/"/g, '')}"]`, instancesBox || document);
+      if(!node) return;
+      const dot = svQs('[data-sv-instance-field="dot"]', node);
+      if(dot){
+        dot.className = 'sv-badge sv-badge--' + String(item.tone || 'muted').replace(/[^a-z]/g, '');
+      }
+      const stateNode = svQs('[data-sv-instance-field="state"]', node);
+      if(stateNode){
+        stateNode.textContent = item.running
+          ? t('supervisor.running', 'supervisor running')
+          : t('supervisor.not_running', 'supervisor is not running');
+      }
+    });
+    setActiveInstance(currentInstance);
+  }
+
+  async function switchInstance(id){
+    if(id === currentInstance) return;
+    currentInstance = id;
+    setActiveInstance(id);
+    updateInstanceUrl(id);
+    clearResult();
+    showResult(t('messages.switching', 'loading :instance…').replace(':instance', id), 'info');
+    await refreshStatus(true);
+  }
 
   let pollTimer = null;
   let busy = false;
@@ -161,10 +235,11 @@ function boot(){
 
   async function refreshStatus(withLog){
     try{
-      const query = withLog ? '?with_log=1&lines=200' : '';
-      const res = await PanelApi.get(statusUrl + query);
+      const params = withLog ? { with_log: 1, lines: 200 } : {};
+      const res = await PanelApi.get(withInstance(statusUrl, params));
       if(res && res.success){
         renderState(res.state);
+        if(Array.isArray(res.instances)) renderInstances(res.instances);
         if(withLog && Array.isArray(res.log)){
           if(logBox) logBox.textContent = res.log.length ? res.log.join('\n') : t('log.empty', 'no log output yet');
         }
@@ -178,7 +253,7 @@ function boot(){
 
   async function refreshLog(){
     try{
-      const res = await PanelApi.get(logUrl + '?lines=200');
+      const res = await PanelApi.get(withInstance(logUrl, { lines: 200 }));
       if(res && res.success && Array.isArray(res.lines) && logBox){
         logBox.textContent = res.lines.length ? res.lines.join('\n') : t('log.empty', 'no log output yet');
       }
@@ -190,10 +265,11 @@ function boot(){
     while(Date.now() < deadline){
       await new Promise((resolve) => setTimeout(resolve, 700));
       try{
-        const res = await PanelApi.get(statusUrl);
+        const res = await PanelApi.get(withInstance(statusUrl));
         const last = res && res.state && res.state.supervisor ? res.state.supervisor.last_command : null;
         if(last && last.id === id){
           renderState(res.state);
+          if(Array.isArray(res.instances)) renderInstances(res.instances);
           return last;
         }
       }catch(error){ /* keep polling */ }
@@ -211,7 +287,9 @@ function boot(){
     showResult(t('messages.sending', 'sending command…'), 'info');
 
     try{
-      const res = await PanelApi.post(commandUrl, { action, target });
+      const payload = { action, target };
+      if(currentInstance !== '') payload.instance = currentInstance;
+      const res = await PanelApi.post(commandUrl, payload);
       if(!res || !res.success){
         showResult((res && res.message) || t('errors.command_failed', 'command failed'), 'error');
         return;
@@ -240,6 +318,13 @@ function boot(){
 
   function bind(){
     document.addEventListener('click', (event) => {
+      const instanceBtn = event.target.closest('[data-sv-instance]');
+      if(instanceBtn){
+        event.preventDefault();
+        switchInstance(instanceBtn.dataset.svInstance || '');
+        return;
+      }
+
       const btn = event.target.closest('[data-sv-action]');
       if(!btn || !servicesBox) return;
       event.preventDefault();
@@ -272,6 +357,7 @@ function boot(){
   }
 
   bind();
+  setActiveInstance(currentInstance);
   refreshStatus(true);
 }
 

@@ -104,7 +104,32 @@ AcoreGMPanel/
 | 物品/库存 | `/item-inventory` | 双轴查询：按角色看背包/银行/装备，按物品定位所有拥有者；支持减少堆叠、批量删除与替换。旧地址 `/bag`、`/item-ownership`、`/bag-query` 会 301 重定向到此页。 |
 | SmartAI 向导 | `/smart-ai` | 分步生成 `smart_scripts` SQL 并支持导出。 |
 | SOAP 向导 | `/soap` | 浏览 SOAP 命令、填写动态表单、预览并安全执行。 |
-| 守护管理 | `/supervisor` | 查看并控制 `acore_supervisor.exe`（worldserver / authserver 守护程序）：运行状态、世界循环心跳、登录服探活、重启次数，以及按服务启停/重启。 |
+| 守护管理 | `/supervisor` | 查看并控制 `acore_supervisor.exe`（worldserver / authserver 守护程序）：运行状态、世界循环心跳、登录服探活、重启次数，以及按服务启停/重启。多区部署时页面顶部会出现**实例切换**（见下）。 |
+
+### 多实例（每个区一个守护程序）
+
+一个 `acore_supervisor.exe` 只守护**一个** worldserver + **一个** authserver，因此多区机器上每个区各跑一个守护进程。
+在 `config/supervisor.php`（或 `config/generated/supervisor.php`）里用 `instances` 列出它们；上面的所有键都是这些实例的**默认值**：
+
+```php
+'instances' => [
+    // id => 覆盖项；字符串是 ['dir' => …] 的简写
+    'realm-a' => ['label' => '一区', 'dir' => 'D:\AzerothCore\release\supervisor'],
+    'realm-b' => [
+        'label' => '二区',
+        'dir' => 'D:\AzerothCore\release\supervisor-b',
+        'allow_start' => true,                 // 每个实例一条计划任务
+        'start_task_name' => 'AcoreSupervisorB',
+    ],
+    // 由上面那些扁平键描述的那个实例（自动探测 release/supervisor）：
+    'default' => [],
+],
+```
+
+- 给实例写了 `dir` 就会**从该目录推导** `exe / status_file / control_file / log_file`，不会再继承扁平的文件路径（否则多个实例会读写同一份状态/指令文件）。
+- 页面顶部渲染实例切换按钮（每个按钮带运行状态点），切换后所有 API 都带 `?instance=<id>`；URL 也会同步，刷新后仍是同一个实例。
+- **未配置的实例 id 会被 API 拒绝**（404），不会静默落到别的区；审计日志（`panel_audit`）会记录 `instance`。
+- 不写 `instances`（或空数组）时行为与以前完全一致：单一隐式实例 `default`。
 
 ## 延伸阅读
 

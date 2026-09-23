@@ -9,6 +9,9 @@ $services = is_array($state['services'] ?? null) ? $state['services'] : [];
 $supervisor = is_array($state['supervisor'] ?? null) ? $state['supervisor'] : [];
 $paths = is_array($state['paths'] ?? null) ? $state['paths'] : [];
 $logLines = is_array($log_lines ?? null) ? $log_lines : [];
+$instances = is_array($instances ?? null) ? $instances : [];
+$currentInstance = (string) ($current_instance ?? ($state['instance']['id'] ?? 'default'));
+$currentInstanceLabel = (string) ($state['instance']['label'] ?? $currentInstance);
 
 $capabilities = $__pageCapabilities ?? [
     'view' => $__can('supervisor.view'),
@@ -40,6 +43,30 @@ $formatDuration = static function (?int $seconds): string {
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
+
+<?php if (count($instances) > 1): ?>
+<div class="sv-instances" id="sv-instances" role="tablist" aria-label="<?= htmlspecialchars(__('app.supervisor.instances.title')) ?>">
+  <?php foreach ($instances as $instance): ?>
+    <?php
+      $instanceId = (string) ($instance['id'] ?? '');
+      $instanceTone = (string) ($instance['tone'] ?? 'muted');
+      $instanceRunning = (bool) ($instance['running'] ?? false);
+    ?>
+    <button type="button" role="tab"
+            class="sv-instance<?= $instanceId === $currentInstance ? ' sv-instance--active' : '' ?>"
+            data-sv-instance="<?= htmlspecialchars($instanceId, ENT_QUOTES, 'UTF-8') ?>"
+            aria-selected="<?= $instanceId === $currentInstance ? 'true' : 'false' ?>">
+      <span class="<?= $toneClass($instanceTone) ?>" data-sv-instance-field="dot">&nbsp;</span>
+      <span class="sv-instance__label"><?= htmlspecialchars((string) ($instance['label'] ?? $instanceId)) ?></span>
+      <span class="sv-muted sv-small" data-sv-instance-field="state">
+        <?= htmlspecialchars($instanceRunning
+            ? __('app.supervisor.supervisor.running')
+            : __('app.supervisor.supervisor.not_running')) ?>
+      </span>
+    </button>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
 <div class="sv-toolbar">
   <div class="sv-toolbar__status">
@@ -184,6 +211,8 @@ $formatDuration = static function (?int $seconds): string {
     <h3><?= htmlspecialchars(__('app.supervisor.meta.title')) ?></h3>
   </header>
   <dl class="sv-meta">
+    <div><dt><?= htmlspecialchars(__('app.supervisor.meta.panel_instance')) ?></dt>
+      <dd data-sv-field="panel_instance"><?= htmlspecialchars($currentInstanceLabel) ?></dd></div>
     <div><dt><?= htmlspecialchars(__('app.supervisor.meta.instance')) ?></dt>
       <dd><?= htmlspecialchars((string) ($supervisor['instance'] ?? '--')) ?></dd></div>
     <div><dt><?= htmlspecialchars(__('app.supervisor.meta.version')) ?></dt>
@@ -218,4 +247,13 @@ $formatDuration = static function (?int $seconds): string {
   'commandUrl' => '/supervisor/api/command',
   'pollSeconds' => max(0, (int) ($state['poll_seconds'] ?? 5)),
   'canControl' => (bool) ($capabilities['control'] ?? false),
+  'instance' => $currentInstance,
+  'instanceLabel' => $currentInstanceLabel,
+  'hasInstances' => count($instances) > 1,
+  'instances' => array_map(static fn (array $instance): array => [
+      'id' => (string) ($instance['id'] ?? ''),
+      'label' => (string) ($instance['label'] ?? ''),
+      'running' => (bool) ($instance['running'] ?? false),
+      'tone' => (string) ($instance['tone'] ?? 'muted'),
+  ], $instances),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>

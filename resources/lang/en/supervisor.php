@@ -98,6 +98,7 @@ return [
 
     'meta' => [
         'title' => 'Supervisor details',
+        'panel_instance' => 'Panel instance',
         'instance' => 'Instance',
         'version' => 'Version',
         'pid' => 'PID',
@@ -113,10 +114,15 @@ return [
         'supervisor_starting' => 'Requested supervisor start through the scheduled task :task - refresh in a moment.',
     ],
 
+    'instances' => [
+        'title' => 'Supervisor instances (one per realm)',
+    ],
+
     'errors' => [
         'disabled' => 'Supervisor management is disabled.',
         'unknown_action' => 'Unknown action: :action',
         'unknown_target' => 'Unknown target: :target',
+        'unknown_instance' => 'Unknown supervisor instance: :instance (not listed under "instances" in config/supervisor.php)',
         'not_running' => 'The supervisor is not running, the command cannot be delivered.',
         'control_unavailable' => 'The command directory is not writable, the command cannot be delivered.',
         'write_failed' => 'Cannot write the command file: :message',
@@ -154,6 +160,7 @@ return [
                 ],
                 'messages' => [
                     'sending' => 'sending command…',
+                    'switching' => 'loading :instance …',
                     'command_sent' => 'command sent',
                     'timeout' => 'no confirmation from the supervisor yet - refresh in a moment.',
                 ],

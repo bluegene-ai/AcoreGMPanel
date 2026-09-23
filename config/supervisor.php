@@ -51,4 +51,33 @@ return [
 
     // Optional: path to schtasks.exe when it is not on PATH.
     'schtasks_path' => '',
+
+    // ---------------------------------------------------------------------------------------------
+    // MORE THAN ONE SUPERVISOR (one per realm)
+    // ---------------------------------------------------------------------------------------------
+    // acore_supervisor.exe supervises exactly one worldserver + one authserver, so a multi-realm
+    // machine runs one supervisor process per realm. List them here; every key above acts as the
+    // DEFAULT for the entries below, and an entry only overrides what differs.
+    //
+    //   'instances' => [
+    //       // id => overrides. A plain string is shorthand for ['dir' => <string>]
+    //       'realm-a' => [
+    //           'label' => 'Realm A',
+    //           'dir' => 'D:\AzerothCore\release\supervisor',
+    //       ],
+    //       'realm-b' => [
+    //           'label' => 'Realm B',
+    //           'dir' => 'D:\AzerothCore\release\supervisor-b',
+    //           // allow_start/start_task_name are per instance too: one scheduled task per supervisor
+    //           'allow_start' => true,
+    //           'start_task_name' => 'AcoreSupervisorB',
+    //       ],
+    //       // the instance described by the keys above (auto-detected release/supervisor):
+    //       'default' => [],
+    //   ],
+    //
+    // Without 'instances' (or with an empty list) the page keeps working exactly as before: a single
+    // instance named "default". An id that is not listed is refused by the APIs instead of being
+    // silently mapped to another realm.
+    'instances' => [],
 ];

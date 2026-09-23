@@ -98,6 +98,7 @@ return [
 
     'meta' => [
         'title' => '守护程序信息',
+        'panel_instance' => '面板实例',
         'instance' => '实例名',
         'version' => '版本',
         'pid' => '进程号',
@@ -113,10 +114,15 @@ return [
         'supervisor_starting' => '已请求启动守护程序（计划任务 :task），请稍后刷新。',
     ],
 
+    'instances' => [
+        'title' => '守护实例（每个实例对应一个区）',
+    ],
+
     'errors' => [
         'disabled' => '守护管理未启用。',
         'unknown_action' => '未知指令：:action',
         'unknown_target' => '未知目标：:target',
+        'unknown_instance' => '未知守护实例：:instance（未在 config/supervisor.php 的 instances 里配置）',
         'not_running' => '守护程序未运行，无法下发指令。',
         'control_unavailable' => '指令文件目录不可写，无法下发指令。',
         'write_failed' => '写入指令失败：:message',
@@ -156,6 +162,8 @@ return [
                     'sending' => '正在下发指令…',
                     'command_sent' => '指令已下发',
                     'timeout' => '暂未收到守护程序确认，稍后刷新查看。',
+                    'switching' => '正在加载 :instance …',
+                    'unknown_instance' => '未知守护实例：:instance',
                 ],
                 'errors' => [
                     'refresh_failed' => '读取守护状态失败',
