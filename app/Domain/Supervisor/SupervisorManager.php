@@ -645,33 +645,25 @@ final class SupervisorManager
         // .../AGMP/app/Domain/Supervisor -> AGMP (3) -> .../Server (6)
         $panelRoot = rtrim(dirname(__DIR__, 3), "\\/");
         $serverRoot = rtrim(dirname(__DIR__, 6), "\\/");
+        $named = $this->instanceId !== self::DEFAULT_INSTANCE;
 
         $candidates = [];
 
         // 1) explicit override, highest priority: an env var is the only knob that does not need a
-        //    file change on a production host (httpd SetEnv / .env / scheduled task)
-        $envDir = $this->envDirectory();
-        if ($envDir !== '') {
-            $candidates[] = $envDir;
+        //    file change on a production host (httpd SetEnv / .env / scheduled task). It is a
+        //    single-instance knob on purpose: applying it to a named instance would point every
+        //    named instance at the same folder.
+        if (!$named) {
+            $envDir = $this->envDirectory();
+            if ($envDir !== '') {
+                $candidates[] = $envDir;
+            }
         }
 
-        // 2) a declared instance that does not spell out its directory: conventional per-instance
-        //    folders first (release/supervisor-<id>, release/<id>/supervisor)
-        if ($this->instanceId !== self::DEFAULT_INSTANCE) {
-            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor-' . $this->instanceId;
-            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor';
-        }
-
-        $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-        $candidates[] = dirname($panelRoot, 2) . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-        $candidates[] = $panelRoot . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-
-        // 3) walk every ancestor of the panel instead of trusting one fixed depth: the panel may be
-        //    deployed deeper (an extra folder), shallower (web root = <server>/web/WWW) or with the
-        //    supervisor next to it rather than under release/. <ancestor>/release/supervisor and
-        //    <ancestor>/supervisor cover both the documented layout and the ad-hoc ones ("unzipped
-        //    it somewhere under the server root") that used to need a hand-written
-        //    config/generated/supervisor.php.
+        // 2) the roots to probe: the server root, the panel's parents and every ancestor of the
+        //    panel. Walking instead of trusting one fixed depth keeps a panel deployed deeper (an
+        //    extra folder) or shallower (web root = <server>/web/WWW) working.
+        $roots = [$serverRoot, rtrim(dirname($panelRoot, 2), "\\/"), $panelRoot];
         $ancestor = $panelRoot;
         for ($depth = 0; $depth < 8; $depth++) {
             $parent = rtrim(dirname($ancestor), "\\/");
@@ -679,9 +671,28 @@ final class SupervisorManager
                 break;
             }
 
-            $candidates[] = $parent . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-            $candidates[] = $parent . DIRECTORY_SEPARATOR . 'supervisor';
+            $roots[] = $parent;
             $ancestor = $parent;
+        }
+
+        // 3) which folder names count as "a supervisor" under those roots.
+        //    A NAMED instance only gets its own conventions: on a multi-realm machine the generic
+        //    release/supervisor folder belongs to ANOTHER realm, and binding this instance to it
+        //    would show - and control - the wrong realm's supervisor. That is the same reason an
+        //    unknown instance id is refused instead of being mapped to another realm; a forgotten
+        //    dir must end in "directory not found" plus the diagnostics block, never in a silently
+        //    wrong realm.
+        $conventions = $named
+            ? ['supervisor-' . $this->instanceId, $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor']
+            : ['release' . DIRECTORY_SEPARATOR . 'supervisor', 'supervisor'];
+
+        foreach (array_unique($roots) as $root) {
+            if ($root === '' || $root === '.') {
+                continue;
+            }
+            foreach ($conventions as $convention) {
+                $candidates[] = $root . DIRECTORY_SEPARATOR . $convention;
+            }
         }
 
         // the configured override is checked last but is never dropped from the report
