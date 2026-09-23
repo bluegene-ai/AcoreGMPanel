@@ -76,9 +76,9 @@ namespace Acme\Panel\Domain\CharacterBoost {
             ];
         }
 
-        public function listRedeemCodesForRealm(int $realmId, ?int $templateId, ?bool $unusedOnly, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
+        public function listRedeemCodesForRealm(int $realmId, ?int $templateId, ?string $status, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
         {
-            self::$calls[] = ['method' => 'listRedeemCodesForRealm', 'args' => [$realmId, $templateId, $unusedOnly, $page, $perPage, $sort, $dir]];
+            self::$calls[] = ['method' => 'listRedeemCodesForRealm', 'args' => [$realmId, $templateId, $status, $page, $perPage, $sort, $dir]];
             return [
                 'page' => $page,
                 'per_page' => $perPage,
@@ -312,6 +312,42 @@ namespace {
     assertTrue(($list['body']['success'] ?? false) === true, 'list success');
     assertTrue((int) (($list['body']['payload']['list']['page'] ?? 0)) === 2, 'list uses normalized page');
     $checks[] = ['name' => 'boost.codes.list_success', 'status' => 'passed', 'detail' => $list['body']];
+
+    // 使用状态筛选必须原样透传到仓储（曾经的缺陷：used 被压成 unused_only=0 后等同于"全部"）
+    BoostTemplateRepository::$calls = [];
+    $listUsed = responsePayload($codesController->apiList(makeRequest('/character-boost/api/redeem-codes/list', [
+        'template_id' => 'all',
+        'status' => 'used',
+    ])));
+    $listUsedStatus = BoostTemplateRepository::$calls[0]['args'][2] ?? null;
+    assertTrue(($listUsed['body']['success'] ?? false) === true, 'list with status=used success');
+    assertTrue($listUsedStatus === 'used', 'status=used passed to repository');
+    assertTrue((string) ($listUsed['body']['payload']['status'] ?? '') === 'used', 'status=used echoed back');
+    $checks[] = ['name' => 'boost.codes.list_status_used', 'status' => 'passed', 'detail' => ['repo_status' => $listUsedStatus]];
+
+    BoostTemplateRepository::$calls = [];
+    $listUnused = responsePayload($codesController->apiList(makeRequest('/character-boost/api/redeem-codes/list', [
+        'template_id' => 'all',
+        'status' => 'unused',
+    ])));
+    assertTrue((BoostTemplateRepository::$calls[0]['args'][2] ?? null) === 'unused', 'status=unused passed to repository');
+    $checks[] = ['name' => 'boost.codes.list_status_unused', 'status' => 'passed', 'detail' => ['repo_status' => 'unused']];
+
+    BoostTemplateRepository::$calls = [];
+    $codesController->apiList(makeRequest('/character-boost/api/redeem-codes/list', [
+        'template_id' => 'all',
+        'status' => 'bogus',
+    ]));
+    assertTrue((BoostTemplateRepository::$calls[0]['args'][2] ?? null) === 'all', 'unknown status falls back to all');
+    $checks[] = ['name' => 'boost.codes.list_status_invalid', 'status' => 'passed', 'detail' => ['repo_status' => 'all']];
+
+    BoostTemplateRepository::$calls = [];
+    $codesController->apiList(makeRequest('/character-boost/api/redeem-codes/list', [
+        'template_id' => 'all',
+        'unused_only' => '1',
+    ]));
+    assertTrue((BoostTemplateRepository::$calls[0]['args'][2] ?? null) === 'unused', 'legacy unused_only=1 still maps to unused');
+    $checks[] = ['name' => 'boost.codes.list_status_legacy_unused_only', 'status' => 'passed', 'detail' => ['repo_status' => 'unused']];
 
     $missingDelete = responsePayload($codesController->apiDeleteUnused(makeRequest('/character-boost/api/redeem-codes/delete-unused', [
         'id' => '0',

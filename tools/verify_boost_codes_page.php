@@ -240,6 +240,14 @@ if (is_file($jsPath)) {
         $failures
     );
 
+    // 状态下拉必须把三态 status 上送（unused_only 仅为旧接口兼容），否则"已使用"等价于"全部"
+    expect(
+        str_contains($jsSource, "d2.set('status', status)"),
+        '管理筛选按状态三态上送 status',
+        $checks,
+        $failures
+    );
+
     // 结果区收起时生成卡片要占满整行（否则右侧留空列）
     expect(
         str_contains($jsSource, 'cb-codes__top--single') && str_contains($css, '.cb-codes__top--single'),

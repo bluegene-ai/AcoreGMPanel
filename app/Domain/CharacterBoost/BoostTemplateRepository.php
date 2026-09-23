@@ -400,12 +400,19 @@ class BoostTemplateRepository extends MultiServerRepository
         ];
     }
 
-    public function listRedeemCodesForRealm(int $realmId, ?int $templateId, ?bool $unusedOnly, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
+    /**
+     * @param string|null $status 使用状态筛选：all | unused | used（其余值按 all 处理）
+     */
+    public function listRedeemCodesForRealm(int $realmId, ?int $templateId, ?string $status, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
     {
         $this->ensureSchema();
 
         $realmId = max(1, (int) $realmId);
         $templateId = $templateId !== null ? (int) $templateId : null;
+        $status = strtolower(trim((string) $status));
+        if (!in_array($status, ['all', 'unused', 'used'], true)) {
+            $status = 'all';
+        }
         $page = max(1, (int) $page);
         $perPage = max(1, min(200, (int) $perPage));
         $offset = ($page - 1) * $perPage;
@@ -427,8 +434,10 @@ class BoostTemplateRepository extends MultiServerRepository
             $where .= ' AND rc.template_id = :tid';
             $params[':tid'] = $templateId;
         }
-        if ($unusedOnly === true) {
+        if ($status === 'unused') {
             $where .= ' AND rc.used_at IS NULL';
+        } elseif ($status === 'used') {
+            $where .= ' AND rc.used_at IS NOT NULL';
         }
 
         $cntSql = 'SELECT COUNT(*)

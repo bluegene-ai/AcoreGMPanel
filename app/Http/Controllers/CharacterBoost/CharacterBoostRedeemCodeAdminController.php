@@ -196,7 +196,7 @@ class CharacterBoostRedeemCodeAdminController extends Controller
             $list = $repo->listRedeemCodesForRealm(
                 $state['realm_id'],
                 $state['template_id'],
-                $state['unused_only'] ? true : null,
+                $state['status'],
                 $state['page'],
                 $state['per_page'],
                 $state['sort'],
@@ -211,7 +211,8 @@ class CharacterBoostRedeemCodeAdminController extends Controller
             'payload' => [
                 'realm_id' => $state['realm_id'],
                 'template_id' => $state['template_id'],
-                'unused_only' => $state['unused_only'] ? 1 : 0,
+                'status' => $state['status'],
+                'unused_only' => $state['status'] === 'unused' ? 1 : 0,
                 'list' => $list,
             ],
         ]);
@@ -302,12 +303,26 @@ class CharacterBoostRedeemCodeAdminController extends Controller
         $state = $this->prepareRedeemCodeStatsState($request);
 
         return $state + [
-            'unused_only' => $request->bool('unused_only', false),
+            'status' => $this->normalizedRedeemCodeStatus($request),
             'sort' => $this->normalizedEnum($request, 'sort', ['id'], 'id'),
             'dir' => strtolower($this->normalizedDirection($request, 'dir', 'DESC')),
             'page' => $this->normalizedPage($request),
             'per_page' => $this->boundedInt($request, 'per_page', 50, 1, 200),
         ];
+    }
+
+    /**
+     * 使用状态筛选：all | unused | used。
+     * 旧客户端只发 unused_only 布尔，这里保留兼容回退（1 → unused，其余 → all）。
+     */
+    private function normalizedRedeemCodeStatus(Request $request): string
+    {
+        $status = strtolower($this->normalizedString($request, 'status'));
+        if (in_array($status, ['all', 'unused', 'used'], true)) {
+            return $status;
+        }
+
+        return $request->bool('unused_only', false) ? 'unused' : 'all';
     }
 
     private function normalizedNullableTemplateId(Request $request): ?int

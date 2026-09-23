@@ -166,7 +166,7 @@ include dirname(__DIR__) . '/components/page_header.php';
         </label>
       </div>
 
-      <!-- 仅"未使用"的开关保留为隐藏字段，实际由状态下拉控制 -->
+      <!-- 状态筛选以 status 三态为准；unused_only 复选框仅作旧接口兼容保留 -->
       <input type="checkbox" id="boostCodesManageUnusedOnly" name="unused_only" value="1" hidden>
     </form>
 

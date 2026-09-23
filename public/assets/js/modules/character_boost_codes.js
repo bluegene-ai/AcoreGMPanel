@@ -131,7 +131,7 @@
 
   const currentTemplateId = () => (selectTemplate ? String(selectTemplate.value || 'all') : 'all');
 
-  /** 状态下拉 → 后端仍是 unused_only 布尔 */
+  /** 状态下拉 → 三态 status（all/unused/used）；unused_only 仅作旧接口兼容 */
   const syncUnusedOnly = () => {
     const status = selectStatus ? String(selectStatus.value || 'all') : 'all';
     const unusedOnly = status === 'unused';
@@ -256,7 +256,7 @@
     if(!manageForm) return;
     const csrfToken = csrfFrom(manageForm);
     const tpl = currentTemplateId();
-    const { unusedOnly } = syncUnusedOnly();
+    const { status, unusedOnly } = syncUnusedOnly();
 
     updateSortUi();
 
@@ -281,6 +281,7 @@
     const d2 = new FormData();
     d2.set('_csrf', csrfToken);
     d2.set('template_id', tpl);
+    d2.set('status', status);
     d2.set('unused_only', unusedOnly ? '1' : '0');
     d2.set('page', String(managePage));
     d2.set('per_page', String(managePerPage));
