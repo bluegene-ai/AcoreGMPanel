@@ -266,6 +266,8 @@
       state.countdownAt = 0;
       setText('next', '—');
       setText('auto', '—');
+      setText('wait_reason', '—');
+      setText('online_min', '');
       return;
     }
 
@@ -329,6 +331,11 @@
       db: live.from_db || 0
     }, 'built-in ' + (live.builtin || 0) + ' | file ' + (live.custom || 0) + ' | db ' + (live.from_db || 0)));
     setText('online', String(live.online || 0));
+    // 脚本的未出题原因（在线人数不足 / 题库为空 / 已暂停 / 不在计划时段…），面板靠它解释"为什么一直空转"
+    setText('wait_reason', live.wait_reason_text || '—');
+    setText('online_min', typeof live.min_players_online === 'number'
+      ? tt('status.online_min', { min: live.min_players_online }, '')
+      : '');
     setText('rounds', String(live.rounds || 0));
     setText('sources', live.sources || '-');
     setText('labels', live.labels || '-');

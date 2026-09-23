@@ -75,6 +75,17 @@ if (!$liveAvailable) {
     $initialNext = __('app.trivia.status.next_in', ['seconds' => (string) (int) ($live['next_in'] ?? 0)]);
 }
 
+// 为什么没出题：脚本把原因写在 wait_reason_text 里（在线人数不足 / 题库为空 / 已暂停 / 不在计划时段…）。
+// 在此之前面板只有"下一题约 N 秒后"，四种情况长得一模一样，出问题只能人工逐项排查。
+$initialWaitReason = trim((string) ($live['wait_reason_text'] ?? ''));
+if ($initialWaitReason === '') {
+    $initialWaitReason = '—';
+}
+// 在线人数旁边直接标出脚本要求的最低人数，省得再去设置页翻
+$initialOnlineMin = $liveAvailable
+    ? __('app.trivia.status.online_min', ['min' => (string) (int) ($live['min_players_online'] ?? 0)])
+    : '';
+
 $money = static function (int $copper): string {
     if ($copper <= 0) {
         return '-';
@@ -195,6 +206,8 @@ if ($canManage) {
         </dd></div>
       <div><dt><?= htmlspecialchars(__('app.trivia.status.next')) ?></dt>
         <dd data-tv-field="next"><?= htmlspecialchars($initialNext) ?></dd></div>
+      <div><dt><?= htmlspecialchars(__('app.trivia.status.wait_reason')) ?></dt>
+        <dd data-tv-field="wait_reason"><?= htmlspecialchars($initialWaitReason) ?></dd></div>
       <div><dt><?= htmlspecialchars(__('app.trivia.status.auto')) ?></dt>
         <dd data-tv-field="auto">
           <?php
@@ -221,7 +234,8 @@ if ($canManage) {
             ])) ?>
           </span></dd></div>
       <div><dt><?= htmlspecialchars(__('app.trivia.status.online')) ?></dt>
-        <dd data-tv-field="online"><?= (int) ($live['online'] ?? 0) ?></dd></div>
+        <dd><span data-tv-field="online"><?= (int) ($live['online'] ?? 0) ?></span>
+          <span class="tv-muted tv-small" data-tv-field="online_min"><?= htmlspecialchars($initialOnlineMin) ?></span></dd></div>
       <div><dt><?= htmlspecialchars(__('app.trivia.status.rounds')) ?></dt>
         <dd data-tv-field="rounds"><?= (int) ($live['rounds'] ?? 0) ?></dd></div>
       <div><dt><?= htmlspecialchars(__('app.trivia.status.sources')) ?></dt>
