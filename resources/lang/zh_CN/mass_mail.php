@@ -26,7 +26,7 @@ return [
                     'custom' => '自定义列表',
                 ],
                 'subject_label' => '标题',
-                'subject_default' => 'PureLand',
+                'subject_default' => '服务器公告',
                 'body_label' => '正文',
                 'body_default' => '这是来自管理团队的邮件，祝您游戏愉快。',
                 'items_label' => '物品列表',

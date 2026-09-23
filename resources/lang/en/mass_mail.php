@@ -26,7 +26,7 @@ return [
                     'custom' => 'Custom list',
                 ],
                 'subject_label' => 'Subject',
-                'subject_default' => 'PureLand',
+                'subject_default' => 'Server Announcement',
                 'body_label' => 'Body',
                 'body_default' => 'Message from the staff. Enjoy your time in Azeroth!',
                 'items_label' => 'Items list',
