@@ -193,6 +193,7 @@
       + '<td class="cb-code-cell">' + esc(row.code) + '</td>'
       + '<td><span class="' + statusClass + '">' + esc(statusLabel) + '</span></td>'
       + '<td>' + usedBy + '</td>'
+      + '<td class="cb-nowrap">' + esc(used ? (row.used_at || '-') : '-') + '</td>'
       + '<td class="cb-nowrap">' + esc(row.created_at || '-') + '</td>'
       + '<td class="cb-col-act">' + act + '</td>'
       + '</tr>';
@@ -224,14 +225,14 @@
     loadedRows = Array.isArray(items) ? items : [];
 
     if(loadedRows.length === 0){
-      manageTbody.innerHTML = '<tr class="js-empty-row"><td colspan="7" class="cb-empty-cell">'
+      manageTbody.innerHTML = '<tr class="js-empty-row"><td colspan="8" class="cb-empty-cell">'
         + esc(translate('codes.table.empty', 'No redeem codes'))
         + '</td></tr>';
       return;
     }
 
     manageTbody.innerHTML = loadedRows.map(rowHtml).join('')
-      + '<tr class="js-filter-none" hidden><td colspan="7" class="cb-empty-cell">'
+      + '<tr class="js-filter-none" hidden><td colspan="8" class="cb-empty-cell">'
       + esc(translate('codes.manage.no_match', 'No codes match the search'))
       + '</td></tr>';
 
@@ -274,7 +275,7 @@
       setStats(null);
     }
 
-    manageTbody.innerHTML = '<tr><td colspan="7" class="cb-empty-cell">'
+    manageTbody.innerHTML = '<tr><td colspan="8" class="cb-empty-cell">'
       + esc(translate('common.loading', 'Loading…'))
       + '</td></tr>';
 

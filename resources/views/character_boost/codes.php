@@ -201,12 +201,13 @@ include dirname(__DIR__) . '/components/page_header.php';
             <th><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.code')) ?></th>
             <th class="cb-col-status"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.status')) ?></th>
             <th><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_by')) ?></th>
+            <th class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_at')) ?></th>
             <th class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.created_at')) ?></th>
             <th class="cb-col-act"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.actions')) ?></th>
           </tr>
         </thead>
         <tbody id="boostCodesManageTbody">
-          <tr><td colspan="7" class="cb-empty-cell"><?= htmlspecialchars(__('app.common.loading')) ?></td></tr>
+          <tr><td colspan="8" class="cb-empty-cell"><?= htmlspecialchars(__('app.common.loading')) ?></td></tr>
         </tbody>
       </table>
     </div>

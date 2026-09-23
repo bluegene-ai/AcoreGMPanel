@@ -248,6 +248,26 @@ if (is_file($jsPath)) {
         $failures
     );
 
+    // "使用时间"列：表头已翻译 + JS 真的渲染 used_at（而非只当布尔用）
+    expect(
+        str_contains($html, Lang::get('app.character_boost.codes.manage.columns.used_at')),
+        '明细表有使用时间表头',
+        $checks,
+        $failures
+    );
+    expect(
+        str_contains($jsSource, "esc(used ? (row.used_at || '-') : '-')"),
+        '明细表渲染兑换（使用）时间',
+        $checks,
+        $failures
+    );
+    expect(
+        !str_contains($jsSource, 'colspan="7"') && !str_contains($viewSource, 'colspan="7"'),
+        '空态 colspan 与 8 列一致',
+        $checks,
+        $failures
+    );
+
     // 结果区收起时生成卡片要占满整行（否则右侧留空列）
     expect(
         str_contains($jsSource, 'cb-codes__top--single') && str_contains($css, '.cb-codes__top--single'),

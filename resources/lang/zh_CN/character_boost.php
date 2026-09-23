@@ -124,6 +124,7 @@ return [
                 'code' => '兑换码',
                 'status' => '状态',
                 'used_by' => '使用信息',
+                'used_at' => '使用时间',
                 'created_at' => '创建时间',
                 'actions' => '操作',
             ],

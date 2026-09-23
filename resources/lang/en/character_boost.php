@@ -124,6 +124,7 @@ return [
                 'code' => 'Code',
                 'status' => 'Status',
                 'used_by' => 'Usage',
+                'used_at' => 'Used At',
                 'created_at' => 'Created At',
                 'actions' => 'Actions',
             ],
