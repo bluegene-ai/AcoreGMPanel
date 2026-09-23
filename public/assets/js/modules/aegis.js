@@ -13,6 +13,32 @@
   const searchParams = new URLSearchParams(location.search);
   const currentServer = searchParams.get('server') || '';
 
+  /**
+   * Base path of the panel install ("/agmp", or "" at the web root).
+   *
+   * The server publishes it only as data-app-base on <body>; window.APP_BASE is
+   * never defined. API calls go through panel.api(), which prepends the base
+   * itself, but plain href links do not — building one without this prefix
+   * yields a root-relative URL that 404s on a sub-path install.
+   */
+  function resolveBasePath(){
+    return ((window.Panel && window.Panel.basePath && window.Panel.basePath())
+      || (document.body && document.body.dataset && document.body.dataset.appBase)
+      || '').replace(/\/$/, '');
+  }
+
+  /**
+   * Panel-relative path -> absolute URL, base path included.
+   *
+   * Never build a plain href from a root-relative literal: on a sub-path
+   * install (/agmp) the browser resolves "/character/view" against the web
+   * root and 404s. API calls go through panel.api(), which prepends the base
+   * itself, so those must stay panel-relative.
+   */
+  const panelUrl = (typeof panel.absoluteUrl === 'function')
+    ? (path) => panel.absoluteUrl(path)
+    : (path) => resolveBasePath() + path;
+
   const dom = {
     feedback: document.getElementById('aegisFeedback'),
     refreshAll: document.getElementById('aegisRefreshAllBtn'),
@@ -66,8 +92,14 @@
     }[char]));
   }
 
+  /**
+   * Adds the `server` query arg to an API path. The base path is left to
+   * panel.api() -> buildUrl(), which prepends it for every request, so callers
+   * here must pass a panel-relative path (never a panelUrl()).
+   */
   function withServer(path){
     if(!currentServer) return path;
+    if(String(path).includes('server=')) return path;
     return path + (path.includes('?') ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
   }
 
@@ -178,7 +210,7 @@
     dom.stageSummary.innerHTML = (payload.stages || []).map((row) => `<span class="badge">${esc(stageLabel(row.value))}: ${esc(row.total)}</span>`).join('') || `<span class="muted">${esc(t('status.empty', 'No data'))}</span>`;
     dom.cheatSummary.innerHTML = (payload.cheats || []).map((row) => `<span class="badge">${esc(cheatLabel(row.value))}: ${esc(row.total)}</span>`).join('') || `<span class="muted">${esc(t('status.empty', 'No data'))}</span>`;
     dom.topOffenders.innerHTML = (payload.top_offenders || []).map((row) => {
-      const playerUrl = withServer(`/character/view?guid=${encodeURIComponent(row.guid || 0)}`);
+      const playerUrl = panelUrl(`/character/view?guid=${encodeURIComponent(row.guid || 0)}`);
       const inner = `
         <strong><a href="${esc(playerUrl)}">${esc(row.player_name || ('#' + row.guid))}</a></strong>
         <span>${esc(stageLabel(row.punish_stage))}</span>
@@ -211,8 +243,8 @@
     const recentEvents = payload.recent_events || [];
     dom.playerLookup.value = player.guid ? `${player.name} (#${player.guid})` : (player.name || name || String(guid || ''));
     dom.playerCard.classList.remove('aegis-player-card--empty');
-    const playerUrl = withServer(`/character/view?guid=${encodeURIComponent(player.guid || 0)}`);
-    const accountUrl = withServer(`/account/view?id=${encodeURIComponent(player.account || 0)}`);
+    const playerUrl = panelUrl(`/character/view?guid=${encodeURIComponent(player.guid || 0)}`);
+    const accountUrl = panelUrl(`/account/view?id=${encodeURIComponent(player.account || 0)}`);
     dom.playerCard.innerHTML = `
       <div class="aegis-player-card__header">
         <strong><a href="${esc(playerUrl)}">${esc(player.name || ('#' + (player.guid || '')))}</a></strong>
@@ -262,8 +294,8 @@
     } else {
       dom.offenseTable.innerHTML = items.map((row) => `
         <tr>
-          <td><a class="link-button" href="${esc(withServer(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
-          <td><a href="${esc(withServer(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
+          <td><a class="link-button" href="${esc(panelUrl(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
+          <td><a href="${esc(panelUrl(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
           <td>${esc(cheatLabel(row.last_cheat_type))}</td>
           <td>${esc(stageLabel(row.punish_stage))}</td>
           <td>${esc(row.offense_count || 0)}</td>
@@ -309,8 +341,8 @@
       dom.eventTable.innerHTML = items.map((row) => `
         <tr>
           <td>${esc(formatTime(row.created_at))}</td>
-          <td><a class="link-button" href="${esc(withServer(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
-          <td><a href="${esc(withServer(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
+          <td><a class="link-button" href="${esc(panelUrl(`/character/view?guid=${Number(row.guid || 0)}`))}">${esc(row.player_name || ('#' + row.guid))}</a></td>
+          <td><a href="${esc(panelUrl(`/account/view?id=${Number(row.account_id || 0)}`))}">${esc(row.account_username || ('#' + row.account_id))}</a></td>
           <td>${esc(cheatLabel(row.cheat_type))}</td>
           <td>${esc(evidenceLabel(row.evidence_level))}</td>
           <td>${esc(row.evidence_tag || '-')}</td>

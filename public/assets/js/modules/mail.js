@@ -56,6 +56,18 @@
   const panelFeedback = window.Panel?.feedback;
   const panelUrl = typeof window.Panel?.url === 'function' ? window.Panel.url : (path => path);
   const basePath = (window.Panel?.base || window.APP_BASE || '').replace(/\/$/, '');
+
+  /**
+   * Absolute URL for a panel-relative path, base path included.
+   *
+   * Never build a plain href from a root-relative literal: on a sub-path
+   * install (/agmp) the browser resolves "/character/view" against the web
+   * root and 404s. Prefer Panel.absoluteUrl() and fall back to the base
+   * captured above.
+   */
+  const absoluteUrl = (typeof window.Panel?.absoluteUrl === 'function')
+    ? (path) => window.Panel.absoluteUrl(path)
+    : (path) => basePath + (String(path).startsWith('/') ? path : '/' + path);
   const panelLocale = window.Panel || {};
   const moduleLocaleFn = typeof panelLocale.moduleLocale === 'function' ? panelLocale.moduleLocale.bind(panelLocale) : null;
   const moduleTranslator = typeof panelLocale.createModuleTranslator === 'function'
@@ -277,8 +289,8 @@
       const remain = formatExpire(expireTs);
       const senderLabel = row.sender_name || ('#' + (row.sender ?? ''));
       const receiverLabel = row.receiver_name || ('#' + (row.receiver ?? ''));
-      const sender = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(row.sender ?? 0)))}">${escapeHtml(senderLabel)}</a>`;
-      const receiver = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(row.receiver ?? 0)))}">${escapeHtml(receiverLabel)}</a>`;
+      const sender = `<a href="${escapeHtml(absoluteUrl('/character/view?guid=' + encodeURIComponent(row.sender ?? 0)))}">${escapeHtml(senderLabel)}</a>`;
+      const receiver = `<a href="${escapeHtml(absoluteUrl('/character/view?guid=' + encodeURIComponent(row.receiver ?? 0)))}">${escapeHtml(receiverLabel)}</a>`;
       const subj = row.subject
         ? escapeHtml(truncate(row.subject, 50))
         : `<span class="muted">${escapeHtml(translate('detail.no_subject', '(No subject)'))}</span>`;
@@ -619,9 +631,9 @@
     const items = Array.isArray(mail.items) ? mail.items : [];
 
     const senderEl = qs('#mdSender');
-    if(senderEl) senderEl.innerHTML = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(mail.sender ?? 0)))}">${escapeHtml(mail.sender_name || ('#' + (mail.sender ?? '')))}</a>`;
+    if(senderEl) senderEl.innerHTML = `<a href="${escapeHtml(absoluteUrl('/character/view?guid=' + encodeURIComponent(mail.sender ?? 0)))}">${escapeHtml(mail.sender_name || ('#' + (mail.sender ?? '')))}</a>`;
     const receiverEl = qs('#mdReceiver');
-    if(receiverEl) receiverEl.innerHTML = `<a href="${escapeHtml(urlWithServer('/character/view?guid=' + encodeURIComponent(mail.receiver ?? 0)))}">${escapeHtml(mail.receiver_name || ('#' + (mail.receiver ?? '')))}</a>`;
+    if(receiverEl) receiverEl.innerHTML = `<a href="${escapeHtml(absoluteUrl('/character/view?guid=' + encodeURIComponent(mail.receiver ?? 0)))}">${escapeHtml(mail.receiver_name || ('#' + (mail.receiver ?? '')))}</a>`;
     const moneyEl = qs('#mdMoney');
     if(moneyEl) moneyEl.textContent = money;
     const expireEl = qs('#mdExpire');
