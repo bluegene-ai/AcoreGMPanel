@@ -20,6 +20,7 @@ use Acme\Panel\Core\Request;
 use Acme\Panel\Core\Response;
 use Acme\Panel\Core\View;
 use Acme\Panel\Domain\Trivia\QuestionTemplate;
+use Acme\Panel\Domain\Trivia\ScheduleWindows;
 use Acme\Panel\Domain\Trivia\TriviaRepository;
 use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\Paginator;
@@ -374,7 +375,8 @@ class TriviaController extends Controller
 
         foreach (['enabled', 'answer_say', 'answer_yell', 'answer_emote', 'answer_whisper',
                   'allow_number_answer', 'allow_latin_letters', 'allow_text_answer', 'use_builtin_questions',
-                  'announce_on_login', 'reply_wrong_answer', 'reply_already_answered'] as $column) {
+                  'announce_on_login', 'reply_wrong_answer', 'reply_already_answered',
+                  'schedule_enabled'] as $column) {
             if ($request->input($column) === null) {
                 if (array_key_exists($column, $current)) {
                     $values[$column] = ((int) $current[$column]) === 1 ? 1 : 0;
@@ -382,6 +384,20 @@ class TriviaController extends Controller
                 continue;
             }
             $values[$column] = $this->normalizedBoolFlag($request, $column) ? 1 : 0;
+        }
+
+        // 定时启停的时间段：面板侧先校验并归一化（写库的是规范写法，Lua 只负责执行）
+        if ($request->input('schedule_windows') === null && array_key_exists('schedule_windows', $current)) {
+            $values['schedule_windows'] = (string) $current['schedule_windows'];
+        } else {
+            try {
+                $normalized = ScheduleWindows::normalize((string) $request->input('schedule_windows', ''));
+            } catch (\RuntimeException $exception) {
+                throw new \RuntimeException(Lang::get('app.trivia.errors.schedule_invalid', [
+                    'token' => $exception->getMessage(),
+                ]));
+            }
+            $values['schedule_windows'] = mb_substr($normalized, 0, 255);
         }
 
         // 作答频道：只接受数字 ID（负数 = 自定义频道）
@@ -1322,12 +1338,15 @@ class TriviaController extends Controller
             'item_link_locale' => 4,
             'mail_subject' => '答题奖励',
             'mail_body' => "勇士，恭喜你在聊天答题中第一个答对！\n题目：{question}\n正确答案：{answer}\n奖励已随信附上，祝你在艾泽拉斯的旅途愉快！",
+            'schedule_enabled' => 0,
+            'schedule_windows' => '',
         ];
 
         $merged = array_replace($defaults, array_intersect_key($row, $defaults));
         $merged['exists'] = $row !== [];
         $merged['channel_ids_list'] = $this->parseIntList((string) $merged['answer_channel_ids']);
         $merged['pool_presets_list'] = $this->parseNameList((string) $merged['pool_presets']);
+        $merged['schedule_windows_list'] = ScheduleWindows::describe((string) $merged['schedule_windows']);
 
         return $merged;
     }

@@ -58,6 +58,9 @@ class TriviaRepository extends MultiServerRepository
         'item_link_locale' => 'int',
         'mail_subject' => 'string',
         'mail_body' => 'string',
+        // 定时启停（每天的时间段）：Lua 侧 tick 强制执行；列不存在时 saveSettings 会自动跳过
+        'schedule_enabled' => 'bool',
+        'schedule_windows' => 'string',
     ];
 
     private string $customDbName;
@@ -67,6 +70,9 @@ class TriviaRepository extends MultiServerRepository
 
     /** @var array<string,bool>|null */
     private ?array $tableAvailability = null;
+
+    /** @var array<string,bool>|null */
+    private ?array $settingsColumnAvailability = null;
 
     public function __construct(?int $serverId = null)
     {
@@ -186,6 +192,9 @@ class TriviaRepository extends MultiServerRepository
      *
      * 行被手工删过时用 INSERT IGNORE 补一行（不会覆盖已有行）。
      *
+     * 注意：只写"数据库里真的存在"的列。新增列（如 schedule_enabled）要求 Lua 脚本先跑过一次
+     * ensureSchema() 建列；面板在列还没补上时跳过它，而不是整条保存失败。
+     *
      * @param array<string,mixed> $values
      */
     public function saveSettings(array $values): bool
@@ -194,10 +203,12 @@ class TriviaRepository extends MultiServerRepository
             throw new \RuntimeException('trivia_settings_storage_missing');
         }
 
+        $existing = $this->settingsColumns();
+
         // 按 SETTINGS_COLUMNS 的顺序落地，保证 UPDATE 与 INSERT 两边的列值一一对应
         $pairs = [];
         foreach (self::SETTINGS_COLUMNS as $column => $type) {
-            if (!array_key_exists($column, $values)) {
+            if (!array_key_exists($column, $values) || !isset($existing[$column])) {
                 continue;
             }
             $pairs[$column] = $this->castValue($type, $values[$column]);
@@ -247,6 +258,33 @@ class TriviaRepository extends MultiServerRepository
         }
 
         return (string) $value;
+    }
+
+    /**
+     * trivia_reward_settings 现有列（缓存）。
+     *
+     * @return array<string,bool>
+     */
+    private function settingsColumns(): array
+    {
+        if ($this->settingsColumnAvailability !== null) {
+            return $this->settingsColumnAvailability;
+        }
+
+        $columns = [];
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?'
+            );
+            $stmt->execute([$this->customDbName, $this->tableName('settings')]);
+            foreach (($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []) as $name) {
+                $columns[(string) $name] = true;
+            }
+        } catch (Throwable $exception) {
+            $columns = [];
+        }
+
+        return $this->settingsColumnAvailability = $columns;
     }
 
     // ------------------------------------------------------------------ 题库

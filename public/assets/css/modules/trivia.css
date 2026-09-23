@@ -456,3 +456,87 @@
   padding: 5px 8px;
   font-size: 0.84rem;
 }
+
+/* ---------------- Tab 分页 ----------------
+ * 5 块内容（运行状态 / 题库 / 奖励预设 / 答对排行 / 设置）竖着堆在一页要滚很久，
+ * 这里改成分页；只用 display 切换，表单与表格仍常驻 DOM，JS 逻辑不受影响。
+ */
+.tv-tabs-wrap {
+  margin: 0 0 16px;
+  border-bottom: 1px solid var(--border-color, #2a3040);
+}
+
+.tv-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: #8b96a1;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tv-tab:hover {
+  color: #cbd6e2;
+  background: rgba(63, 168, 255, 0.08);
+}
+
+.tv-tab.is-active {
+  color: #e7f4ff;
+  background: var(--panel-bg, rgba(255, 255, 255, 0.04));
+  border-color: var(--border-color, #2a3040);
+  margin-bottom: -1px;
+  box-shadow: inset 0 2px 0 #3fa8ff;
+}
+
+.tv-tab__badge {
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.tv-tabpanel {
+  display: none;
+}
+
+.tv-tabpanel.is-active {
+  display: block;
+  animation: tvTabFadeIn 0.18s ease;
+}
+
+@keyframes tvTabFadeIn {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+/* 运行控制区里的整行提示（例如「定时计划会覆盖手动开关」） */
+.tv-hint {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  opacity: 0.78;
+}
+
+@media (max-width: 720px) {
+  .tv-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .tv-tab {
+    white-space: nowrap;
+  }
+}

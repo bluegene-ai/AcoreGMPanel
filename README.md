@@ -105,7 +105,7 @@ AcoreGMPanel/
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
 | Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. On a multi-realm machine the page gets an **instance switcher** (see below). |
-| Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event: live round state (via SOAP `.trivia api`), start / stop / pause / enable controls, pacing + answer-channel + label settings, question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
+| Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event, split into tabs (runtime status / question bank / reward presets / leaderboard / settings): live round state (via SOAP `.trivia api`), a next-question countdown, start / stop / pause-resume / enable-disable controls (one toggle each, labelled from the live state), daily **scheduled start/stop windows**, pacing + answer-channel + label settings, question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
 
 ## Further Reading
 

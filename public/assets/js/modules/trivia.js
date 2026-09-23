@@ -12,11 +12,15 @@
   const currentServer = new URLSearchParams(window.location.search).get('server') || '';
 
   const dom = {
+    tabsWrap: document.getElementById('tvTabs'),
     statusPanel: document.getElementById('tvStatusPanel'),
     refreshedAt: document.getElementById('tvRefreshedAt'),
     refreshStatus: document.getElementById('tvRefreshStatus'),
     autoRefresh: document.getElementById('tvAutoRefresh'),
     startIndex: document.getElementById('tvStartIndex'),
+    pauseToggle: document.getElementById('tvPauseToggle'),
+    powerToggle: document.getElementById('tvPowerToggle'),
+    scheduleWarn: document.getElementById('tvScheduleWarn'),
     settingsForm: document.getElementById('tvSettingsForm'),
     saveSettings: document.getElementById('tvSaveSettings'),
     channelIds: document.getElementById('tvChannelIds'),
@@ -54,7 +58,15 @@
     search: '',
     status: 'all',
     pollTimer: null,
-    busy: false
+    busy: false,
+    tab: 'status',
+    /** 最近一次实时状态（运行控制按钮的文案/可用性依赖它） */
+    live: null,
+    liveAvailable: false,
+    /** 「下一题」倒计时：本地每秒自减，每次轮询再与服务端对齐 */
+    countdownKind: 'none',
+    countdownAt: 0,
+    countdownZeroPinged: false
   };
 
   function t(path, fallback) {
@@ -130,8 +142,97 @@
     if (node) node.textContent = value;
   }
 
+  /**
+   * 「下一题」字段的渲染：暂停/关闭时给出原因，否则显示倒计时。
+   *
+   * 每秒本地自减，让"到底还有多久出下一题"可见——这正是之前"恢复自动出题点了没反应"
+   * 的关键：脚本当时其实已经排好队了，只是面板上没有任何倒计时，看不出还在等。
+   */
+  function renderCountdown() {
+    const live = state.live;
+    if (!live || !state.liveAvailable) return;
+
+    if (state.countdownKind === 'none') {
+      setText('next', live.enabled === false
+        ? t('status.next_disabled', '—')
+        : t('status.next_paused', '—'));
+      return;
+    }
+
+    const left = Math.max(0, Math.round((state.countdownAt - Date.now()) / 1000));
+    if (state.countdownKind === 'remaining') {
+      setText('next', tt('status.remaining', { seconds: left }, left + 's'));
+    } else {
+      setText('next', tt('status.next_in', { seconds: left }, left + 's'));
+    }
+
+    // 倒计时归零后再拉一次状态：下一题多半已经开始了（轮询间隔 10 秒，等下一轮太迟钝）
+    if (left === 0 && !state.countdownZeroPinged) {
+      state.countdownZeroPinged = true;
+      refreshStatus();
+    }
+  }
+
+  function startCountdown() {
+    window.setInterval(renderCountdown, 1000);
+  }
+
   function stateLabel(key) {
     return t('status.states.' + key, key);
+  }
+
+  /**
+   * 「暂停/恢复」与「开启/关闭」各自只有一个按钮：按实时状态切换文案与动作。
+   *
+   * 之前是四个按钮常驻，看不出当前到底是暂停还是恢复、开着还是关着；
+   * 系统关闭时点「暂停自动出题」更是完全没有反馈（tick 在 enabled 判定处就返回了，
+   * 根本走不到 paused 分支），现在这种无意义的按钮会被禁用并给出原因。
+   */
+  function applyControls(live, available) {
+    const enabled = available ? live.enabled !== false : false;
+    const paused = available ? live.paused === true : false;
+
+    if (dom.powerToggle) {
+      if (enabled) {
+        dom.powerToggle.dataset.tvAction = 'disable';
+        dom.powerToggle.textContent = t('actions.disable', 'Disable system');
+        dom.powerToggle.classList.add('danger');
+        dom.powerToggle.dataset.tvConfirm = t('confirm.disable', '');
+        dom.powerToggle.disabled = !available;
+      } else {
+        dom.powerToggle.dataset.tvAction = 'enable';
+        dom.powerToggle.textContent = t('actions.enable', 'Enable system');
+        dom.powerToggle.classList.remove('danger');
+        dom.powerToggle.dataset.tvConfirm = t('confirm.enable', '');
+        dom.powerToggle.disabled = !available;
+      }
+      if (live.schedule_enabled) {
+        dom.powerToggle.title = t('actions.power_hint_scheduled', '');
+      } else {
+        dom.powerToggle.removeAttribute('title');
+      }
+    }
+
+    if (dom.pauseToggle) {
+      if (paused) {
+        dom.pauseToggle.dataset.tvAction = 'resume';
+        dom.pauseToggle.textContent = t('actions.resume', 'Resume');
+      } else {
+        dom.pauseToggle.dataset.tvAction = 'pause';
+        dom.pauseToggle.textContent = t('actions.pause', 'Pause');
+      }
+      // 系统关闭时暂停/恢复没有意义（脚本 tick 会在 enabled 处直接返回）
+      dom.pauseToggle.disabled = !available || !enabled;
+      if (!enabled && available) {
+        dom.pauseToggle.title = t('actions.pause_hint_disabled', '');
+      } else {
+        dom.pauseToggle.removeAttribute('title');
+      }
+    }
+
+    if (dom.scheduleWarn) {
+      dom.scheduleWarn.hidden = !live.schedule_enabled;
+    }
   }
 
   function applyStatus(json) {
@@ -139,6 +240,9 @@
     const live = json.data || {};
     const available = !!json.available;
     const key = available ? (live.state || 'idle') : 'offline';
+
+    state.live = live;
+    state.liveAvailable = available;
 
     if (dom.statusPanel) {
       dom.statusPanel.dataset.tvState = key;
@@ -150,11 +254,74 @@
       }
     }
 
-    if (!available) return;
+    const tabBadge = document.querySelector('[data-tv-tabstate]');
+    if (tabBadge) {
+      tabBadge.textContent = stateLabel(key);
+      tabBadge.className = 'tv-tab__badge tv-badge tv-badge--' + key;
+    }
+
+    if (!available) {
+      applyControls({}, false);
+      state.countdownKind = 'none';
+      state.countdownAt = 0;
+      setText('next', '—');
+      setText('auto', '—');
+      return;
+    }
+
+    applyControls(live, true);
 
     setText('question', live.question || t('status.no_question', '—'));
     setText('answer', live.answer_text ? tt('status.answer_suffix', { answer: live.answer_text }, '(answer: ' + live.answer_text + ')') : '');
-    setText('remaining', live.round_active ? '· ' + live.remaining + 's' : '');
+    setText('remaining', live.round_active ? '· ' + tt('status.remaining', { seconds: live.remaining }, live.remaining + 's') : '');
+
+    // 下一题：出题中显示本题剩余作答时间，否则显示倒计时 / 暂停 / 关闭 三种说明
+    if (live.round_active) {
+      state.countdownKind = 'remaining';
+      state.countdownAt = Date.now() + Math.max(0, Number(live.remaining) || 0) * 1000;
+    } else if (live.enabled === false || live.paused === true) {
+      state.countdownKind = 'none';
+      state.countdownAt = 0;
+    } else {
+      state.countdownKind = 'next';
+      state.countdownAt = Date.now() + Math.max(0, Number(live.next_in) || 0) * 1000;
+    }
+    state.countdownZeroPinged = false;
+    renderCountdown();
+
+    // 「自动出题」这一列独立于"有没有题在跑"：出题途中按下暂停也能立刻看到生效
+    setText('auto', live.enabled === false
+      ? t('status.auto_disabled', 'Off')
+      : (live.paused === true ? t('status.auto_paused', 'Paused') : t('status.auto_on', 'On')));
+
+    // 定时计划
+    if (live.schedule_enabled) {
+      setText('schedule_state', live.schedule_active
+        ? t('status.schedule_active', 'Active')
+        : t('status.schedule_waiting', 'Waiting'));
+      const schedBadge = dom.statusPanel ? dom.statusPanel.querySelector('[data-tv-field="schedule_state"]') : null;
+      if (schedBadge) {
+        schedBadge.className = 'tv-badge tv-badge--' + (live.schedule_active ? 'running' : 'paused');
+      }
+      const parts = [];
+      if (live.schedule_valid) {
+        parts.push(String(live.schedule_windows || ''));
+        if (live.schedule_next_change_text) {
+          parts.push(tt('status.schedule_next_change', { time: live.schedule_next_change_text }, ''));
+        }
+      } else {
+        parts.push(t('status.schedule_no_windows', ''));
+      }
+      setText('schedule_detail', parts.filter(Boolean).join(' · '));
+    } else {
+      setText('schedule_state', t('status.schedule_off', 'Off'));
+      const schedBadge = dom.statusPanel ? dom.statusPanel.querySelector('[data-tv-field="schedule_state"]') : null;
+      if (schedBadge) {
+        schedBadge.className = 'tv-badge tv-badge--muted';
+      }
+      setText('schedule_detail', t('status.schedule_hint_off', ''));
+    }
+
     setText('bank', String(live.bank || 0));
     setText('bank_detail', tt('status.bank_detail_template', {
       builtin: live.builtin || 0,
@@ -579,6 +746,59 @@
     }
   });
 
+  // ---------------------------------------------------------------- Tab 分页
+  function availableTabs() {
+    const names = [];
+    document.querySelectorAll('[data-tv-tabpanel]').forEach(function (node) {
+      names.push(node.dataset.tvTabpanel);
+    });
+    return names;
+  }
+
+  /**
+   * 切换 Tab 并把当前 Tab 记到 URL hash（刷新/换服后回到同一页）。
+   *
+   * 用 replaceState 而不是 location.hash = …，避免浏览器把每次点 Tab 都塞进历史记录
+   * （在标签页之间来回点要按很多次"后退"才能离开这个页面）。
+   */
+  function activateTab(name, remember) {
+    const names = availableTabs();
+    if (names.indexOf(name) < 0) name = names[0] || 'status';
+    state.tab = name;
+
+    document.querySelectorAll('[data-tv-tab]').forEach(function (node) {
+      const active = node.dataset.tvTab === name;
+      node.classList.toggle('is-active', active);
+      node.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-tv-tabpanel]').forEach(function (node) {
+      node.classList.toggle('is-active', node.dataset.tvTabpanel === name);
+    });
+
+    if (remember) {
+      const url = new URL(window.location.href);
+      url.hash = 'tab=' + name;
+      window.history.replaceState(null, '', url.toString());
+    }
+  }
+
+  function initialTab() {
+    const match = /(?:^|[#&])tab=([a-z_]+)/.exec(window.location.hash || '');
+    if (match && availableTabs().indexOf(match[1]) >= 0) return match[1];
+    return data.defaultTab || 'status';
+  }
+
+  if (dom.tabsWrap) {
+    dom.tabsWrap.addEventListener('click', function (event) {
+      const tab = event.target.closest('[data-tv-tab]');
+      if (tab) activateTab(tab.dataset.tvTab, true);
+    });
+
+    window.addEventListener('hashchange', function () {
+      activateTab(initialTab(), false);
+    });
+  }
+
   if (dom.refreshStatus) {
     dom.refreshStatus.addEventListener('click', refreshStatus);
   }
@@ -688,6 +908,8 @@
   }
 
   syncChannelIds();
+  activateTab(initialTab(), false);
   startPolling();
+  startCountdown();
   refreshStatus();
 })();
