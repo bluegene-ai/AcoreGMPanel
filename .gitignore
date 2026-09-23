@@ -14,9 +14,11 @@
 /storage/logs/*
 !/storage/logs/.gitkeep
 
-# Composer dependencies
-#/vendor/
-#/vendor/composer/
+# Composer dependencies (not tracked: run composer install / scripts/install-deps.ps1)
+/vendor/
+
+# Local verification tooling (not tracked: kept local only)
+/tools/
 
 # Local composer phar (use scripts/install-deps.ps1 to download as needed)
 /composer.phar
