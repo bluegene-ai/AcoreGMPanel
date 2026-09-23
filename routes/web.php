@@ -10,6 +10,7 @@ use Acme\Panel\Core\Router;
 use Acme\Panel\Http\Controllers\AccountController;
 use Acme\Panel\Http\Controllers\Aegis\AegisController;
 use Acme\Panel\Http\Controllers\AuditController;
+use Acme\Panel\Http\Controllers\Auctionator\AuctionatorController;
 use Acme\Panel\Http\Controllers\Boss\BossController;
 use Acme\Panel\Http\Controllers\Character\CharacterController;
 use Acme\Panel\Http\Controllers\Creature\CreatureController;
@@ -245,6 +246,15 @@ return static function (Router $router): void {
             $router->post('/trivia/api/preset/save', [TriviaController::class, 'apiPresetSave']);
             $router->post('/trivia/api/preset/delete', [TriviaController::class, 'apiPresetDelete']);
             $router->post('/trivia/api/winners/clear', [TriviaController::class, 'apiWinnersClear']);
+        });
+
+        // 拍卖机器人（mod-auctionator）：挂单/市场概览、conf 读写、物品策略表、.auctionator GM 命令（SOAP）
+        $router->get('/auctionator', [AuctionatorController::class, 'index']);
+        $router->get('/auctionator/api/status', [AuctionatorController::class, 'apiStatus']);
+        $router->group([CsrfMiddleware::class], static function (Router $router): void {
+            $router->post('/auctionator/api/config', [AuctionatorController::class, 'apiConfigSave']);
+            $router->post('/auctionator/api/item', [AuctionatorController::class, 'apiItem']);
+            $router->post('/auctionator/api/action', [AuctionatorController::class, 'apiAction']);
         });
     });
 };

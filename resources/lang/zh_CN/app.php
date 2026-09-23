@@ -28,6 +28,7 @@ return array (
     'logs' => '日志',
     'supervisor' => '守护管理',
     'trivia' => '聊天答题',
+    'auctionator' => '拍卖机器人',
   ),
   'common' => 
   array (

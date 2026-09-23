@@ -28,6 +28,7 @@ final class ModuleAssets
         'soap.' => 'soap_wizard',
         'supervisor.' => 'supervisor',
         'trivia.' => 'trivia',
+        'auctionator.' => 'auctionator',
     ];
 
     private const PAGE_MODULE_ALIASES = [
@@ -143,6 +144,12 @@ final class ModuleAssets
             'capability' => 'supervisor.view',
         ],
         [
+            'path' => '/auctionator',
+            'label' => 'app.nav.auctionator',
+            'activePrefixes' => ['/auctionator'],
+            'capability' => 'auctionator.view',
+        ],
+        [
             'path' => '/logs',
             'label' => 'app.nav.logs',
             'activePrefixes' => ['/logs'],
@@ -168,6 +175,7 @@ final class ModuleAssets
         'soap' => ['soap'],
         'supervisor' => ['supervisor'],
         'trivia' => ['trivia'],
+        'auctionator' => ['auctionator'],
     ];
 
     private const JS_LOCALE_BUNDLES = [
@@ -188,6 +196,7 @@ final class ModuleAssets
         'soap' => ['soap'],
         'supervisor' => ['supervisor'],
         'trivia' => ['trivia'],
+        'auctionator' => ['auctionator'],
     ];
 
     private const SPLIT_LANG_SECTIONS = [
@@ -213,6 +222,7 @@ final class ModuleAssets
         'setup',
         'supervisor',
         'trivia',
+        'auctionator',
     ];
 
     private const SPLIT_JS_MODULES = [
@@ -232,6 +242,7 @@ final class ModuleAssets
         'soap',
         'supervisor',
         'trivia',
+        'auctionator',
     ];
 
     private const JS_LOCALE_TRANSLATION_KEYS = [

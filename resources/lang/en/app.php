@@ -28,6 +28,7 @@ return array (
     'logs' => 'Logs',
     'supervisor' => 'Supervisor',
     'trivia' => 'Chat Trivia',
+    'auctionator' => 'Auction Bot',
   ),
   'common' => 
   array (

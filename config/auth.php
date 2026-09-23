@@ -51,6 +51,11 @@ return [
       'control' => 'Trivia runtime SOAP actions: start, stop, pause, resume, enable, disable, reload.',
       'manage' => 'Trivia settings, question bank, reward preset and leaderboard writes.',
     ],
+    'auctionator' => [
+      'view' => 'Auction bot page shell, config snapshot, listing/market counters and log tail reads.',
+      'manage' => 'Auction bot writes: mod_auctionator.conf keys and the disabled/class/gm_list policy tables.',
+      'control' => 'Auction bot SOAP actions: .auctionator status, addlist, expireall, enable/disable, market import/prune.',
+    ],
     'mail' => [
       'list' => 'Mail page shell, mail list, and base filters.',
       'view' => 'Single mail detail reads including attachments.',
