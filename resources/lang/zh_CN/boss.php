@@ -4,12 +4,17 @@ return [
     'page_title' => 'Boss 活动管理',
     'intro' => '查看 Boss 当前运行态、活动配置、事件流水与贡献快照，并通过 SOAP 执行生成、热加载、模板切换和倍率重基准。',
     'scope_note' => '当前服务器：:server',
+    'fields' => [
+        'estimated_hp' => '预估血量',
+    ],
     'warnings' => [
         'schema_missing' => '未检测到部分 Boss 相关表：:tables。请先加载 boss.lua，让 Lua 完成 ac_eluna 表结构初始化后再使用 AGMP。',
         'runtime_unavailable' => 'Boss 运行态表暂不可用，请确认 boss.lua 已创建 ac_eluna 持久化表。',
         'config_unavailable' => 'Boss 配置表暂不可用，AGMP 将回退到内置默认值。',
         'events_unavailable' => 'Boss 事件表暂不可用。',
         'contributors_unavailable' => 'Boss 贡献快照表暂不可用。',
+        'dashboard_degraded' => '读取 Boss 数据时发生异常，页面已降级为默认值显示，详情见 storage/logs/boss_repository_warnings.log。',
+        'server_not_supported' => '本模块只在 80 区生效，当前区服（:server）未部署 boss.lua，AGMP 不会向其发送 Boss 命令。请切换到 80 区后再操作。',
     ],
     'runtime' => [
         'title' => '当前运行态',
@@ -45,8 +50,12 @@ return [
         'title' => '管理动作',
         'spawn' => '生成 Boss',
         'spawn_help' => '在脚本配置的刷新点生成当前模板下的 Boss。',
+        'kill' => '击杀 Boss',
+        'kill_help' => '击杀当前活跃 Boss，按正常死亡流程结算并发放奖励。',
+        'clear' => '重置 Boss',
+        'clear_help' => '直接移除当前活跃 Boss，不发放奖励并复位运行时记录。',
         'rebase' => '重基准生命',
-        'rebase_help' => '用当前模板重新刷新活跃 Boss 的基础血量倍率。',
+        'rebase_help' => '用当前模板重新刷新活跃 Boss 的基础血量倍率。仅脱战后可执行。',
         'reload_config' => '热加载配置',
         'reload_config_help' => '重新从 ac_eluna 读取活动 Boss 配置，并尝试对活跃 Boss 应用可热更的部分。',
         'preset_label' => '技能预设',
@@ -63,7 +72,7 @@ return [
             'rewards' => '奖励与结算',
         ],
         'fields' => [
-            'boss_entry' => 'Boss Entry',
+            'boss_entry' => '难度档位',
             'boss_name' => 'Boss 名称',
             'boss_level' => 'Boss 等级',
             'boss_scale' => 'Boss 体型倍率',
@@ -103,6 +112,8 @@ return [
             'spawn_point_line' => '每行一个刷新点：map_id,x,y,z（例如 571,4353.573,-4411.8877,151.3909）',
         ],
         'hints' => [
+            'boss_entry' => '档位决定游戏侧模板（190090–190093）的 HealthModifier / DamageModifier；切换后需要重新生成 Boss 才会完全生效。',
+            'estimated_hp' => '预估血量 = 83 级 basehp2（13945）× 模板 HealthModifier × 当前血量倍率，实际值以游戏内为准。',
             'boss_auras_text' => '示例：21562,1126,467,20217',
             'reward_items_text' => '所有额外随机获奖者必得物品，从此列表中随机抽取一个。',
             'reward_formulas_text' => '命中公式奖励概率后，从此列表随机抽取一个。可留空。',
@@ -130,6 +141,20 @@ return [
             'venom_pursuit' => '偏追击与持续毒性伤害。',
             'grave_bombard' => '偏轰炸与场地封锁。',
             'spellbreak_bulwark' => '偏打断、反法与前排压制。',
+        ],
+    ],
+    'tiers' => [
+        'labels' => [
+            'entry' => '入门（与现网同级）',
+            'standard' => '标准（5 人）',
+            'hard' => '困难（10 人）',
+            'raid' => '团本（25 人）',
+        ],
+        'summary' => [
+            'entry' => '推荐 1–3 人。模板 entry 190090，HealthModifier 0.21 / DamageModifier 1.0，预估血量约 4,392,700（血量倍率 1500 时）。',
+            'standard' => '推荐 5 人。模板 entry 190091，HealthModifier 0.60 / DamageModifier 2.0，预估血量约 12,550,500（血量倍率 1500 时）。',
+            'hard' => '推荐 10 人。模板 entry 190092，HealthModifier 1.45 / DamageModifier 4.0，预估血量约 30,330,000（血量倍率 1500 时）。',
+            'raid' => '推荐 25 人。模板 entry 190093，HealthModifier 3.60 / DamageModifier 7.0，预估血量约 75,303,000（血量倍率 1500 时）。',
         ],
     ],
     'difficulties' => [
@@ -168,6 +193,8 @@ return [
             'command_preset' => '切换预设',
             'command_difficulty' => '切换强度',
             'command_rebase' => '重基准',
+            'command_clear' => '命令重置',
+            'runtime_cleared' => '运行时复位',
         ],
     ],
     'contributors' => [
@@ -201,13 +228,16 @@ return [
         'config_storage_missing' => 'Boss 配置表尚未由 boss.lua 初始化，当前只能查看默认值，不能保存。',
         'config_save_failed' => 'Boss 配置保存失败。',
         'reload_failed' => 'Lua 热加载失败。',
+        'marker_missing' => '命令未到达游戏（未收到 [AGMP_OK]/[AGMP_ERROR] 标记），请确认该区服已加载 boss.lua。',
     ],
     'js' => [
         'modules' => [
             'boss' => [
                 'confirm' => [
                     'spawn' => '确认在当前服务器生成 Boss 吗？',
-                    'rebase' => '确认对当前活跃 Boss 执行重基准吗？',
+                    'kill' => '确认击杀当前活跃 Boss 吗？将按正常死亡流程结算并发放奖励。',
+                    'clear' => '确认重置当前活跃 Boss 吗？Boss 会被直接移除且不发放任何奖励。',
+                    'rebase' => '确认对当前活跃 Boss 执行重基准吗？（Boss 必须在脱战状态）',
                     'config_reload' => '确认从 ac_eluna 重新热加载 Boss 配置吗？',
                     'preset' => '确认切换技能预设为 :value 吗？',
                     'difficulty' => '确认切换强度档位为 :value 吗？',

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Acme\Panel\Support;
 
+use Acme\Panel\Core\Lang;
+
 final class SoapCommandRunner
 {
     public static function execute(string $command, array $options = []): array
@@ -18,11 +20,19 @@ final class SoapCommandRunner
             'audit' => $options['audit'] ?? true,
         ]);
 
-        return self::normalize($execution);
+        return self::normalize($execution, [
+            'strict_marker' => $options['strict_marker'] ?? false,
+        ]);
     }
 
-    public static function normalize(array $execution): array
+    /**
+     * @param array $options 支持 strict_marker（默认 false，保持既有模块行为不变）：
+     *                       为 true 时，输出里既没有 [AGMP_OK] 也没有 [AGMP_ERROR]
+     *                       标记的调用会被判定为失败，避免「命令根本没到游戏」被当成成功。
+     */
+    public static function normalize(array $execution, array $options = []): array
     {
+        $strictMarker = ($options['strict_marker'] ?? false) === true;
         $output = trim((string) ($execution['output'] ?? ''));
         $marked = self::extractMarker($output);
 
@@ -44,6 +54,16 @@ final class SoapCommandRunner
                     : $output,
                 'output' => $output,
                 'marked' => true,
+                'execution' => $execution,
+            ];
+        }
+
+        if ($strictMarker) {
+            return [
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.marker_missing'),
+                'output' => $output,
+                'marked' => false,
                 'execution' => $execution,
             ];
         }

@@ -23,6 +23,13 @@ $bossWarnings = is_array($bossDashboard['warnings'] ?? null)
     ? $bossDashboard['warnings']
     : [];
 $bossOptions = is_array($boss_options ?? null) ? $boss_options : [];
+$bossTiers = is_array($bossOptions['tiers'] ?? null) ? $bossOptions['tiers'] : [];
+$bossTierItems = is_array($bossTiers['items'] ?? null) ? $bossTiers['items'] : [];
+$bossTierBaseHp = (int) ($bossTiers['base_hp'] ?? 13945);
+$bossTierDecimalScale = max(1, (int) ($bossTiers['decimal_scale'] ?? 100));
+$bossCurrentTierEntry = (int) ($bossTiers['current_tier_entry'] ?? ($bossConfig['boss_entry'] ?? 0));
+$bossCurrentEstimatedHp = (int) ($bossTiers['current_estimated_hp'] ?? 0);
+$bossServerSupported = ($bossOptions['supported'] ?? true) !== false;
 $bossCapabilities = is_array($__pageCapabilities ?? null)
     ? $__pageCapabilities
     : [
@@ -32,6 +39,7 @@ $bossCapabilities = is_array($__pageCapabilities ?? null)
         'actions' => $__can('boss.actions'),
     ];
 $__pageCapabilities = $bossCapabilities;
+$bossCanAct = !empty($bossCapabilities['actions']) && $bossServerSupported;
 $capabilityNotice = $__canAll(['boss.events', 'boss.contributors', 'boss.actions'])
     ? null
     : __('app.common.capabilities.page_limited');
@@ -149,7 +157,7 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
     </article>
   </section>
 
-  <?php if ($bossCapabilities['actions']): ?>
+  <?php if ($bossCanAct): ?>
     <section class="boss-panel">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.actions.title')) ?></h2>
@@ -163,6 +171,26 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
           </div>
           <button type="button" class="btn warn" id="bossSpawnBtn" data-boss-action="spawn">
             <?= htmlspecialchars(__('app.boss.actions.spawn')) ?>
+          </button>
+        </div>
+
+        <div class="boss-action-card">
+          <div class="boss-action-card__body">
+            <strong><?= htmlspecialchars(__('app.boss.actions.kill')) ?></strong>
+            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.kill_help')) ?></p>
+          </div>
+          <button type="button" class="btn" id="bossKillBtn" data-boss-action="kill">
+            <?= htmlspecialchars(__('app.boss.actions.kill')) ?>
+          </button>
+        </div>
+
+        <div class="boss-action-card">
+          <div class="boss-action-card__body">
+            <strong><?= htmlspecialchars(__('app.boss.actions.clear')) ?></strong>
+            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.clear_help')) ?></p>
+          </div>
+          <button type="button" class="btn outline" id="bossClearBtn" data-boss-action="clear">
+            <?= htmlspecialchars(__('app.boss.actions.clear')) ?>
           </button>
         </div>
 
@@ -239,7 +267,25 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
             <div class="boss-config-columns">
               <label class="boss-field">
                 <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?></span>
-                <input type="number" name="boss_entry" min="1" step="1" value="<?= htmlspecialchars((string) ($bossConfig['boss_entry'] ?? 647)) ?>">
+                <select
+                  name="boss_entry"
+                  id="bossTierSelect"
+                  data-boss-tier-select
+                  data-boss-base-hp="<?= $bossTierBaseHp ?>"
+                  data-boss-hp-scale="<?= $bossTierDecimalScale ?>"
+                >
+                  <?php foreach ($bossTierItems as $bossTierItem): ?>
+                    <?php if (!is_array($bossTierItem)) continue; ?>
+                    <?php $bossTierEntry = (int) ($bossTierItem['entry'] ?? 0); ?>
+                    <option
+                      value="<?= $bossTierEntry ?>"
+                      data-boss-health-modifier="<?= htmlspecialchars((string) ($bossTierItem['health_modifier'] ?? 0)) ?>"
+                      data-boss-estimated-hp="<?= (int) ($bossTierItem['estimated_hp'] ?? 0) ?>"
+                      <?= $bossTierEntry === $bossCurrentTierEntry ? 'selected' : '' ?>
+                    ><?= htmlspecialchars((string) ($bossTierItem['label'] ?? $bossTierEntry)) ?> · <?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?> <?= htmlspecialchars(number_format((int) ($bossTierItem['estimated_hp'] ?? 0), 0, '.', ',')) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_entry')) ?></small>
               </label>
 
               <label class="boss-field">
@@ -259,8 +305,20 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
 
               <label class="boss-field">
                 <span><?= htmlspecialchars(__('app.boss.config.fields.boss_health_multiplier')) ?></span>
-                <input type="number" name="boss_health_multiplier" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_health_multiplier'] ?? '20.00')) ?>">
+                <input type="number" name="boss_health_multiplier" id="bossHealthMultiplierInput" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_health_multiplier'] ?? '20.00')) ?>">
               </label>
+
+              <div class="boss-field boss-field--readonly">
+                <span><?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?></span>
+                <strong
+                  class="boss-estimated-hp"
+                  id="bossEstimatedHp"
+                  data-boss-hp-preview
+                  data-boss-base-hp="<?= $bossTierBaseHp ?>"
+                  data-boss-hp-scale="<?= $bossTierDecimalScale ?>"
+                ><?= htmlspecialchars(number_format($bossCurrentEstimatedHp, 0, '.', ',')) ?></strong>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.estimated_hp')) ?></small>
+              </div>
 
               <label class="boss-field">
                 <span><?= htmlspecialchars(__('app.boss.config.fields.respawn_time_minutes')) ?></span>
@@ -453,7 +511,11 @@ $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
   <?php else: ?>
     <section class="boss-panel">
       <div class="panel-flash panel-flash--info panel-flash--inline is-visible">
-        <?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.boss.actions.title')])) ?>
+        <?php if ($bossServerSupported): ?>
+          <?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.boss.actions.title')])) ?>
+        <?php else: ?>
+          <?= htmlspecialchars(__('app.boss.warnings.server_not_supported')) ?>
+        <?php endif; ?>
       </div>
     </section>
   <?php endif; ?>

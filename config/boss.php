@@ -7,6 +7,52 @@ return [
     'decimal_scale' => 100,
     'event_limit' => 18,
     'contributor_limit' => 18,
+
+    // boss.lua 只部署在 80 区。这里的值是 ServerContext::currentId() 的取值
+    // （即 config/generated/servers.php 的 server 索引），不在列表内的区服：
+    // - dashboard 追加 critical warning
+    // - apiAction / apiConfigSave 直接返回 422，不发 SOAP 命令
+    'supported_server_ids' => [1],
+
+    // 每个区服可覆盖全局的 ac_eluna 库名 / 运行时 state_key。
+    // 目前仅 80 区部署 boss.lua，且沿用全局默认值。
+    'server_overrides' => [
+        1 => [
+            'custom_db_name' => 'ac_eluna',
+            'runtime_key' => 'current',
+        ],
+    ],
+
+    // 难度档位（= ac_eluna.boss_activity_config.boss_entry）。
+    // 190090–190093 是 acore_world80 上的活动 Boss 专用模板，AIName 为空、
+    // 无 smart_scripts、无掉落；实际强度由模板的 HealthModifier/DamageModifier 决定。
+    'tiers' => [
+        190090 => [
+            'key' => 'entry',
+            'health_modifier' => 0.21,
+            'damage_modifier' => 1.0,
+        ],
+        190091 => [
+            'key' => 'standard',
+            'health_modifier' => 0.60,
+            'damage_modifier' => 2.0,
+        ],
+        190092 => [
+            'key' => 'hard',
+            'health_modifier' => 1.45,
+            'damage_modifier' => 4.0,
+        ],
+        190093 => [
+            'key' => 'raid',
+            'health_modifier' => 3.60,
+            'damage_modifier' => 7.0,
+        ],
+    ],
+
+    // creature_classlevelstats(level=83, class=1).basehp2
+    'tier_base_hp' => 13945,
+
+    'default_tier_entry' => 190090,
     'preset_values' => [
         'storm_siege',
         'ember_storm',
@@ -22,7 +68,7 @@ return [
         'raid',
     ],
     'defaults' => [
-        'boss_entry' => 647,
+        'boss_entry' => 190090,
         'boss_name' => '净土年兽',
         'boss_level' => 83,
         'boss_scale_scaled' => 500,

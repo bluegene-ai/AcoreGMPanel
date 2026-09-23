@@ -4,12 +4,17 @@ return [
     'page_title' => 'Boss Activity',
     'intro' => 'Review current boss runtime state, editable activity config, recent events, and contributor snapshots, then execute spawn, reload, preset, difficulty, or rebase actions through SOAP.',
     'scope_note' => 'Current realm: :server',
+    'fields' => [
+        'estimated_hp' => 'Estimated health',
+    ],
     'warnings' => [
         'schema_missing' => 'Some Boss tables are missing: :tables. Load boss.lua first so Lua can initialize the ac_eluna schema before using AGMP.',
         'runtime_unavailable' => 'Boss runtime data is unavailable. Verify boss.lua created the ac_eluna persistence tables.',
         'config_unavailable' => 'Boss config storage is unavailable. AGMP fell back to built-in defaults.',
         'events_unavailable' => 'Boss event data is unavailable.',
         'contributors_unavailable' => 'Boss contributor snapshots are unavailable.',
+        'dashboard_degraded' => 'Reading Boss data failed. The page fell back to default values; see storage/logs/boss_repository_warnings.log for details.',
+        'server_not_supported' => 'This module only works on the level-80 realm. The current realm (:server) does not deploy boss.lua, so AGMP will not send Boss commands to it. Switch to the level-80 realm first.',
     ],
     'runtime' => [
         'title' => 'Current Runtime',
@@ -45,8 +50,12 @@ return [
         'title' => 'Actions',
         'spawn' => 'Spawn Boss',
         'spawn_help' => 'Spawn the current template at one of the configured spawn points.',
+        'kill' => 'Kill Boss',
+        'kill_help' => 'Kill the active boss through the normal death flow, including rewards.',
+        'clear' => 'Reset Boss',
+        'clear_help' => 'Remove the active boss immediately without rewards and reset the runtime record.',
         'rebase' => 'Rebase health',
-        'rebase_help' => 'Re-apply the current health multiplier to the active boss.',
+        'rebase_help' => 'Re-apply the current health multiplier to the active boss. Only allowed while out of combat.',
         'reload_config' => 'Reload config',
         'reload_config_help' => 'Reload the activity config from ac_eluna and apply the hot-reloadable pieces to the active boss when possible.',
         'preset_label' => 'Skill preset',
@@ -63,7 +72,7 @@ return [
             'rewards' => 'Rewards and Scoring',
         ],
         'fields' => [
-            'boss_entry' => 'Boss entry',
+            'boss_entry' => 'Difficulty tier',
             'boss_name' => 'Boss name',
             'boss_level' => 'Boss level',
             'boss_scale' => 'Boss scale multiplier',
@@ -103,6 +112,8 @@ return [
             'spawn_point_line' => 'One point per line: map_id,x,y,z (e.g. 571,4353.573,-4411.8877,151.3909)',
         ],
         'hints' => [
+            'boss_entry' => 'The tier selects the in-game template (190090–190093) and its HealthModifier / DamageModifier. Respawn the boss for the change to fully apply.',
+            'estimated_hp' => 'Estimated health = level-83 basehp2 (13945) × template HealthModifier × current health multiplier; the in-game value is authoritative.',
             'boss_auras_text' => 'Example: 21562,1126,467,20217',
             'reward_items_text' => 'Every extra random winner receives one item chosen from this list.',
             'reward_formulas_text' => 'If the formula roll succeeds, one item is chosen from this list. Can be empty.',
@@ -130,6 +141,20 @@ return [
             'venom_pursuit' => 'Focuses on pursuit and poison attrition.',
             'grave_bombard' => 'Focuses on bombardment and area denial.',
             'spellbreak_bulwark' => 'Focuses on interrupts and anti-caster pressure.',
+        ],
+    ],
+    'tiers' => [
+        'labels' => [
+            'entry' => 'Entry (live-equivalent)',
+            'standard' => 'Standard (5 players)',
+            'hard' => 'Hard (10 players)',
+            'raid' => 'Raid (25 players)',
+        ],
+        'summary' => [
+            'entry' => 'Recommended for 1–3 players. Template entry 190090, HealthModifier 0.21 / DamageModifier 1.0, about 4,392,700 health at multiplier 1500.',
+            'standard' => 'Recommended for 5 players. Template entry 190091, HealthModifier 0.60 / DamageModifier 2.0, about 12,550,500 health at multiplier 1500.',
+            'hard' => 'Recommended for 10 players. Template entry 190092, HealthModifier 1.45 / DamageModifier 4.0, about 30,330,000 health at multiplier 1500.',
+            'raid' => 'Recommended for 25 players. Template entry 190093, HealthModifier 3.60 / DamageModifier 7.0, about 75,303,000 health at multiplier 1500.',
         ],
     ],
     'difficulties' => [
@@ -168,6 +193,8 @@ return [
             'command_preset' => 'Preset change',
             'command_difficulty' => 'Difficulty change',
             'command_rebase' => 'Rebase',
+            'command_clear' => 'Command reset',
+            'runtime_cleared' => 'Runtime cleared',
         ],
     ],
     'contributors' => [
@@ -201,13 +228,16 @@ return [
         'config_storage_missing' => 'Boss config storage has not been initialized by boss.lua yet. AGMP can only show defaults until Lua creates the table.',
         'config_save_failed' => 'Boss config could not be saved.',
         'reload_failed' => 'Lua reload failed.',
+        'marker_missing' => 'The command did not reach the game (no [AGMP_OK]/[AGMP_ERROR] marker received). Verify that boss.lua is loaded on this realm.',
     ],
     'js' => [
         'modules' => [
             'boss' => [
                 'confirm' => [
                     'spawn' => 'Spawn a boss on the current realm?',
-                    'rebase' => 'Rebase the active boss health values?',
+                    'kill' => 'Kill the active boss? It will die through the normal flow and rewards will be granted.',
+                    'clear' => 'Reset the active boss? It will be removed immediately without any rewards.',
+                    'rebase' => 'Rebase the active boss health values? The boss must be out of combat.',
                     'config_reload' => 'Reload the boss config from ac_eluna?',
                     'preset' => 'Switch preset to :value?',
                     'difficulty' => 'Switch difficulty to :value?',

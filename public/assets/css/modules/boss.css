@@ -35,6 +35,8 @@
 .boss-field input,.boss-field select,.boss-field textarea{background:#09111a;border:1px solid rgba(220,168,82,.22);border-radius:8px;color:#fff7ea;padding:9px 10px;font-size:13px;}
 .boss-field textarea{resize:vertical;min-height:88px;line-height:1.45;}
 .boss-field--full{grid-column:1 / -1;}
+.boss-field--readonly{justify-content:flex-start;}
+.boss-estimated-hp{display:block;background:#09111a;border:1px dashed rgba(220,168,82,.32);border-radius:8px;color:#ffe1ab;padding:9px 10px;font-size:15px;font-variant-numeric:tabular-nums;}
 .boss-check{display:flex;align-items:center;gap:10px;background:#09111a;border:1px solid rgba(220,168,82,.22);border-radius:8px;padding:11px 12px;color:#fff7ea;min-height:44px;}
 .boss-check input{margin:0;accent-color:#dca852;}
 .boss-config-actions{display:flex;justify-content:flex-end;}

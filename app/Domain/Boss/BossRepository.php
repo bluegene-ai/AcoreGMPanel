@@ -7,12 +7,34 @@ namespace Acme\Panel\Domain\Boss;
 use Acme\Panel\Core\Config;
 use Acme\Panel\Core\Lang;
 use Acme\Panel\Domain\Support\MultiServerRepository;
+use Acme\Panel\Support\LogPath;
+use Acme\Panel\Support\ServerContext;
 use PDO;
 use PDOStatement;
 use Throwable;
 
 class BossRepository extends MultiServerRepository
 {
+    /**
+     * config 表的原始列清单，loadConfig / loadConfigStorageRow 共用。
+     */
+    private const CONFIG_COLUMNS = [
+        'state_key', 'boss_entry', 'boss_name', 'boss_level',
+        'boss_scale_scaled', 'boss_health_multiplier_scaled',
+        'boss_auras_text', 'ally_level',
+        'ally_health_multiplier_scaled', 'respawn_time_minutes',
+        'minion_count_min', 'minion_count_max', 'skill_preset',
+        'skill_difficulty', 'guaranteed_reward_enabled',
+        'guaranteed_reward_notify', 'max_random_reward_players',
+        'class_reward_chance', 'formula_reward_chance',
+        'mount_reward_chance', 'random_reward_mode', 'participation_range',
+        'damage_weight', 'healing_weight', 'threat_weight',
+        'presence_weight', 'kill_weight', 'guaranteed_item_id',
+        'guaranteed_item_count', 'gold_min_copper', 'gold_max_copper',
+        'reward_items_text', 'reward_formulas_text', 'reward_mounts_text',
+        'spawn_points_text', 'updated_at',
+    ];
+
     private string $customDbName;
     private string $runtimeKey;
     private string $configTable;
@@ -23,16 +45,119 @@ class BossRepository extends MultiServerRepository
     {
         parent::__construct($serverId);
 
-        $this->customDbName = (string) Config::get('boss.custom_db_name', 'ac_eluna');
-        $this->runtimeKey = (string) Config::get('boss.runtime_key', 'current');
+        $override = $this->serverOverride($this->serverId);
+
+        $this->customDbName = (string) (
+            $override['custom_db_name']
+            ?? Config::get('boss.custom_db_name', 'ac_eluna')
+        );
+        $this->runtimeKey = (string) (
+            $override['runtime_key']
+            ?? Config::get('boss.runtime_key', 'current')
+        );
         $this->configTable = (string) Config::get('boss.config_table', 'boss_activity_config');
         $this->decimalScale = max(1, (int) Config::get('boss.decimal_scale', 100));
     }
 
+    /**
+     * 当前区服是否部署了 boss.lua（config/boss.php supported_server_ids）。
+     */
+    public function serverSupported(?int $serverId = null): bool
+    {
+        $supported = Config::get('boss.supported_server_ids', []);
+
+        if (!is_array($supported) || $supported === [])
+            return true;
+
+        $resolved = $serverId ?? $this->serverId;
+
+        foreach ($supported as $candidate) {
+            if ((int) $candidate === $resolved)
+                return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 当前区服显示名，用于 :server 占位替换；取不到时退回区服索引。
+     */
+    private function serverName(): string
+    {
+        try {
+            $server = ServerContext::server($this->serverId);
+            $name = trim((string) ($server['name'] ?? ''));
+
+            if ($name !== '')
+                return $name;
+        } catch (Throwable $exception) {
+            $this->logWarning('server_name_unavailable', $exception);
+        }
+
+        return (string) $this->serverId;
+    }
+
+    /**
+     * 取当前区服的 ac_eluna / state_key 覆盖项，没有配置时返回空数组。
+     */
+    private function serverOverride(int $serverId): array
+    {
+        $overrides = Config::get('boss.server_overrides', []);
+
+        if (!is_array($overrides))
+            return [];
+
+        $override = $overrides[$serverId] ?? null;
+
+        return is_array($override) ? $override : [];
+    }
+
     public function dashboard(int $eventLimit, int $contributorLimit): array
+    {
+        try {
+            return $this->buildDashboard($eventLimit, $contributorLimit);
+        } catch (Throwable $exception) {
+            // public/index.php 没有全局异常兜底：DB/配置异常时降级为警告 + 默认值。
+            $this->logWarning('dashboard_degraded', $exception);
+
+            $warnings = [];
+            $this->warn($warnings, Lang::get('app.boss.warnings.runtime_unavailable'));
+            $this->warn($warnings, Lang::get('app.boss.warnings.config_unavailable'));
+            $this->warn($warnings, Lang::get('app.boss.warnings.events_unavailable'));
+            $this->warn($warnings, Lang::get('app.boss.warnings.contributors_unavailable'));
+
+            $defaults = $this->defaultConfigStorage();
+
+            return [
+                'runtime' => $this->defaultRuntime(),
+                'config' => $this->normalizeConfigRow($defaults, $defaults),
+                'stats' => [
+                    'events_24h' => 0,
+                    'kills_7d' => 0,
+                    'contributors_7d' => 0,
+                    'random_rewarded_7d' => 0,
+                ],
+                'events' => [],
+                'contributors' => [],
+                'critical_warnings' => [
+                    Lang::get('app.boss.warnings.dashboard_degraded'),
+                ],
+                'warnings' => $warnings,
+            ];
+        }
+    }
+
+    private function buildDashboard(int $eventLimit, int $contributorLimit): array
     {
         $warnings = [];
         $criticalWarnings = [];
+
+        if (!$this->serverSupported()) {
+            $criticalWarnings[] = Lang::get('app.boss.warnings.server_not_supported', [
+                'server' => $this->serverName(),
+            ]);
+        }
+
         $missingTables = $this->missingTables([
             'boss_activity_runtime',
             $this->configTable,
@@ -59,18 +184,47 @@ class BossRepository extends MultiServerRepository
 
     public function saveConfig(array $config): array
     {
+        if (!$this->tableExists($this->configTable))
+            throw new \RuntimeException('boss_config_storage_missing');
+
+        // 语义：缺失字段保留数据库现值，只有显式提交的字段才被覆盖。
+        $currentRow = $this->loadConfigStorageRow($this->configTable) ?? [];
         $defaults = $this->defaultConfigStorage();
-        $normalized = array_replace($defaults, $config, [
+
+        $normalized = array_replace($defaults, $currentRow, $config, [
             'state_key' => $this->runtimeKey,
             'updated_at' => time(),
         ]);
 
-        if (!$this->tableExists($this->configTable))
-            throw new \RuntimeException('boss_config_storage_missing');
-
         $this->storeConfig($normalized, false);
 
         return $this->normalizeConfigRow($normalized, $defaults);
+    }
+
+    /**
+     * 读取 config 表当前行的原始列值；表不存在或行缺失时返回 null。
+     */
+    private function loadConfigStorageRow(string $table): ?array
+    {
+        if (!$this->tableExists($table))
+            return null;
+
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT ' . implode(', ', self::CONFIG_COLUMNS)
+                . ' FROM ' . $this->table($table)
+                . ' WHERE state_key = :state_key LIMIT 1'
+            );
+            $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
+            $stmt->execute();
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            return is_array($row) ? $row : null;
+        } catch (Throwable $exception) {
+            $this->logWarning('config_row_unavailable', $exception);
+
+            return null;
+        }
     }
 
     private function loadRuntime(array &$warnings): array
@@ -127,23 +281,8 @@ class BossRepository extends MultiServerRepository
 
         try {
             $stmt = $this->characters()->prepare(
-                'SELECT '
-                . 'state_key, boss_entry, boss_name, boss_level, '
-                . 'boss_scale_scaled, boss_health_multiplier_scaled, '
-                . 'boss_auras_text, ally_level, '
-                . 'ally_health_multiplier_scaled, respawn_time_minutes, '
-                . 'minion_count_min, minion_count_max, skill_preset, '
-                . 'skill_difficulty, guaranteed_reward_enabled, '
-                . 'guaranteed_reward_notify, max_random_reward_players, '
-                . 'class_reward_chance, formula_reward_chance, '
-                . 'mount_reward_chance, random_reward_mode, '
-                . 'participation_range, damage_weight, healing_weight, '
-                . 'threat_weight, presence_weight, kill_weight, '
-                . 'guaranteed_item_id, guaranteed_item_count, '
-                . 'gold_min_copper, gold_max_copper, reward_items_text, '
-                . 'reward_formulas_text, reward_mounts_text, '
-                . 'spawn_points_text, updated_at '
-                . 'FROM ' . $this->table($this->configTable)
+                'SELECT ' . implode(', ', self::CONFIG_COLUMNS)
+                . ' FROM ' . $this->table($this->configTable)
                 . ' WHERE state_key = :state_key LIMIT 1'
             );
             $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
@@ -361,19 +500,48 @@ class BossRepository extends MultiServerRepository
         if ($this->tableAvailability !== null && array_key_exists($table, $this->tableAvailability))
             return $this->tableAvailability[$table];
 
-        $stmt = $this->characters()->prepare(
-            'SELECT 1 FROM information_schema.TABLES '
-            . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table LIMIT 1'
-        );
-        $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
-        $stmt->bindValue(':table', $table, PDO::PARAM_STR);
-        $stmt->execute();
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT 1 FROM information_schema.TABLES '
+                . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table LIMIT 1'
+            );
+            $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
+            $stmt->bindValue(':table', $table, PDO::PARAM_STR);
+            $stmt->execute();
 
-        $exists = $stmt->fetchColumn() !== false;
+            $exists = $stmt->fetchColumn() !== false;
+        } catch (Throwable $exception) {
+            // 探测失败（连接/权限异常）不能冒泡：按「不存在」处理并记录一条 warning。
+            $this->logWarning('table_probe_failed:' . $table, $exception);
+            $exists = false;
+        }
+
         $this->tableAvailability ??= [];
         $this->tableAvailability[$table] = $exists;
 
         return $exists;
+    }
+
+    /**
+     * 在 storage/logs 下落一条 warning，避免异常被完全吞掉（与既有 LogPath 约定一致）。
+     */
+    private function logWarning(string $context, Throwable $exception): void
+    {
+        try {
+            if (!class_exists(LogPath::class))
+                return;
+
+            LogPath::appendLine('boss_repository_warnings.log', sprintf(
+                '[%s] %s: %s (%s:%d)',
+                date('Y-m-d H:i:s'),
+                $context,
+                $exception->getMessage(),
+                $exception->getFile(),
+                $exception->getLine()
+            ), true, 0777);
+        } catch (Throwable $ignored) {
+            // 日志不可写时静默降级，绝不能因为记录日志再次抛异常。
+        }
     }
 
     private function storeConfig(array $config, bool $ignoreExisting): void
@@ -420,7 +588,7 @@ class BossRepository extends MultiServerRepository
     private function bindConfigStatement(PDOStatement $stmt, array $config): void
     {
         $stmt->bindValue(':state_key', (string) ($config['state_key'] ?? $this->runtimeKey), PDO::PARAM_STR);
-        $stmt->bindValue(':boss_entry', (int) ($config['boss_entry'] ?? 647), PDO::PARAM_INT);
+        $stmt->bindValue(':boss_entry', (int) ($config['boss_entry'] ?? Config::get('boss.default_tier_entry', 190090)), PDO::PARAM_INT);
         $stmt->bindValue(':boss_name', (string) ($config['boss_name'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':boss_level', (int) ($config['boss_level'] ?? 83), PDO::PARAM_INT);
         $stmt->bindValue(':boss_scale_scaled', (int) ($config['boss_scale_scaled'] ?? 500), PDO::PARAM_INT);
@@ -488,7 +656,7 @@ class BossRepository extends MultiServerRepository
 
         return [
             'state_key' => (string) ($resolved['state_key'] ?? $this->runtimeKey),
-            'boss_entry' => (int) ($resolved['boss_entry'] ?? 647),
+            'boss_entry' => (int) ($resolved['boss_entry'] ?? Config::get('boss.default_tier_entry', 190090)),
             'boss_name' => (string) ($resolved['boss_name'] ?? ''),
             'boss_level' => (int) ($resolved['boss_level'] ?? 83),
             'boss_scale' => $this->scaledToDisplay((int) ($resolved['boss_scale_scaled'] ?? 500)),
@@ -558,7 +726,7 @@ class BossRepository extends MultiServerRepository
     {
         $defaults = [
             'state_key' => $this->runtimeKey,
-            'boss_entry' => 647,
+            'boss_entry' => (int) Config::get('boss.default_tier_entry', 190090),
             'boss_name' => '净土年兽',
             'boss_level' => 83,
             'boss_scale_scaled' => 500,

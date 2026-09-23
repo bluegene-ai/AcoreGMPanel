@@ -10,6 +10,7 @@ use Acme\Panel\Core\Lang;
 use Acme\Panel\Core\Request;
 use Acme\Panel\Core\Response;
 use Acme\Panel\Domain\Boss\BossRepository;
+use Acme\Panel\Domain\Boss\BossTierOptions;
 use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\ServerContext;
 use Acme\Panel\Support\SoapCommandRunner;
@@ -64,13 +65,17 @@ class BossController extends Controller
         );
 
         $server = ServerContext::server();
+        $dashboard = $this->repo()->dashboard($eventLimit, $contributorLimit);
+        $config = is_array($dashboard['config'] ?? null) ? $dashboard['config'] : [];
 
         return $this->pageView('boss.index', $this->serverViewData([
-            'boss_dashboard' => $this->repo()->dashboard($eventLimit, $contributorLimit),
+            'boss_dashboard' => $dashboard,
             'boss_options' => [
                 'presets' => $this->presetOptions(),
                 'difficulties' => $this->difficultyOptions(),
                 'random_modes' => $this->randomModeOptions(),
+                'tiers' => $this->tierPayload($config),
+                'supported' => $this->repo()->serverSupported(),
             ],
             'event_limit' => $eventLimit,
             'contributor_limit' => $contributorLimit,
@@ -99,10 +104,17 @@ class BossController extends Controller
         $this->requireActionCapability();
         $this->maybeSwitchServer($request);
 
+        if (!$this->repo()->serverSupported()) {
+            return $this->json([
+                'success' => false,
+                'message' => $this->serverNotSupportedMessage(),
+            ], 422);
+        }
+
         $action = $this->normalizedEnum(
             $request,
             'action',
-            ['spawn', 'preset', 'difficulty', 'rebase', 'config_reload'],
+            ['spawn', 'preset', 'difficulty', 'rebase', 'config_reload', 'kill', 'clear'],
             ''
         );
         $value = $this->normalizedString($request, 'value');
@@ -136,9 +148,7 @@ class BossController extends Controller
         }
 
         $command = $this->buildCommand($action, $value);
-        $result = SoapCommandRunner::execute($command, [
-            'server_id' => ServerContext::currentId(),
-        ]);
+        $result = $this->runBossCommand($command);
 
         Audit::log('boss', 'command', $action, [
             'server_id' => ServerContext::currentId(),
@@ -167,6 +177,13 @@ class BossController extends Controller
         $this->requireActionCapability();
         $this->maybeSwitchServer($request);
 
+        if (!$this->repo()->serverSupported()) {
+            return $this->json([
+                'success' => false,
+                'message' => $this->serverNotSupportedMessage(),
+            ], 422);
+        }
+
         $defaults = (array) Config::get('boss.defaults', []);
         $bossName = $this->trimmedName(
             $this->normalizedString(
@@ -176,14 +193,13 @@ class BossController extends Controller
             )
         );
 
+        // 难度档位：只接受 config/boss.php tiers 里的 entry，不在列表内回落到 default_tier_entry。
+        $submittedEntry = trim((string) $request->input('boss_entry', ''));
+        $resolvedEntry = BossTierOptions::resolveEntry($submittedEntry);
+        $entryFallback = $submittedEntry !== '' && (int) $submittedEntry !== $resolvedEntry;
+
         $config = [
-            'boss_entry' => $this->boundedInt(
-                $request,
-                'boss_entry',
-                (int) ($defaults['boss_entry'] ?? 647),
-                1,
-                2000000
-            ),
+            'boss_entry' => $resolvedEntry,
             'boss_name' => $bossName,
             'boss_level' => $this->boundedInt(
                 $request,
@@ -418,9 +434,7 @@ class BossController extends Controller
         }
 
         try {
-            $reloadResult = SoapCommandRunner::execute('.boss config reload', [
-                'server_id' => ServerContext::currentId(),
-            ]);
+            $reloadResult = $this->runBossCommand('.boss config reload');
         } catch (Throwable $exception) {
             $reloadResult = [
                 'success' => false,
@@ -455,11 +469,83 @@ class BossController extends Controller
                 ]),
             'payload' => [
                 'saved' => true,
+                'entry_fallback' => $entryFallback,
                 'reload_success' => $reloadResult['success'],
                 'config' => $savedConfig,
                 'reload' => $reloadResult,
             ],
         ], $reloadResult['success'] ? 200 : 422);
+    }
+
+    /**
+     * Boss SOAP 调用统一入口：强制 strict_marker，避免「命令没到游戏」被当成成功。
+     */
+    private function runBossCommand(string $command): array
+    {
+        return SoapCommandRunner::execute($command, [
+            'server_id' => ServerContext::currentId(),
+            'strict_marker' => true,
+        ]);
+    }
+
+    private function serverNotSupportedMessage(): string
+    {
+        $server = ServerContext::server();
+        $name = trim((string) ($server['name'] ?? ''));
+
+        return Lang::get('app.boss.warnings.server_not_supported', [
+            'server' => $name !== '' ? $name : (string) ServerContext::currentId(),
+        ]);
+    }
+
+    /**
+     * 难度档位 payload：每档的倍率与当前倍率下的预估血量，供视图与前端即时换算。
+     */
+    private function tierPayload(array $config): array
+    {
+        $currentScaled = $this->resolveCurrentHealthMultiplierScaled($config);
+        $currentEntry = BossTierOptions::resolveEntry($config['boss_entry'] ?? null);
+        $labels = BossTierOptions::labels();
+
+        $items = [];
+
+        foreach (BossTierOptions::entries() as $entry => $tier) {
+            $items[] = [
+                'entry' => $entry,
+                'key' => (string) ($tier['key'] ?? ''),
+                'label' => (string) ($labels[$entry] ?? (string) $entry),
+                'health_modifier' => (float) ($tier['health_modifier'] ?? 0),
+                'damage_modifier' => (float) ($tier['damage_modifier'] ?? 0),
+                'estimated_hp' => BossTierOptions::estimateHp($entry, $currentScaled),
+            ];
+        }
+
+        return [
+            'items' => $items,
+            'base_hp' => (int) Config::get('boss.tier_base_hp', 13945),
+            'decimal_scale' => max(1, (int) Config::get('boss.decimal_scale', 100)),
+            'current_tier_entry' => $currentEntry,
+            'current_health_multiplier_scaled' => $currentScaled,
+            'current_estimated_hp' => BossTierOptions::estimateHp($currentEntry, $currentScaled),
+            'default_tier_entry' => BossTierOptions::defaultEntry(),
+        ];
+    }
+
+    /**
+     * 当前生效的血量倍率（缩放值）：以数据库现值为准，缺失时回落到默认值。
+     */
+    private function resolveCurrentHealthMultiplierScaled(array $config): int
+    {
+        $display = $config['boss_health_multiplier'] ?? null;
+
+        if (is_numeric($display) && $display !== '')
+            return BossTierOptions::toScaled($display);
+
+        $scaled = $config['boss_health_multiplier_scaled'] ?? null;
+        if (is_numeric($scaled) && $scaled !== '')
+            return max(0, (int) $scaled);
+
+        return (int) Config::get('boss.defaults.boss_health_multiplier_scaled', 2000);
     }
 
     private function buildCommand(string $action, string $value): string
@@ -472,6 +558,12 @@ class BossController extends Controller
 
         if ($action === 'config_reload')
             return '.boss config reload';
+
+        if ($action === 'kill')
+            return '.boss kill';
+
+        if ($action === 'clear')
+            return '.boss clear';
 
         return '.boss ' . $action . ' ' . $value;
     }

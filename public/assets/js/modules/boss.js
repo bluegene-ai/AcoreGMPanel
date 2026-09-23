@@ -8,12 +8,17 @@
   const dom = {
     feedback: document.getElementById('bossFeedback'),
     spawnBtn: document.getElementById('bossSpawnBtn'),
+    killBtn: document.getElementById('bossKillBtn'),
+    clearBtn: document.getElementById('bossClearBtn'),
     rebaseBtn: document.getElementById('bossRebaseBtn'),
     configReloadBtn: document.getElementById('bossConfigReloadBtn'),
     presetBtn: document.getElementById('bossPresetBtn'),
     presetSelect: document.getElementById('bossPresetSelect'),
     difficultyBtn: document.getElementById('bossDifficultyBtn'),
     difficultySelect: document.getElementById('bossDifficultySelect'),
+    tierSelect: document.querySelector('[data-boss-tier-select]'),
+    healthMultiplierInput: document.getElementById('bossHealthMultiplierInput'),
+    estimatedHp: document.querySelector('[data-boss-hp-preview]'),
     configForm: document.getElementById('bossConfigForm'),
     configSaveBtn: document.getElementById('bossConfigSaveBtn')
   };
@@ -52,16 +57,55 @@
   }
 
   function setBusy(disabled){
-    [dom.spawnBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn].forEach(function(node){
+    [dom.spawnBtn, dom.killBtn, dom.clearBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn].forEach(function(node){
       if(node) node.disabled = !!disabled;
     });
     if(dom.presetSelect) dom.presetSelect.disabled = !!disabled;
     if(dom.difficultySelect) dom.difficultySelect.disabled = !!disabled;
+    if(dom.tierSelect) dom.tierSelect.disabled = !!disabled;
+    if(dom.healthMultiplierInput) dom.healthMultiplierInput.disabled = !!disabled;
     if(dom.configForm){
       dom.configForm.querySelectorAll('input, textarea, select').forEach(function(node){
         node.disabled = !!disabled;
       });
     }
+  }
+
+  function formatHp(value){
+    const rounded = Math.max(0, Math.round(Number(value) || 0));
+    if(!isFinite(rounded)) return '0';
+    try{
+      return rounded.toLocaleString('en-US');
+    }catch(error){
+      return String(rounded);
+    }
+  }
+
+  function currentHealthMultiplierScaled(){
+    if(!dom.healthMultiplierInput) return null;
+    const multiplier = parseFloat(dom.healthMultiplierInput.value);
+    if(!isFinite(multiplier) || multiplier < 0) return null;
+    const scale = parseFloat(dom.estimatedHp && dom.estimatedHp.dataset.bossHpScale) || 100;
+    return multiplier * scale;
+  }
+
+  // 预估血量 = base_hp × 模板 HealthModifier × 当前血量倍率（纯前端换算）。
+  function updateEstimatedHp(){
+    if(!dom.estimatedHp || !dom.tierSelect) return;
+    const option = dom.tierSelect.options[dom.tierSelect.selectedIndex];
+    if(!option) return;
+
+    const baseHp = parseFloat(dom.estimatedHp.dataset.bossBaseHp) || 0;
+    const modifier = parseFloat(option.dataset.bossHealthModifier);
+    const multiplierScaled = currentHealthMultiplierScaled();
+
+    if(!isFinite(modifier) || modifier <= 0 || multiplierScaled === null){
+      dom.estimatedHp.textContent = '—';
+      return;
+    }
+
+    const scale = parseFloat(dom.estimatedHp.dataset.bossHpScale) || 100;
+    dom.estimatedHp.textContent = formatHp(baseHp * modifier * (multiplierScaled / scale));
   }
 
   function confirmMessage(action, label){
@@ -110,6 +154,14 @@
     dom.spawnBtn.addEventListener('click', function(){ runAction('spawn'); });
   }
 
+  if(dom.killBtn){
+    dom.killBtn.addEventListener('click', function(){ runAction('kill'); });
+  }
+
+  if(dom.clearBtn){
+    dom.clearBtn.addEventListener('click', function(){ runAction('clear'); });
+  }
+
   if(dom.rebaseBtn){
     dom.rebaseBtn.addEventListener('click', function(){ runAction('rebase'); });
   }
@@ -117,6 +169,17 @@
   if(dom.configReloadBtn){
     dom.configReloadBtn.addEventListener('click', function(){ runAction('config_reload'); });
   }
+
+  if(dom.tierSelect){
+    dom.tierSelect.addEventListener('change', updateEstimatedHp);
+  }
+
+  if(dom.healthMultiplierInput){
+    dom.healthMultiplierInput.addEventListener('input', updateEstimatedHp);
+    dom.healthMultiplierInput.addEventListener('change', updateEstimatedHp);
+  }
+
+  updateEstimatedHp();
 
   if(dom.presetBtn && dom.presetSelect){
     dom.presetBtn.addEventListener('click', function(){
