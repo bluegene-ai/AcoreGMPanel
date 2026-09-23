@@ -65,64 +65,77 @@ class SoapExecutor
     $uri  = $cfg['uri'];
 
         $attempt=0; $lastError=null; $faultMsg=null; $output='';
-        while($attempt <= $retries){
-            $attempt++;
-            try {
-                if(class_exists(SoapClient::class)){
-                    $url=sprintf('http://%s:%s@%s:%d/',rawurlencode($user),rawurlencode($pass),$host,$port);
-                    $cli = new SoapClient(null,[
-                        'location'=>$url,
-                        'uri'=>$uri,
-                        'style'=>SOAP_RPC,
-                        'login'=>$user,
-                        'password'=>$pass,
-                        'exceptions'=>true,
-                        'connection_timeout'=>$connectTimeout,
-                    ]);
 
-                    $resp = $cli->__soapCall('executeCommand',[ new \SoapParam($command,'command') ]);
-                    $output = is_string($resp)? $resp : var_export($resp,true);
-                    $res = $this->result(true,$command,$serverId,$start,'ok',null,['output'=>$output,'retried'=>$attempt-1]);
+        // worldserver 没启动时，SoapClient::__doRequest() 会发出 "connect() failed" 之类的
+        // PHP warning；面板的 ErrorHandler 会把任何 warning 转成错误页直接 echo 出来，
+        // 结果就是页面中间插一段异常堆栈。SOAP 不通是预期内的情况（下面会优雅返回失败），
+        // 所以这里临时把 warning 静音，调用结束再恢复原来的错误处理器。
+        set_error_handler(static function (): bool {
+            return true;
+        }, E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE | E_DEPRECATED);
+
+        try {
+            while($attempt <= $retries){
+                $attempt++;
+                try {
+                    if(class_exists(SoapClient::class)){
+                        $url=sprintf('http://%s:%s@%s:%d/',rawurlencode($user),rawurlencode($pass),$host,$port);
+                        $cli = new SoapClient(null,[
+                            'location'=>$url,
+                            'uri'=>$uri,
+                            'style'=>SOAP_RPC,
+                            'login'=>$user,
+                            'password'=>$pass,
+                            'exceptions'=>true,
+                            'connection_timeout'=>$connectTimeout,
+                        ]);
+
+                        $resp = $cli->__soapCall('executeCommand',[ new \SoapParam($command,'command') ]);
+                        $output = is_string($resp)? $resp : var_export($resp,true);
+                        $res = $this->result(true,$command,$serverId,$start,'ok',null,['output'=>$output,'retried'=>$attempt-1]);
+                        if($doAudit){ $this->audit($res); }
+                        return $res;
+                    } else {
+
+                        $xml = '<?xml version="1.0" encoding="utf-8"?>'
+                            .'<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="'.$uri.'">'
+                            .'<SOAP-ENV:Body><ns1:executeCommand><command>'.htmlspecialchars($command,ENT_XML1|ENT_QUOTES,'UTF-8').'</command>'
+                            .'</ns1:executeCommand></SOAP-ENV:Body></SOAP-ENV:Envelope>';
+                        $ctx = stream_context_create([
+                            'http'=>[
+                                'method'=>'POST','header'=>[
+                                    'Content-Type: text/xml; charset=utf-8',
+                                    'SOAPAction: executeCommand',
+                                    'Authorization: Basic '.base64_encode($user.':'.$pass),
+                                ],'content'=>$xml,'timeout'=>$totalTimeout
+                            ]
+                        ]);
+                        $resp = @file_get_contents("http://{$host}:{$port}/", false, $ctx);
+                        if($resp===false){ $lastError='net.unreachable'; throw new \RuntimeException(Lang::get('support.soap_executor.errors.request_failed')); }
+                        if(preg_match('#<return>(<!\[CDATA\[)?(.*?)(\]\]>)?</return>#s',$resp,$m)){ $output=trim($m[2]); }
+                        else { $output=trim(strip_tags($resp)); }
+                        $res=$this->result(true,$command,$serverId,$start,'ok',null,['output'=>$output,'retried'=>$attempt-1]);
+                        if($doAudit){ $this->audit($res); }
+                        return $res;
+                    }
+                } catch(SoapFault $sf){
+                    $faultMsg = $sf->getMessage();
+                    $code = $this->mapFaultMessage($faultMsg);
+                    $res = $this->result(false,$command,$serverId,$start,$code,$faultMsg,['fault'=>$faultMsg,'retried'=>$attempt-1]);
                     if($doAudit){ $this->audit($res); }
                     return $res;
-                } else {
+                } catch(Throwable $e){
+                    $lastError = $this->classifyException($e);
+                    if($attempt > $retries){
+                        $res = $this->result(false,$command,$serverId,$start,$lastError,$e->getMessage(),['retried'=>$attempt-1]);
+                        if($doAudit){ $this->audit($res); }
+                        return $res;
+                    }
 
-                    $xml = '<?xml version="1.0" encoding="utf-8"?>'
-                        .'<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="'.$uri.'">'
-                        .'<SOAP-ENV:Body><ns1:executeCommand><command>'.htmlspecialchars($command,ENT_XML1|ENT_QUOTES,'UTF-8').'</command>'
-                        .'</ns1:executeCommand></SOAP-ENV:Body></SOAP-ENV:Envelope>';
-                    $ctx = stream_context_create([
-                        'http'=>[
-                            'method'=>'POST','header'=>[
-                                'Content-Type: text/xml; charset=utf-8',
-                                'SOAPAction: executeCommand',
-                                'Authorization: Basic '.base64_encode($user.':'.$pass),
-                            ],'content'=>$xml,'timeout'=>$totalTimeout
-                        ]
-                    ]);
-                    $resp = @file_get_contents("http://{$host}:{$port}/", false, $ctx);
-                    if($resp===false){ $lastError='net.unreachable'; throw new \RuntimeException(Lang::get('support.soap_executor.errors.request_failed')); }
-                    if(preg_match('#<return>(<!\[CDATA\[)?(.*?)(\]\]>)?</return>#s',$resp,$m)){ $output=trim($m[2]); }
-                    else { $output=trim(strip_tags($resp)); }
-                    $res=$this->result(true,$command,$serverId,$start,'ok',null,['output'=>$output,'retried'=>$attempt-1]);
-                    if($doAudit){ $this->audit($res); }
-                    return $res;
                 }
-            } catch(SoapFault $sf){
-                $faultMsg = $sf->getMessage();
-                $code = $this->mapFaultMessage($faultMsg);
-                $res = $this->result(false,$command,$serverId,$start,$code,$faultMsg,['fault'=>$faultMsg,'retried'=>$attempt-1]);
-                if($doAudit){ $this->audit($res); }
-                return $res;
-            } catch(Throwable $e){
-                $lastError = $this->classifyException($e);
-                if($attempt > $retries){
-                    $res = $this->result(false,$command,$serverId,$start,$lastError,$e->getMessage(),['retried'=>$attempt-1]);
-                    if($doAudit){ $this->audit($res); }
-                    return $res;
-                }
-
             }
+        } finally {
+            restore_error_handler();
         }
 
     $res = $this->result(false,$command,$serverId,$start,$lastError?:'internal.error',Lang::get('support.soap_executor.errors.unknown'));

@@ -27,6 +27,7 @@ final class ModuleAssets
         'smartai.' => 'smart_ai_wizard',
         'soap.' => 'soap_wizard',
         'supervisor.' => 'supervisor',
+        'trivia.' => 'trivia',
     ];
 
     private const PAGE_MODULE_ALIASES = [
@@ -130,6 +131,12 @@ final class ModuleAssets
             'capability' => 'aegis.dashboard',
         ],
         [
+            'path' => '/trivia',
+            'label' => 'app.nav.trivia',
+            'activePrefixes' => ['/trivia'],
+            'capability' => 'trivia.view',
+        ],
+        [
             'path' => '/supervisor',
             'label' => 'app.nav.supervisor',
             'activePrefixes' => ['/supervisor'],
@@ -160,6 +167,7 @@ final class ModuleAssets
         'smartai' => ['smartai'],
         'soap' => ['soap'],
         'supervisor' => ['supervisor'],
+        'trivia' => ['trivia'],
     ];
 
     private const JS_LOCALE_BUNDLES = [
@@ -179,6 +187,7 @@ final class ModuleAssets
         'smartai' => ['smartai'],
         'soap' => ['soap'],
         'supervisor' => ['supervisor'],
+        'trivia' => ['trivia'],
     ];
 
     private const SPLIT_LANG_SECTIONS = [
@@ -203,6 +212,7 @@ final class ModuleAssets
         'soap',
         'setup',
         'supervisor',
+        'trivia',
     ];
 
     private const SPLIT_JS_MODULES = [
@@ -221,6 +231,7 @@ final class ModuleAssets
         'smartai',
         'soap',
         'supervisor',
+        'trivia',
     ];
 
     private const JS_LOCALE_TRANSLATION_KEYS = [

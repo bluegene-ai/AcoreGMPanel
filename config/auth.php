@@ -46,6 +46,11 @@ return [
     'audit' => [
       'read' => 'Audit log list and filter reads.',
     ],
+    'trivia' => [
+      'view' => 'Trivia page shell, live status reads, question/preset/winner list reads.',
+      'control' => 'Trivia runtime SOAP actions: start, stop, pause, resume, enable, disable, reload.',
+      'manage' => 'Trivia settings, question bank, reward preset and leaderboard writes.',
+    ],
     'mail' => [
       'list' => 'Mail page shell, mail list, and base filters.',
       'view' => 'Single mail detail reads including attachments.',

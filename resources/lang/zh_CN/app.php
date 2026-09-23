@@ -27,6 +27,7 @@ return array (
     'aegis' => 'Aegis 反作弊',
     'logs' => '日志',
     'supervisor' => '守护管理',
+    'trivia' => '聊天答题',
   ),
   'common' => 
   array (

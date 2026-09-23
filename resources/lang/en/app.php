@@ -27,6 +27,7 @@ return array (
     'aegis' => 'Aegis Anti-Cheat',
     'logs' => 'Logs',
     'supervisor' => 'Supervisor',
+    'trivia' => 'Chat Trivia',
   ),
   'common' => 
   array (

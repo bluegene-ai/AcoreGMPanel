@@ -26,6 +26,7 @@ use Acme\Panel\Http\Controllers\Setup\SetupController;
 use Acme\Panel\Http\Controllers\SmartAi\SmartAiWizardController;
 use Acme\Panel\Http\Controllers\Soap\SoapWizardController;
 use Acme\Panel\Http\Controllers\Supervisor\SupervisorController;
+use Acme\Panel\Http\Controllers\Trivia\TriviaController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostAdminController;
 use Acme\Panel\Http\Controllers\CharacterBoost\PublicCharacterBoostController;
 use Acme\Panel\Http\Controllers\CharacterBoost\CharacterBoostRedeemCodeAdminController;
@@ -223,6 +224,27 @@ return static function (Router $router): void {
         $router->get('/supervisor/api/log', [SupervisorController::class, 'apiLog']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/supervisor/api/command', [SupervisorController::class, 'apiCommand']);
+        });
+
+        // 聊天答题（TriviaReward.lua）：实时状态走 SOAP，配置/题库/预设/排行走 ac_eluna 数据表
+        $router->get('/trivia', [TriviaController::class, 'index']);
+        $router->get('/trivia/api/status', [TriviaController::class, 'apiStatus']);
+        $router->get('/trivia/api/questions', [TriviaController::class, 'apiQuestions']);
+        $router->get('/trivia/api/presets', [TriviaController::class, 'apiPresets']);
+        $router->get('/trivia/api/winners', [TriviaController::class, 'apiWinners']);
+        // 题库模板导入/导出（导出与模板下载是 GET，导入走 POST + CSRF）
+        $router->get('/trivia/api/questions/export', [TriviaController::class, 'apiQuestionExport']);
+        $router->get('/trivia/api/questions/template', [TriviaController::class, 'apiQuestionTemplate']);
+        $router->group([CsrfMiddleware::class], static function (Router $router): void {
+            $router->post('/trivia/api/action', [TriviaController::class, 'apiAction']);
+            $router->post('/trivia/api/settings', [TriviaController::class, 'apiSettings']);
+            $router->post('/trivia/api/questions/import', [TriviaController::class, 'apiQuestionImport']);
+            $router->post('/trivia/api/question/save', [TriviaController::class, 'apiQuestionSave']);
+            $router->post('/trivia/api/question/delete', [TriviaController::class, 'apiQuestionDelete']);
+            $router->post('/trivia/api/question/toggle', [TriviaController::class, 'apiQuestionToggle']);
+            $router->post('/trivia/api/preset/save', [TriviaController::class, 'apiPresetSave']);
+            $router->post('/trivia/api/preset/delete', [TriviaController::class, 'apiPresetDelete']);
+            $router->post('/trivia/api/winners/clear', [TriviaController::class, 'apiWinnersClear']);
         });
     });
 };
