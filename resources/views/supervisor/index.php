@@ -135,12 +135,119 @@ $heartbeatNote = static function (array $service): string {
   <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.notices.disabled')) ?></div>
 <?php elseif (!$supervisorRunning): ?>
   <div class="sv-notice">
-    <?= htmlspecialchars(__('app.supervisor.notices.not_running')) ?>
-    <?php if (($paths['exe'] ?? '') !== ''): ?>
-      <code><?= htmlspecialchars((string) $paths['exe']) ?></code>
+    <?php if (($state['reason'] ?? '') === 'dir_missing'): ?>
+      <?= htmlspecialchars(__('app.supervisor.notices.dir_missing')) ?>
+    <?php else: ?>
+      <?= htmlspecialchars(__('app.supervisor.notices.not_running')) ?>
+      <?php if (($paths['exe'] ?? '') !== ''): ?>
+        <code><?= htmlspecialchars((string) $paths['exe']) ?></code>
+      <?php endif; ?>
     <?php endif; ?>
     <div class="sv-notice__hint"><?= htmlspecialchars(__('app.supervisor.notices.not_running_hint')) ?></div>
   </div>
+<?php endif; ?>
+
+<?php
+// Why the panel cannot see the supervisor: the directories it tried and the two ways to point it
+// at the real one. A production deployment commonly keeps the supervisor outside the web root,
+// and without this the page only said "supervisor directory not found" (see the usage doc 2.10).
+$diagnostics = is_array($state['diagnostics'] ?? null) ? $state['diagnostics'] : null;
+$pathExample = __('app.supervisor.diagnostics.placeholder_dir');
+if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
+    // prefer a directory that really holds the supervisor / its ini; the second loop deliberately
+    // does NOT fall back to "any existing directory" - that example would send people to a path
+    // that cannot work, and the placeholder tells them to fill in the real one
+    foreach ($diagnostics['candidates'] as $candidate) {
+        if (($candidate['has_exe'] ?? false) || ($candidate['has_ini'] ?? false)) {
+            $pathExample = (string) ($candidate['path'] ?? $pathExample);
+            break;
+        }
+    }
+}
+?>
+<?php if ($diagnostics !== null && !$supervisorRunning): ?>
+<section class="sv-panel sv-panel--diagnostics">
+  <header class="sv-panel__head">
+    <h3><?= htmlspecialchars(__('app.supervisor.diagnostics.title')) ?></h3>
+  </header>
+  <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro')) ?></p>
+  <dl class="sv-meta">
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.configured')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['configured_dir'] ?? '') !== ''
+          ? (string) $diagnostics['configured_dir']
+          : __('app.supervisor.diagnostics.configured_empty')) ?></code></dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.env', ['var' => (string) ($diagnostics['env_var'] ?? '')])) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['env_dir'] ?? '') !== ''
+          ? (string) $diagnostics['env_dir']
+          : __('app.supervisor.diagnostics.env_empty')) ?></code></dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.resolved')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['resolved_dir'] ?? '') !== ''
+          ? (string) $diagnostics['resolved_dir']
+          : __('app.supervisor.diagnostics.resolved_empty')) ?></code></dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.status_file')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['status_file'] ?? '') ?: '--') ?></code>
+        <?php if (!($diagnostics['status_file_exists'] ?? false)): ?>
+          <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.status_file_missing')) ?></span>
+        <?php elseif (($diagnostics['status_file_age_seconds'] ?? null) !== null): ?>
+          <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.status_file_age', ['seconds' => (int) $diagnostics['status_file_age_seconds']])) ?></span>
+        <?php endif; ?>
+      </dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.process_user')) ?></dt>
+      <dd><?= htmlspecialchars((string) ($diagnostics['process_user'] ?? '') ?: '--') ?></dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir')) ?></dt>
+      <dd><?= htmlspecialchars((string) ($diagnostics['open_basedir'] ?? '') !== ''
+          ? (string) $diagnostics['open_basedir']
+          : __('app.supervisor.diagnostics.open_basedir_empty')) ?></dd></div>
+  </dl>
+  <?php if ((string) ($diagnostics['open_basedir'] ?? '') !== ''): ?>
+    <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning')) ?></div>
+  <?php endif; ?>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_path')) ?></th>
+        <th><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_state')) ?></th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ((array) ($diagnostics['candidates'] ?? []) as $candidate): ?>
+        <tr>
+          <td><code><?= htmlspecialchars((string) ($candidate['path'] ?? '')) ?></code></td>
+          <td>
+            <span class="<?= $toneClass(($candidate['exists'] ?? false) ? 'ok' : 'muted') ?>">
+              <?= htmlspecialchars(($candidate['exists'] ?? false) ? __('app.supervisor.diagnostics.exists_yes') : __('app.supervisor.diagnostics.exists_no')) ?>
+            </span>
+            <?php if (($candidate['has_exe'] ?? false) || ($candidate['has_ini'] ?? false) || ($candidate['has_status'] ?? false)): ?>
+              <span class="sv-muted sv-small">
+                <?= ($candidate['has_exe'] ?? false) ? 'exe ' : '' ?>
+                <?= ($candidate['has_ini'] ?? false) ? 'ini ' : '' ?>
+                <?= ($candidate['has_status'] ?? false) ? 'status' : '' ?>
+              </span>
+            <?php endif; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+
+  <div class="sv-notice">
+    <strong><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_title')) ?></strong>
+    <?php if (($state['reason'] ?? '') === 'dir_missing'): ?>
+      <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured')) ?></div>
+    <?php endif; ?>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint')) ?></div>
+    <ol class="sv-muted sv-small">
+      <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_config', ['file' => (string) ($diagnostics['override_file'] ?? 'config/generated/supervisor.php')])) ?>
+        <pre>return [
+    'dir' =&gt; '<?= htmlspecialchars($pathExample) ?>',
+];</pre>
+      </li>
+      <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_env', ['var' => (string) ($diagnostics['env_var'] ?? '')])) ?></li>
+    </ol>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note')) ?></div>
+  </div>
+</section>
 <?php endif; ?>
 
 <div class="sv-grid" id="sv-services">

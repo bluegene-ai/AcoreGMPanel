@@ -18,8 +18,46 @@ return [
         'ok' => '状态文件持续更新',
         'disabled' => '面板中未启用守护管理',
         'not_configured' => '未找到守护程序目录',
+        'dir_missing' => '配置的守护程序目录不存在',
         'no_status_file' => '还没有状态文件（守护程序可能尚未启动）',
         'stale' => '状态文件已过期',
+    ],
+
+    'diagnostics' => [
+        'title' => '为什么找不到守护程序',
+        'intro' => '面板按下面的顺序查找 acore_supervisor.exe / supervisor.ini，全部落空就会显示"未找到守护程序目录"。守护在别的目录跑完全没问题，只要让面板知道它在哪。',
+        'configured' => '配置的目录',
+        'configured_empty' => '（未配置，使用自动探测）',
+        'env' => '环境变量 :var',
+        'env_empty' => '（未设置）',
+        'resolved' => '实际解析到',
+        'resolved_empty' => '（没有命中任何目录）',
+        'status_file' => '状态文件',
+        'status_file_missing' => '不存在',
+        'status_file_age' => '更新于 :seconds 秒前',
+        'process_user' => 'PHP 运行账号',
+        'open_basedir' => 'open_basedir',
+        'open_basedir_empty' => '（未限制）',
+        'open_basedir_warning' => 'PHP 设置了 open_basedir，守护目录在该列表之外时面板永远看不到它，需要把该目录加进去。',
+        'candidate_path' => '查找过的目录',
+        'candidate_state' => '存在 / exe / ini / 状态文件',
+        'exists_yes' => '有',
+        'exists_no' => '无',
+        'fix_title' => '怎么修',
+        'fix_configured' => '上面的"配置的目录"写错了或者盘符/目录已改名：改 config/generated/supervisor.php 里的 dir，或删掉这一项改回自动探测。',
+        'fix_hint' => '任选一种，然后刷新本页：',
+        'fix_option_config' => '写死在面板配置里（推荐，最稳）：新建 :file',
+        'fix_option_env' => '给 PHP 进程设置环境变量 :var（Apache 可写 SetEnv，或写进 .env）',
+        'fix_option_note' => '路径用正斜杠或双反斜杠都行；不要指向 exe 本身，指向它所在的文件夹。',
+        'placeholder_dir' => 'C:/请改成守护程序所在的文件夹',
+    ],
+
+    'notices' => [
+        'disabled' => '守护管理已在 config/supervisor.php 中关闭。',
+        'not_running' => '守护程序当前未运行，因此只能查看历史状态，无法下发启停指令。',
+        'not_running_hint' => '请在服务器桌面会话中运行 release\\supervisor\\start_supervisor.bat（或通过登录时的计划任务启动），再回到本页刷新。',
+        'dir_missing' => '面板配置里的守护程序目录不存在，请照下面的诊断信息改正路径。',
+        'no_services' => '状态文件中没有任何服务。',
     ],
 
     'actions' => [
@@ -37,13 +75,6 @@ return [
     'confirm' => [
         'stop_all' => '确定要停止 worldserver 与 authserver 吗？停止后不会自动拉起，需要手动再启动。',
         'stop_service' => '确定要停止 :service 吗？停止后不会自动拉起。',
-    ],
-
-    'notices' => [
-        'disabled' => '守护管理已在 config/supervisor.php 中关闭。',
-        'not_running' => '守护程序当前未运行，因此只能查看历史状态，无法下发启停指令。',
-        'not_running_hint' => '请在服务器桌面会话中运行 release\\supervisor\\start_supervisor.bat（或通过登录时的计划任务启动），再回到本页刷新。',
-        'no_services' => '状态文件中没有任何服务。',
     ],
 
     'services' => [

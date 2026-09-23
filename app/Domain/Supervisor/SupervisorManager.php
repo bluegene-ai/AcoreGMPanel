@@ -359,11 +359,21 @@ final class SupervisorManager
         $available = $decoded !== null;
         $running = $available && $age !== null && $age <= $staleAfter;
 
+        // Distinguish "the panel cannot find the supervisor at all" from "the supervisor is not
+        // running": a production deployment often keeps the supervisor outside the web root, and
+        // the old single "no_status_file" wording sent people looking in the wrong place.
+        $configuredDir = trim((string) ($this->config['dir'] ?? ''));
         $reason = 'ok';
         if (!$enabled) {
             $reason = 'disabled';
         } elseif (!$available) {
-            $reason = $paths['dir'] === '' ? 'not_configured' : 'no_status_file';
+            if ($configuredDir !== '' && !is_dir($configuredDir)) {
+                $reason = 'dir_missing';
+            } elseif ($paths['dir'] === '' && trim((string) ($this->config['status_file'] ?? '')) === '') {
+                $reason = 'not_configured';
+            } else {
+                $reason = 'no_status_file';
+            }
         } elseif (!$running) {
             $reason = 'stale';
         }
@@ -387,6 +397,8 @@ final class SupervisorManager
             'running' => $running,
             'reason' => $reason,
             'reason_label' => Lang::get('app.supervisor.reason.' . $reason),
+            // only when something is wrong: tells the operator which directories were tried
+            'diagnostics' => $available ? null : $this->diagnostics(),
             'status_age_seconds' => $age,
             'stale_after_seconds' => $staleAfter,
             'poll_seconds' => max(0, (int) ($this->config['poll_seconds'] ?? 5)),
@@ -609,25 +621,8 @@ final class SupervisorManager
      */
     private function candidateDirectories(): array
     {
-        // .../AGMP/app/Domain/Supervisor -> AGMP (3) -> .../Server (6)
-        $panelRoot = dirname(__DIR__, 3);
-        $serverRoot = dirname(__DIR__, 6);
-
-        $candidates = [];
-
-        // a declared instance that does not spell out its directory: try the conventional
-        // per-instance folders first (release/supervisor-<id>, release/<id>/supervisor)
-        if ($this->instanceId !== self::DEFAULT_INSTANCE) {
-            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor-' . $this->instanceId;
-            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor';
-        }
-
-        $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-        $candidates[] = dirname($panelRoot, 2) . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-        $candidates[] = $panelRoot . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
-
         $resolved = [];
-        foreach ($candidates as $candidate) {
+        foreach ($this->rawCandidateDirectories() as $candidate) {
             $real = realpath($candidate);
             if ($real === false) {
                 continue;
@@ -637,6 +632,127 @@ final class SupervisorManager
         }
 
         return array_values(array_unique($resolved));
+    }
+
+    /**
+     * Every directory the panel would look in, including the ones that do not exist - the page
+     * needs those to explain itself (see diagnostics()).
+     *
+     * @return array<int,string>
+     */
+    private function rawCandidateDirectories(): array
+    {
+        // .../AGMP/app/Domain/Supervisor -> AGMP (3) -> .../Server (6)
+        $panelRoot = rtrim(dirname(__DIR__, 3), "\\/");
+        $serverRoot = rtrim(dirname(__DIR__, 6), "\\/");
+
+        $candidates = [];
+
+        // 1) explicit override, highest priority: an env var is the only knob that does not need a
+        //    file change on a production host (httpd SetEnv / .env / scheduled task)
+        $envDir = $this->envDirectory();
+        if ($envDir !== '') {
+            $candidates[] = $envDir;
+        }
+
+        // 2) a declared instance that does not spell out its directory: conventional per-instance
+        //    folders first (release/supervisor-<id>, release/<id>/supervisor)
+        if ($this->instanceId !== self::DEFAULT_INSTANCE) {
+            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor-' . $this->instanceId;
+            $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor';
+        }
+
+        $candidates[] = $serverRoot . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+        $candidates[] = dirname($panelRoot, 2) . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+        $candidates[] = $panelRoot . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+
+        // 3) walk every ancestor of the panel instead of trusting one fixed depth: the panel may be
+        //    deployed deeper (an extra folder), shallower (web root = <server>/web/WWW) or with the
+        //    supervisor next to it rather than under release/. <ancestor>/release/supervisor and
+        //    <ancestor>/supervisor cover both the documented layout and the ad-hoc ones ("unzipped
+        //    it somewhere under the server root") that used to need a hand-written
+        //    config/generated/supervisor.php.
+        $ancestor = $panelRoot;
+        for ($depth = 0; $depth < 8; $depth++) {
+            $parent = rtrim(dirname($ancestor), "\\/");
+            if ($parent === $ancestor || $parent === '' || $parent === '.') {
+                break;
+            }
+
+            $candidates[] = $parent . DIRECTORY_SEPARATOR . 'release' . DIRECTORY_SEPARATOR . 'supervisor';
+            $candidates[] = $parent . DIRECTORY_SEPARATOR . 'supervisor';
+            $ancestor = $parent;
+        }
+
+        // the configured override is checked last but is never dropped from the report
+        $configured = trim((string) ($this->config['dir'] ?? ''));
+        if ($configured !== '') {
+            $candidates[] = $configured;
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    /**
+     * The ACORE_SUPERVISOR_DIR override, from the process environment or the request environment
+     * (Apache SetEnv shows up in $_SERVER, not always in getenv()).
+     */
+    private function envDirectory(): string
+    {
+        foreach ([getenv('ACORE_SUPERVISOR_DIR'), $_SERVER['ACORE_SUPERVISOR_DIR'] ?? null, $_ENV['ACORE_SUPERVISOR_DIR'] ?? null] as $value) {
+            if (is_string($value) && trim($value) !== '') {
+                return rtrim(trim($value), "\\/");
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Why the supervisor was (not) found, for the page and for support: the directories that were
+     * tried, what is in them, which path won and what the panel process may not be able to see.
+     *
+     * @return array<string,mixed>
+     */
+    public function diagnostics(): array
+    {
+        $configuredDir = trim((string) ($this->config['dir'] ?? ''));
+        $panelRoot = rtrim(dirname(__DIR__, 3), "\\/");
+
+        $candidates = [];
+        foreach ($this->rawCandidateDirectories() as $candidate) {
+            $exists = is_dir($candidate);
+            $candidates[] = [
+                'path' => $candidate,
+                'exists' => $exists,
+                'has_exe' => $exists && is_file($candidate . DIRECTORY_SEPARATOR . 'acore_supervisor.exe'),
+                'has_ini' => $exists && is_file($candidate . DIRECTORY_SEPARATOR . 'supervisor.ini'),
+                'has_status' => $exists && is_file($candidate . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR . 'supervisor_status.json'),
+            ];
+        }
+
+        $paths = $this->paths();
+        $statusExists = $paths['status_file'] !== '' && is_file($paths['status_file']);
+
+        return [
+            'instance' => $this->instanceId,
+            'panel_root' => $panelRoot,
+            'configured_dir' => $configuredDir,
+            'env_dir' => $this->envDirectory(),
+            'env_var' => 'ACORE_SUPERVISOR_DIR',
+            'resolved_dir' => $paths['dir'],
+            'status_file' => $paths['status_file'],
+            'status_file_exists' => $statusExists,
+            'status_file_age_seconds' => $statusExists ? $this->statusAge($paths['status_file']) : null,
+            'exe' => $paths['exe'],
+            'exe_exists' => $paths['exe'] !== '' && is_file($paths['exe']),
+            'config_file' => $paths['config_file'],
+            'candidates' => $candidates,
+            // the two things that make a file invisible to PHP on a production host
+            'open_basedir' => (string) ini_get('open_basedir'),
+            'process_user' => (string) (getenv('USERNAME') ?: (getenv('USER') ?: '')),
+            'override_file' => 'config/generated/supervisor.php',
+        ];
     }
 
     /**
