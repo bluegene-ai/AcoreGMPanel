@@ -143,14 +143,17 @@
   background: rgba(255, 200, 87, 0.1);
 }
 
-.tv-result {
-  margin: 0 0 16px;
-  padding: 10px 14px;
-  border-radius: 8px;
-}
-
 .tv-form {
   display: block;
+}
+
+/*
+ * 必须显式写 [hidden] 规则：浏览器默认的 [hidden]{display:none} 在 UA 样式表里，
+ * 会被上面这条 .tv-form{display:block} 覆盖，结果是「新增/编辑」表单一开始就整块展开，
+ * 页面被撑长一倍多，页面上永远挂着一个空的编辑表单。
+ */
+.tv-form[hidden] {
+  display: none;
 }
 
 .tv-fieldset {
@@ -231,6 +234,40 @@
   padding: 14px;
   border: 1px dashed var(--border-color, #2a3040);
   border-radius: 10px;
+}
+
+/* 打开中的编辑表单：高亮一下，避免"点了编辑但不知道表单在哪" */
+.tv-form--editor.is-open {
+  border-style: solid;
+  border-color: rgba(63, 168, 255, 0.55);
+  background: rgba(63, 168, 255, 0.05);
+  box-shadow: 0 0 0 1px rgba(63, 168, 255, 0.16);
+}
+
+/* 编辑表单自己的标题栏（表单紧跟面板标题，标题栏常驻视口顶部附近） */
+.tv-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px dashed var(--border-color, #2a3040);
+}
+
+.tv-editor__head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* 编辑表单底部的动作区：左侧「返回列表」，右侧「保存」 */
+.tv-form--editor .tv-form__actions {
+  align-items: center;
+}
+
+.tv-form--editor .tv-form__actions .btn.ghost:first-child {
+  margin-right: auto;
 }
 
 .tv-filters {

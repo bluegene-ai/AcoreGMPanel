@@ -13,7 +13,6 @@
 
   const dom = {
     statusPanel: document.getElementById('tvStatusPanel'),
-    feedback: document.getElementById('tvFeedback'),
     refreshedAt: document.getElementById('tvRefreshedAt'),
     refreshStatus: document.getElementById('tvRefreshStatus'),
     autoRefresh: document.getElementById('tvAutoRefresh'),
@@ -28,6 +27,7 @@
     questionFormTitle: document.getElementById('tvQuestionFormTitle'),
     questionSave: document.getElementById('tvQuestionSave'),
     questionCancel: document.getElementById('tvQuestionCancel'),
+    questionCancelBottom: document.getElementById('tvQuestionCancelBottom'),
     newQuestion: document.getElementById('tvNewQuestion'),
     qstats: document.querySelector('[data-tv-qstats]'),
     presetTable: document.getElementById('tvPresetTable'),
@@ -35,6 +35,7 @@
     presetFormTitle: document.getElementById('tvPresetFormTitle'),
     presetSave: document.getElementById('tvPresetSave'),
     presetCancel: document.getElementById('tvPresetCancel'),
+    presetCancelBottom: document.getElementById('tvPresetCancelBottom'),
     newPreset: document.getElementById('tvNewPreset'),
     winnerTable: document.getElementById('tvWinnerTable'),
     winnerStats: document.querySelector('[data-tv-wstats]'),
@@ -77,16 +78,35 @@
     return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
   }
 
+  /**
+   * 固定在右上角的提示区。
+   *
+   * 题库/奖励预设面板在页面很靠下的位置，行内提示留在页面顶部（运行状态卡下面）时，
+   * 在下面点「启用/保存」根本看不到反馈，失败看起来就是「点了没反应」。
+   */
+  function flashHost() {
+    let zone = document.querySelector('.flash-zone');
+    if (!zone) {
+      zone = document.createElement('div');
+      zone.className = 'flash-zone';
+      document.body.appendChild(zone);
+    }
+    return zone;
+  }
+
   function show(type, message) {
-    if (feedback && dom.feedback) {
-      feedback.show(dom.feedback, type, message, { duration: 5000 });
+    if (feedback && typeof feedback.show === 'function') {
+      feedback.show(flashHost(), type, message, { duration: 5000 });
       return;
     }
-    if (dom.feedback) {
-      dom.feedback.hidden = false;
-      dom.feedback.textContent = message;
-      dom.feedback.classList.add('is-visible');
-    }
+    const host = flashHost();
+    const node = document.createElement('div');
+    node.className = 'flash flash-' + type;
+    node.textContent = message;
+    host.appendChild(node);
+    window.setTimeout(function () {
+      if (node.parentNode === host) node.remove();
+    }, 5000);
   }
 
   async function request(method, path, payload) {
@@ -260,9 +280,24 @@
     if (json.payload && json.payload.status) applyStatus(Object.assign({ success: true }, json.payload.status));
   }
 
+  /**
+   * 把编辑表单所在面板的标题栏滚到视口顶部。
+   *
+   * 不能用 scrollIntoView({block:'center'})：编辑表单比很多笔记本视口还高（约 520-670px），
+   * 居中会把表单自己的标题与「取消」按钮推到视口上边缘之外，看起来就是"顶部被覆盖、没有返回按钮"。
+   * 标题栏对齐到顶部则始终能看到「题库 / 奖励预设」上下文，表单头部紧跟在下面。
+   */
+  function revealEditorPanel(form) {
+    if (!form) return;
+    const panel = form.closest('.tv-panel') || form;
+    const head = panel.querySelector(':scope > .tv-panel__head') || form;
+    head.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function openQuestionForm(row) {
     if (!dom.questionForm) return;
     dom.questionForm.hidden = false;
+    dom.questionForm.classList.add('is-open');
     dom.questionForm.querySelector('[name="id"]').value = row && row.id ? row.id : 0;
     dom.questionForm.querySelector('[name="question"]').value = row ? row.question || '' : '';
     [1, 2, 3, 4].forEach(function (index) {
@@ -278,10 +313,22 @@
     dom.questionForm.querySelector('[name="enabled"][type="checkbox"]').checked = row ? !!row.enabled : true;
     if (dom.questionFormTitle) {
       dom.questionFormTitle.textContent = row && row.id
-        ? t('actions.edit', 'Edit')
+        ? tt('actions.edit_title', { id: row.id }, t('actions.edit', 'Edit') + ' #' + row.id)
         : t('actions.new_question', 'New question');
     }
-    dom.questionForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 先聚焦再滚动：preventScroll 避免焦点抢走平滑滚动的位置
+    const questionField = dom.questionForm.querySelector('[name="question"]');
+    if (questionField) {
+      try { questionField.focus({ preventScroll: true }); } catch (error) { questionField.focus(); }
+    }
+    revealEditorPanel(dom.questionForm);
+  }
+
+  function closeQuestionForm() {
+    if (!dom.questionForm) return;
+    dom.questionForm.hidden = true;
+    dom.questionForm.classList.remove('is-open');
+    revealEditorPanel(dom.questionForm);
   }
 
   async function saveQuestion() {
@@ -301,7 +348,7 @@
       return;
     }
     show('success', json.message || t('feedback.question_saved', 'Saved.'));
-    dom.questionForm.hidden = true;
+    closeQuestionForm();
     await reloadQuestions();
     await reloadPresets();
   }
@@ -317,7 +364,10 @@
   }
 
   async function toggleQuestion(id, enabled) {
-    const json = await request('POST', data.questionToggleUrl || '/trivia/api/question/toggle', { id: id, enabled: enabled });
+    // 必须发 1/0：Panel.api.post 会把普通对象转成 FormData，JS 布尔值到服务端就是字符串
+    // "true"/"false"，而服务端只认 1（'true' 会被当成 false），结果是"停用"能用、"启用"无效。
+    const json = await request('POST', data.questionToggleUrl || '/trivia/api/question/toggle',
+      { id: id, enabled: enabled ? 1 : 0 });
     if (!json || !json.success) {
       show('error', (json && json.message) || t('errors.question_not_found', 'Not found.'));
       return;
@@ -329,15 +379,29 @@
   function openPresetForm(row) {
     if (!dom.presetForm) return;
     dom.presetForm.hidden = false;
+    dom.presetForm.classList.add('is-open');
     dom.presetForm.querySelector('[name="name"]').value = row ? row.name || '' : '';
     dom.presetForm.querySelector('[name="original_name"]').value = row ? row.name || '' : '';
     dom.presetForm.querySelector('[name="items"]').value = row ? row.items || '' : '';
     dom.presetForm.querySelector('[name="money"]').value = String(row ? row.money || 0 : 0);
     dom.presetForm.querySelector('[name="enabled"][type="checkbox"]').checked = row ? !!row.enabled : true;
     if (dom.presetFormTitle) {
-      dom.presetFormTitle.textContent = row ? t('actions.edit', 'Edit') : t('actions.new_preset', 'New preset');
+      dom.presetFormTitle.textContent = row && row.name
+        ? tt('actions.edit_preset_title', { name: row.name }, t('actions.edit', 'Edit') + ' ' + row.name)
+        : t('actions.new_preset', 'New preset');
     }
-    dom.presetForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const nameField = dom.presetForm.querySelector('[name="name"]');
+    if (nameField) {
+      try { nameField.focus({ preventScroll: true }); } catch (error) { nameField.focus(); }
+    }
+    revealEditorPanel(dom.presetForm);
+  }
+
+  function closePresetForm() {
+    if (!dom.presetForm) return;
+    dom.presetForm.hidden = true;
+    dom.presetForm.classList.remove('is-open');
+    revealEditorPanel(dom.presetForm);
   }
 
   async function savePreset() {
@@ -357,7 +421,7 @@
       return;
     }
     show('success', json.message || t('feedback.preset_saved', 'Saved.'));
-    dom.presetForm.hidden = true;
+    closePresetForm();
     await reloadPresets();
   }
 
@@ -542,9 +606,11 @@
   }
 
   if (dom.questionCancel) {
-    dom.questionCancel.addEventListener('click', function () {
-      if (dom.questionForm) dom.questionForm.hidden = true;
-    });
+    dom.questionCancel.addEventListener('click', closeQuestionForm);
+  }
+
+  if (dom.questionCancelBottom) {
+    dom.questionCancelBottom.addEventListener('click', closeQuestionForm);
   }
 
   if (dom.questionForm) {
@@ -570,9 +636,11 @@
   }
 
   if (dom.presetCancel) {
-    dom.presetCancel.addEventListener('click', function () {
-      if (dom.presetForm) dom.presetForm.hidden = true;
-    });
+    dom.presetCancel.addEventListener('click', closePresetForm);
+  }
+
+  if (dom.presetCancelBottom) {
+    dom.presetCancelBottom.addEventListener('click', closePresetForm);
   }
 
   if (dom.presetForm) {

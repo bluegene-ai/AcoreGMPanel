@@ -119,9 +119,16 @@ abstract class Controller
         return in_array($value, $allowed, true) ? $value : $default;
     }
 
+    /**
+     * 归一化布尔开关。
+     *
+     * 请求体可能是表单（'1'/'0'）、JSON（true/false）或前端 FormData（'true'/'false'），
+     * 所以统一交给 Request::bool() 判断。只写 (int) $value === 1 的话，前端传布尔值
+     * 时 'true' 会被当成 false——"启用"这类操作会被静默写成 0。
+     */
     protected function normalizedBoolFlag(Request $request, string $key): bool
     {
-        return (int) $request->input($key, 0) === 1;
+        return $request->bool($key, false);
     }
 
     protected function normalizedPage(Request $request, string $key = 'page', int $default = 1): int

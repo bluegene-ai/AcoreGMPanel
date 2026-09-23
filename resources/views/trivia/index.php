@@ -181,8 +181,6 @@ $presetItemsText = static function (string $raw, array $names) use ($itemLabel):
   </footer>
 </section>
 
-<div class="tv-result" id="tvFeedback" hidden></div>
-
 <?php if ($canManage): ?>
 <section class="tv-panel" id="tvSettingsPanel">
   <header class="tv-panel__head">
@@ -371,51 +369,10 @@ $presetItemsText = static function (string $raw, array $names) use ($itemLabel):
     </div>
   </header>
 
-  <form class="tv-filters" id="tvQuestionFilters">
-    <input type="search" name="search" placeholder="<?= htmlspecialchars(__('app.trivia.fields.search'), ENT_QUOTES, 'UTF-8') ?>"
-           value="<?= htmlspecialchars((string) ($trivia_filters['search'] ?? '')) ?>">
-    <select name="status">
-      <?php $statusFilter = (string) ($trivia_filters['status'] ?? 'all'); ?>
-      <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_all')) ?></option>
-      <option value="enabled" <?= $statusFilter === 'enabled' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_enabled')) ?></option>
-      <option value="disabled" <?= $statusFilter === 'disabled' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_disabled')) ?></option>
-    </select>
-    <button type="submit" class="btn outline"><?= htmlspecialchars(__('app.trivia.actions.filter')) ?></button>
-  </form>
-
-  <div id="tvQuestionTable">
-    <?php include __DIR__ . '/_question_table.php'; ?>
-  </div>
-
-  <?php if ($canManage): ?>
-    <div class="tv-import" id="tvImportPanel">
-      <header class="tv-import__head">
-        <h4><?= htmlspecialchars(__('app.trivia.import.title')) ?></h4>
-        <div class="tv-import__actions">
-          <a class="btn ghost tv-btn-sm" href="<?= htmlspecialchars(url_with_server('/trivia/api/questions/template')) ?>">
-            <?= htmlspecialchars(__('app.trivia.import.download_template')) ?>
-          </a>
-          <a class="btn ghost tv-btn-sm" href="<?= htmlspecialchars(url_with_server('/trivia/api/questions/export')) ?>">
-            <?= htmlspecialchars(__('app.trivia.import.export')) ?>
-          </a>
-        </div>
-      </header>
-      <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.import.hint')) ?></p>
-      <div class="tv-import__row">
-        <input type="file" id="tvImportFile" accept=".csv,.tsv,.txt,.json">
-        <button type="button" class="btn outline" id="tvImportPreview"><?= htmlspecialchars(__('app.trivia.import.preview')) ?></button>
-        <button type="button" class="btn" id="tvImportCommit" disabled><?= htmlspecialchars(__('app.trivia.import.commit')) ?></button>
-        <button type="button" class="btn ghost tv-btn-sm" id="tvImportReset"><?= htmlspecialchars(__('app.trivia.actions.reset')) ?></button>
-      </div>
-      <textarea id="tvImportText" rows="6" spellcheck="false"
-                placeholder="<?= htmlspecialchars(__('app.trivia.import.placeholder'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
-      <div id="tvImportResult" class="tv-import__result"></div>
-    </div>
-  <?php endif; ?>
-
+  <?php // 编辑表单紧跟面板标题：点「编辑」时把面板标题滚到视口顶部，标题与表单头部（取消）都在视野内 ?>
   <?php if ($canManage): ?>
     <form id="tvQuestionForm" class="tv-form tv-form--editor" hidden>
-      <header class="tv-panel__head">
+      <header class="tv-editor__head">
         <h4 id="tvQuestionFormTitle"><?= htmlspecialchars(__('app.trivia.actions.new_question')) ?></h4>
         <button type="button" class="btn ghost" id="tvQuestionCancel"><?= htmlspecialchars(__('app.trivia.actions.cancel')) ?></button>
       </header>
@@ -460,9 +417,52 @@ $presetItemsText = static function (string $raw, array $names) use ($itemLabel):
           <input type="number" name="reward_money" min="0" value="0"></label>
       </div>
       <div class="tv-form__actions">
+        <button type="button" class="btn ghost" id="tvQuestionCancelBottom"><?= htmlspecialchars(__('app.trivia.actions.back_to_list')) ?></button>
         <button type="submit" class="btn" id="tvQuestionSave"><?= htmlspecialchars(__('app.trivia.actions.save')) ?></button>
       </div>
     </form>
+  <?php endif; ?>
+
+  <form class="tv-filters" id="tvQuestionFilters">
+    <input type="search" name="search" placeholder="<?= htmlspecialchars(__('app.trivia.fields.search'), ENT_QUOTES, 'UTF-8') ?>"
+           value="<?= htmlspecialchars((string) ($trivia_filters['search'] ?? '')) ?>">
+    <select name="status">
+      <?php $statusFilter = (string) ($trivia_filters['status'] ?? 'all'); ?>
+      <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_all')) ?></option>
+      <option value="enabled" <?= $statusFilter === 'enabled' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_enabled')) ?></option>
+      <option value="disabled" <?= $statusFilter === 'disabled' ? 'selected' : '' ?>><?= htmlspecialchars(__('app.trivia.fields.status_disabled')) ?></option>
+    </select>
+    <button type="submit" class="btn outline"><?= htmlspecialchars(__('app.trivia.actions.filter')) ?></button>
+  </form>
+
+  <div id="tvQuestionTable">
+    <?php include __DIR__ . '/_question_table.php'; ?>
+  </div>
+
+  <?php if ($canManage): ?>
+    <div class="tv-import" id="tvImportPanel">
+      <header class="tv-import__head">
+        <h4><?= htmlspecialchars(__('app.trivia.import.title')) ?></h4>
+        <div class="tv-import__actions">
+          <a class="btn ghost tv-btn-sm" href="<?= htmlspecialchars(url_with_server('/trivia/api/questions/template')) ?>">
+            <?= htmlspecialchars(__('app.trivia.import.download_template')) ?>
+          </a>
+          <a class="btn ghost tv-btn-sm" href="<?= htmlspecialchars(url_with_server('/trivia/api/questions/export')) ?>">
+            <?= htmlspecialchars(__('app.trivia.import.export')) ?>
+          </a>
+        </div>
+      </header>
+      <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.import.hint')) ?></p>
+      <div class="tv-import__row">
+        <input type="file" id="tvImportFile" accept=".csv,.tsv,.txt,.json">
+        <button type="button" class="btn outline" id="tvImportPreview"><?= htmlspecialchars(__('app.trivia.import.preview')) ?></button>
+        <button type="button" class="btn" id="tvImportCommit" disabled><?= htmlspecialchars(__('app.trivia.import.commit')) ?></button>
+        <button type="button" class="btn ghost tv-btn-sm" id="tvImportReset"><?= htmlspecialchars(__('app.trivia.actions.reset')) ?></button>
+      </div>
+      <textarea id="tvImportText" rows="6" spellcheck="false"
+                placeholder="<?= htmlspecialchars(__('app.trivia.import.placeholder'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+      <div id="tvImportResult" class="tv-import__result"></div>
+    </div>
   <?php endif; ?>
 </section>
 
@@ -476,13 +476,9 @@ $presetItemsText = static function (string $raw, array $names) use ($itemLabel):
     </div>
   </header>
 
-  <div id="tvPresetTable">
-    <?php include __DIR__ . '/_preset_table.php'; ?>
-  </div>
-
   <?php if ($canManage): ?>
     <form id="tvPresetForm" class="tv-form tv-form--editor" hidden>
-      <header class="tv-panel__head">
+      <header class="tv-editor__head">
         <h4 id="tvPresetFormTitle"><?= htmlspecialchars(__('app.trivia.actions.new_preset')) ?></h4>
         <button type="button" class="btn ghost" id="tvPresetCancel"><?= htmlspecialchars(__('app.trivia.actions.cancel')) ?></button>
       </header>
@@ -501,10 +497,15 @@ $presetItemsText = static function (string $raw, array $names) use ($itemLabel):
           <span><?= htmlspecialchars(__('app.trivia.fields.preset_enabled')) ?></span></label>
       </div>
       <div class="tv-form__actions">
+        <button type="button" class="btn ghost" id="tvPresetCancelBottom"><?= htmlspecialchars(__('app.trivia.actions.back_to_list')) ?></button>
         <button type="submit" class="btn" id="tvPresetSave"><?= htmlspecialchars(__('app.trivia.actions.save')) ?></button>
       </div>
     </form>
   <?php endif; ?>
+
+  <div id="tvPresetTable">
+    <?php include __DIR__ . '/_preset_table.php'; ?>
+  </div>
 </section>
 
 <section class="tv-panel" id="tvWinnersPanel">

@@ -60,6 +60,7 @@ return [
         'new_preset' => '新增奖励预设',
         'save' => '保存',
         'cancel' => '取消',
+        'back_to_list' => '返回列表',
         'edit' => '编辑',
         'delete' => '删除',
         'enable_row' => '启用',
@@ -272,6 +273,8 @@ return [
                 ],
                 'actions' => [
                     'edit' => '编辑',
+                    'edit_title' => '编辑题目 #:id',
+                    'edit_preset_title' => '编辑奖励预设 :name',
                     'new_question' => '新增题目',
                     'new_preset' => '新增奖励预设',
                     'start_index' => '按下标出题',

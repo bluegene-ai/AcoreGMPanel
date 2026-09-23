@@ -60,6 +60,7 @@ return [
         'new_preset' => 'New reward preset',
         'save' => 'Save',
         'cancel' => 'Cancel',
+        'back_to_list' => 'Back to list',
         'edit' => 'Edit',
         'delete' => 'Delete',
         'enable_row' => 'Enable',
@@ -272,6 +273,8 @@ return [
                 ],
                 'actions' => [
                     'edit' => 'Edit',
+                    'edit_title' => 'Edit question #:id',
+                    'edit_preset_title' => 'Edit reward preset :name',
                     'new_question' => 'New question',
                     'new_preset' => 'New reward preset',
                     'start_index' => 'Ask by index',

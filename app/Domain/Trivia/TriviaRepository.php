@@ -485,7 +485,14 @@ class TriviaRepository extends MultiServerRepository
         );
         $stmt->execute([$enabled ? 1 : 0, time(), $id]);
 
-        return $stmt->rowCount() > 0;
+        // 不能用 rowCount() 判断题目是否存在：MySQL 在写入值与现值相同时返回 0 行受影响，
+        // 重复点"启用/停用"（或已经是目标状态）就会被误报成"找不到这道题"。
+        $check = $this->characters()->prepare(
+            'SELECT COUNT(*) FROM ' . $this->table('questions') . ' WHERE `id` = ?'
+        );
+        $check->execute([$id]);
+
+        return ((int) $check->fetchColumn()) > 0;
     }
 
     public function questionStats(): array
