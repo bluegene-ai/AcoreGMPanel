@@ -61,6 +61,16 @@ class TriviaRepository extends MultiServerRepository
         // 定时启停（每天的时间段）：Lua 侧 tick 强制执行；列不存在时 saveSettings 会自动跳过
         'schedule_enabled' => 'bool',
         'schedule_windows' => 'string',
+        // TriviaReward_conf.lua 退休后搬进数据库的 9 项
+        'debug_log' => 'bool',
+        'idle_retry_seconds' => 'int',
+        'resume_delay_seconds' => 'int',
+        'allow_loose_letter' => 'bool',
+        'ignore_gms' => 'bool',
+        'gm_rank_exempt' => 'int',
+        'answer_hint' => 'string',
+        'broadcast_prefix' => 'string',
+        'win_prefix' => 'string',
     ];
 
     private string $customDbName;

@@ -363,6 +363,7 @@ class TriviaController extends Controller
 
         foreach (['interval_seconds', 'answer_seconds', 'remind_every_seconds', 'first_delay_seconds',
                   'min_players_online', 'min_level', 'attempts_per_player', 'min_gm_rank_for_command',
+                  'idle_retry_seconds', 'resume_delay_seconds', 'gm_rank_exempt',
                   'sender_guid', 'mail_stationery', 'item_link_locale'] as $column) {
             $range = $limits[$column] ?? [0, 2147483647];
             $default = array_key_exists($column, $current) ? (int) $current[$column] : (int) $range[0];
@@ -376,7 +377,7 @@ class TriviaController extends Controller
         foreach (['enabled', 'answer_say', 'answer_yell', 'answer_emote', 'answer_whisper',
                   'allow_number_answer', 'allow_latin_letters', 'allow_text_answer', 'use_builtin_questions',
                   'announce_on_login', 'reply_wrong_answer', 'reply_already_answered',
-                  'schedule_enabled'] as $column) {
+                  'schedule_enabled', 'debug_log', 'allow_loose_letter', 'ignore_gms'] as $column) {
             if ($request->input($column) === null) {
                 if (array_key_exists($column, $current)) {
                     $values[$column] = ((int) $current[$column]) === 1 ? 1 : 0;
@@ -467,6 +468,19 @@ class TriviaController extends Controller
         $values['mail_body'] = $request->input('mail_body') === null && array_key_exists('mail_body', $current)
             ? (string) $current['mail_body']
             : mb_substr((string) $request->input('mail_body', ''), 0, 2000);
+
+        // 作答提示 / 播报前缀（原来是 TriviaReward_conf.lua 里的项，现在写库）
+        $values['answer_hint'] = $request->input('answer_hint') === null && array_key_exists('answer_hint', $current)
+            ? (string) $current['answer_hint']
+            : mb_substr(trim((string) $request->input('answer_hint', '')), 0, 255);
+
+        $values['broadcast_prefix'] = $request->input('broadcast_prefix') === null && array_key_exists('broadcast_prefix', $current)
+            ? (string) $current['broadcast_prefix']
+            : mb_substr((string) $request->input('broadcast_prefix', ''), 0, 32);
+
+        $values['win_prefix'] = $request->input('win_prefix') === null && array_key_exists('win_prefix', $current)
+            ? (string) $current['win_prefix']
+            : mb_substr((string) $request->input('win_prefix', ''), 0, 32);
 
         return $values;
     }
@@ -1340,6 +1354,15 @@ class TriviaController extends Controller
             'mail_body' => "勇士，恭喜你在聊天答题中第一个答对！\n题目：{question}\n正确答案：{answer}\n奖励已随信附上，祝你在艾泽拉斯的旅途愉快！",
             'schedule_enabled' => 0,
             'schedule_windows' => '',
+            'debug_log' => 0,
+            'idle_retry_seconds' => 5,
+            'resume_delay_seconds' => 5,
+            'allow_loose_letter' => 1,
+            'ignore_gms' => 1,
+            'gm_rank_exempt' => 3,
+            'answer_hint' => '',
+            'broadcast_prefix' => '|cff00ff00[答题]|r ',
+            'win_prefix' => '|cffffd200[答题]|r ',
         ];
 
         $merged = array_replace($defaults, array_intersect_key($row, $defaults));

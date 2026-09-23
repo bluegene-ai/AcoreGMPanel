@@ -511,6 +511,10 @@ if ($canManage) {
             <input type="number" name="first_delay_seconds" min="0" max="86400" value="<?= (int) ($settings['first_delay_seconds'] ?? 60) ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.min_players_online')) ?></span>
             <input type="number" name="min_players_online" min="0" max="1000" value="<?= (int) ($settings['min_players_online'] ?? 1) ?>"></label>
+          <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.idle_retry_seconds')) ?></span>
+            <input type="number" name="idle_retry_seconds" min="1" max="300" value="<?= (int) ($settings['idle_retry_seconds'] ?? 5) ?>"></label>
+          <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.resume_delay_seconds')) ?></span>
+            <input type="number" name="resume_delay_seconds" min="1" max="600" value="<?= (int) ($settings['resume_delay_seconds'] ?? 5) ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.min_level')) ?></span>
             <input type="number" name="min_level" min="1" max="255" value="<?= (int) ($settings['min_level'] ?? 1) ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.min_gm_rank_for_command')) ?></span>
@@ -520,8 +524,14 @@ if ($canManage) {
             <input type="checkbox" name="use_builtin_questions" value="1" <?= ((int) ($settings['use_builtin_questions'] ?? 1) === 1) ? 'checked' : '' ?>>
             <span><?= htmlspecialchars(__('app.trivia.fields.use_builtin_questions')) ?></span>
           </label>
+          <label class="tv-field tv-field--check">
+            <input type="hidden" name="debug_log" value="0">
+            <input type="checkbox" name="debug_log" value="1" <?= ((int) ($settings['debug_log'] ?? 0) === 1) ? 'checked' : '' ?>>
+            <span><?= htmlspecialchars(__('app.trivia.fields.debug_log')) ?></span>
+          </label>
         </div>
         <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.enabled_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.min_players_hint')) ?></p>
       </fieldset>
 
       <fieldset class="tv-fieldset">
@@ -593,6 +603,9 @@ if ($canManage) {
         <div class="tv-grid">
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.answer_prefix')) ?></span>
             <input type="text" name="answer_prefix" maxlength="8" value="<?= htmlspecialchars((string) ($settings['answer_prefix'] ?? '')) ?>"></label>
+          <label class="tv-field tv-field--wide"><span><?= htmlspecialchars(__('app.trivia.fields.answer_hint')) ?></span>
+            <input type="text" name="answer_hint" maxlength="255" value="<?= htmlspecialchars((string) ($settings['answer_hint'] ?? '')) ?>"
+                   placeholder="<?= htmlspecialchars(__('app.trivia.fields.answer_hint_placeholder'), ENT_QUOTES, 'UTF-8') ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.attempts_per_player')) ?></span>
             <input type="number" name="attempts_per_player" min="0" max="20" value="<?= (int) ($settings['attempts_per_player'] ?? 1) ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.option_labels')) ?></span>
@@ -618,6 +631,10 @@ if ($canManage) {
             <input type="checkbox" name="allow_latin_letters" value="1" <?= ((int) ($settings['allow_latin_letters'] ?? 1) === 1) ? 'checked' : '' ?>>
             <span><?= htmlspecialchars(__('app.trivia.fields.allow_latin_letters')) ?></span></label>
           <label class="tv-field tv-field--check">
+            <input type="hidden" name="allow_loose_letter" value="0">
+            <input type="checkbox" name="allow_loose_letter" value="1" <?= ((int) ($settings['allow_loose_letter'] ?? 1) === 1) ? 'checked' : '' ?>>
+            <span><?= htmlspecialchars(__('app.trivia.fields.allow_loose_letter')) ?></span></label>
+          <label class="tv-field tv-field--check">
             <input type="hidden" name="allow_text_answer" value="0">
             <input type="checkbox" name="allow_text_answer" value="1" <?= ((int) ($settings['allow_text_answer'] ?? 0) === 1) ? 'checked' : '' ?>>
             <span><?= htmlspecialchars(__('app.trivia.fields.allow_text_answer')) ?></span></label>
@@ -634,6 +651,24 @@ if ($canManage) {
             <input type="checkbox" name="reply_already_answered" value="1" <?= ((int) ($settings['reply_already_answered'] ?? 1) === 1) ? 'checked' : '' ?>>
             <span><?= htmlspecialchars(__('app.trivia.fields.reply_already_answered')) ?></span></label>
         </div>
+      </fieldset>
+
+      <fieldset class="tv-fieldset">
+        <legend><?= htmlspecialchars(__('app.trivia.sections.participation')) ?></legend>
+        <div class="tv-grid">
+          <label class="tv-field tv-field--check">
+            <input type="hidden" name="ignore_gms" value="0">
+            <input type="checkbox" name="ignore_gms" value="1" <?= ((int) ($settings['ignore_gms'] ?? 1) === 1) ? 'checked' : '' ?>>
+            <span><?= htmlspecialchars(__('app.trivia.fields.ignore_gms')) ?></span></label>
+          <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.gm_rank_exempt')) ?></span>
+            <input type="number" name="gm_rank_exempt" min="0" max="4" value="<?= (int) ($settings['gm_rank_exempt'] ?? 3) ?>"></label>
+          <label class="tv-field tv-field--wide"><span><?= htmlspecialchars(__('app.trivia.fields.broadcast_prefix')) ?></span>
+            <input type="text" name="broadcast_prefix" maxlength="32" value="<?= htmlspecialchars((string) ($settings['broadcast_prefix'] ?? '')) ?>"></label>
+          <label class="tv-field tv-field--wide"><span><?= htmlspecialchars(__('app.trivia.fields.win_prefix')) ?></span>
+            <input type="text" name="win_prefix" maxlength="32" value="<?= htmlspecialchars((string) ($settings['win_prefix'] ?? '')) ?>"></label>
+        </div>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.prefix_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.gm_rank_exempt_hint')) ?></p>
       </fieldset>
 
       <fieldset class="tv-fieldset">
