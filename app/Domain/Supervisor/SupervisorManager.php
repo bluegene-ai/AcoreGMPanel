@@ -401,7 +401,7 @@ final class SupervisorManager
                 'instance' => (string) ($decoded['instance'] ?? ''),
                 'uptime_seconds' => (int) ($decoded['uptimeSec'] ?? 0),
                 'updated_at_ms' => (int) ($decoded['updatedAtTickMs'] ?? 0),
-                'last_command' => $this->normalizeLastCommand($decoded['lastCommand'] ?? null),
+                'last_command' => $this->normalizeLastCommand($decoded['lastCommand'] ?? null, (int) ($decoded['updatedAtTickMs'] ?? 0)),
             ],
             'services' => $services,
         ];
@@ -673,9 +673,13 @@ final class SupervisorManager
         $state = (string) ($service['state'] ?? 'unknown');
         $heartbeatSeen = (bool) ($service['heartbeatSeen'] ?? false);
         $heartbeatAge = isset($service['heartbeatAgeSec']) ? (int) $service['heartbeatAgeSec'] : -1;
+        // heartbeatTimeoutSec is the EFFECTIVE limit: since supervisor 1.1.2 it is raised to
+        // max(configured, RecordUpdateTimeDiffInterval + 120s) so a healthy server with a slow
+        // heartbeat cadence is not killed (see heartbeatTimeoutConfiguredSec). The panel must judge
+        // and display the effective one, and explain the difference.
         $heartbeatTimeout = (int) ($service['heartbeatTimeoutSec'] ?? 0);
+        $heartbeatTimeoutConfigured = (int) ($service['heartbeatTimeoutConfiguredSec'] ?? $heartbeatTimeout);
         $probeOk = (bool) ($service['probeOk'] ?? true);
-        $probePort = (int) ($service['probePort'] ?? 0);
 
         [$health, $tone] = $this->healthFor($state, $heartbeatSeen, $heartbeatAge, $heartbeatTimeout, $probeOk, (bool) ($service['stoppedByUser'] ?? false));
 
@@ -697,6 +701,13 @@ final class SupervisorManager
             'heartbeat_seen' => $heartbeatSeen,
             'heartbeat_age_seconds' => $heartbeatAge,
             'heartbeat_timeout_seconds' => $heartbeatTimeout,
+            'heartbeat_timeout_configured_seconds' => $heartbeatTimeoutConfigured,
+            'heartbeat_timeout_raised' => $heartbeatTimeoutConfigured > 0 && $heartbeatTimeout > $heartbeatTimeoutConfigured,
+            // how often the server config says the world loop writes the line, and how often it was
+            // really observed - the two numbers the 2026-09-23 false-stall incident turned on
+            'heartbeat_interval_seconds' => (int) ($service['heartbeatIntervalSec'] ?? 0),
+            'heartbeat_min_record_ms' => (int) ($service['heartbeatMinRecordMs'] ?? 0),
+            'heartbeat_cadence_seconds' => (int) ($service['heartbeatCadenceSec'] ?? 0),
             'probe_ok' => $probeOk,
             'probe_failures' => (int) ($service['probeFailures'] ?? 0),
             'probe_detail' => (string) ($service['probeDetail'] ?? ''),
@@ -751,9 +762,10 @@ final class SupervisorManager
 
     /**
      * @param mixed $command
+     * @param int $statusTickMs the supervisor's own updatedAtTickMs for this snapshot
      * @return array<string,mixed>|null
      */
-    private function normalizeLastCommand(mixed $command): ?array
+    private function normalizeLastCommand(mixed $command, int $statusTickMs = 0): ?array
     {
         if (!is_array($command)) {
             return null;
@@ -761,9 +773,10 @@ final class SupervisorManager
 
         $doneTick = (int) ($command['doneAtTickMs'] ?? 0);
         $ageSeconds = null;
-        if ($doneTick > 0) {
-            // Tick() is milliseconds since boot; convert to "how long ago" using the status age
-            $ageSeconds = null;
+        if ($doneTick > 0 && $statusTickMs >= $doneTick) {
+            // Tick() is milliseconds since boot, so the difference between the snapshot's own tick
+            // and the command's completion tick is how long ago the command finished.
+            $ageSeconds = intdiv($statusTickMs - $doneTick, 1000);
         }
 
         return [

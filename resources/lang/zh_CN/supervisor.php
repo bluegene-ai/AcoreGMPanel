@@ -57,6 +57,9 @@ return [
         'uptime' => '运行时长',
         'heartbeat' => '世界循环心跳',
         'heartbeat_ago' => ':seconds 秒前',
+        'heartbeat_raised' => '配置 :configured 秒 → 实际 :effective 秒（按服务器节奏自动放宽）',
+        'heartbeat_interval' => '服务器每 :seconds 秒写一行',
+        'heartbeat_cadence' => '实测间隔 :seconds 秒',
         'not_available' => '不适用',
         'probe' => '端口探活',
         'probe_ok' => '正常',
@@ -107,6 +110,7 @@ return [
         'status_file' => '状态文件',
         'last_command' => '最近指令',
         'no_command' => '尚未收到任何指令',
+        'command_age' => ':seconds 秒前',
     ],
 
     'messages' => [

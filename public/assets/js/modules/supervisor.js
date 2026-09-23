@@ -153,6 +153,30 @@ function boot(){
     if(node) node.textContent = value;
   }
 
+  /**
+   * The heartbeat cell explains itself: effective timeout, the configured one when the supervisor
+   * raised it (1.1.2: max(configured, RecordUpdateTimeDiffInterval + 120s)) and the observed
+   * cadence. Must stay in sync with $heartbeatNote() in views/supervisor/index.php.
+   */
+  function heartbeatNote(service, t){
+    const effective = Number(service.heartbeat_timeout_seconds) || 0;
+    const configured = Number(service.heartbeat_timeout_configured_seconds) || effective;
+    const interval = Number(service.heartbeat_interval_seconds) || 0;
+    const cadence = Number(service.heartbeat_cadence_seconds) || 0;
+    const parts = [];
+    if(configured > 0 && configured !== effective){
+      parts.push(t('fields.heartbeat_raised', 'configured :configured s, raised to :effective s')
+        .replace(':configured', configured).replace(':effective', effective));
+    }else if(interval > 0){
+      parts.push(t('fields.heartbeat_interval', 'server writes one line every :seconds s')
+        .replace(':seconds', interval));
+    }
+    if(cadence > 0){
+      parts.push(t('fields.heartbeat_cadence', 'measured cadence :seconds s').replace(':seconds', cadence));
+    }
+    return parts.join(' · ');
+  }
+
   function renderService(node, service){
     node.className = 'sv-card sv-card--' + (service.tone || 'muted');
     const healthBadge = svQs('[data-sv-field="health_label"]', node);
@@ -163,10 +187,34 @@ function boot(){
     setText(node, 'state_label', service.state_label || service.state || '');
     setText(node, 'pid', service.pid > 0 ? service.pid : '--');
     setText(node, 'uptime', formatDuration(service.uptime_seconds));
-    setText(node, 'heartbeat', service.heartbeat_age_seconds >= 0
-      ? t('fields.heartbeat_ago', 'heartbeat :seconds s ago').replace(':seconds', service.heartbeat_age_seconds)
+
+    // write the CELLS OF THE CELL, never the whole cell: the age, the limit and the explanation are
+    // separate spans in the server-rendered markup and a whole-cell overwrite dropped them
+    const heartbeatAge = Number(service.heartbeat_age_seconds);
+    setText(node, 'heartbeat_age', heartbeatAge >= 0
+      ? t('fields.heartbeat_ago', 'heartbeat :seconds s ago').replace(':seconds', heartbeatAge)
       : t('fields.not_available', 'n/a'));
-    setText(node, 'probe', service.probe_ok ? t('fields.probe_ok', 'reachable') : t('fields.probe_failed', 'no answer'));
+    const timeoutNode = svQs('[data-sv-field="heartbeat_timeout"]', node);
+    if(timeoutNode) timeoutNode.textContent = String(Number(service.heartbeat_timeout_seconds) || 0);
+    const noteNode = svQs('[data-sv-field="heartbeat_note"]', node);
+    if(noteNode){
+      const note = heartbeatNote(service, t);
+      noteNode.textContent = note;
+      noteNode.hidden = note === '';
+    }
+
+    const probeState = svQs('[data-sv-field="probe_state"]', node);
+    if(probeState){
+      probeState.className = 'sv-badge sv-badge--' + (service.probe_ok ? 'ok' : 'error');
+      probeState.textContent = service.probe_ok ? t('fields.probe_ok', 'reachable') : t('fields.probe_failed', 'no answer');
+    }
+    const probeDetail = svQs('[data-sv-field="probe_detail"]', node);
+    if(probeDetail){
+      const detail = String(service.probe_detail || '');
+      probeDetail.textContent = detail;
+      probeDetail.hidden = detail === '';
+    }
+
     setText(node, 'restarts', String(service.restarts ?? 0));
     setText(node, 'memory', `${Math.round(Number(service.working_set_mb) || 0)} MB`);
     setText(node, 'last_event', service.last_event || '');
@@ -207,8 +255,11 @@ function boot(){
         lastBox.innerHTML = `<span class="sv-muted">${svEscape(t('meta.no_command', 'no command yet'))}</span>`;
       }else{
         const tone = last.result === 'ok' ? 'ok' : 'warn';
+        const age = (last.age_seconds === null || last.age_seconds === undefined)
+          ? ''
+          : ` <span class="sv-muted sv-small">· ${svEscape(t('meta.command_age', ':seconds s ago').replace(':seconds', last.age_seconds))}</span>`;
         lastBox.innerHTML = `<span class="sv-badge sv-badge--${tone}">${svEscape(last.action)} / ${svEscape(last.target)}</span> `
-          + svEscape(last.message || '');
+          + svEscape(last.message || '') + age;
       }
     }
 

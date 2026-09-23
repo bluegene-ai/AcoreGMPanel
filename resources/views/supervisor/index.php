@@ -40,6 +40,32 @@ $formatDuration = static function (?int $seconds): string {
     }
     return sprintf('%dm%02ds', $minutes, $secs);
 };
+/**
+ * Why the heartbeat timeout is what it is, and how fast the line really appears.
+ *
+ * The supervisor raises the effective timeout to max(configured, RecordUpdateTimeDiffInterval + 120s)
+ * so a server whose world loop writes the line every few minutes is not declared dead. Without the
+ * configured value and the cadence next to it, that auto-raise looks like the panel is showing the
+ * wrong number (2026-09-23: a healthy server was killed by a timeout shorter than its cadence).
+ */
+$heartbeatNote = static function (array $service): string {
+    $effective = (int) ($service['heartbeat_timeout_seconds'] ?? 0);
+    $configured = (int) ($service['heartbeat_timeout_configured_seconds'] ?? $effective);
+    $interval = (int) ($service['heartbeat_interval_seconds'] ?? 0);
+    $cadence = (int) ($service['heartbeat_cadence_seconds'] ?? 0);
+
+    $bits = [];
+    if ($configured > 0 && $configured !== $effective) {
+        $bits[] = __('app.supervisor.fields.heartbeat_raised', ['configured' => $configured, 'effective' => $effective]);
+    } elseif ($interval > 0) {
+        $bits[] = __('app.supervisor.fields.heartbeat_interval', ['seconds' => $interval]);
+    }
+    if ($cadence > 0) {
+        $bits[] = __('app.supervisor.fields.heartbeat_cadence', ['seconds' => $cadence]);
+    }
+
+    return implode(' · ', $bits);
+};
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -127,8 +153,9 @@ $formatDuration = static function (?int $seconds): string {
       $stateKey = (string) ($service['state'] ?? '');
       $healthKey = (string) ($service['health'] ?? '');
       $heartbeat = (int) ($service['heartbeat_age_seconds'] ?? -1);
+      $heartbeatNoteText = $heartbeatNote($service);
       $probeOk = (bool) ($service['probe_ok'] ?? true);
-      $hasProbe = (bool) ($service['probe_failed'] ?? false) || ($service['probe_detail'] ?? '') !== '';
+      $probeDetail = (string) ($service['probe_detail'] ?? '');
     ?>
   <section class="sv-card sv-card--<?= htmlspecialchars((string) ($service['tone'] ?? 'muted')) ?>"
            data-sv-service="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>">
@@ -147,21 +174,26 @@ $formatDuration = static function (?int $seconds): string {
         <dd data-sv-field="uptime"><?= htmlspecialchars($formatDuration((int) ($service['uptime_seconds'] ?? 0))) ?></dd></div>
       <div><dt><?= htmlspecialchars(__('app.supervisor.fields.heartbeat')) ?></dt>
         <dd data-sv-field="heartbeat">
+          <?php // the live updater writes into these spans; overwriting the whole cell would drop
+                // the timeout and the explanation on the first poll (see supervisor.js) ?>
+          <span data-sv-field="heartbeat_age"><?= htmlspecialchars($heartbeat >= 0
+              ? __('app.supervisor.fields.heartbeat_ago', ['seconds' => $heartbeat])
+              : __('app.supervisor.fields.not_available')) ?></span>
           <?php if ($heartbeat >= 0): ?>
-            <?= htmlspecialchars(__('app.supervisor.fields.heartbeat_ago', ['seconds' => $heartbeat])) ?>
-            <span class="sv-muted">/ <?= (int) ($service['heartbeat_timeout_seconds'] ?? 0) ?>s</span>
+            <span class="sv-muted">/ <span data-sv-field="heartbeat_timeout"><?= (int) ($service['heartbeat_timeout_seconds'] ?? 0) ?></span>s</span>
+          <?php endif; ?>
+          <?php if ($heartbeatNoteText !== ''): ?>
+            <span class="sv-muted sv-small" data-sv-field="heartbeat_note"><?= htmlspecialchars($heartbeatNoteText) ?></span>
           <?php else: ?>
-            <span class="sv-muted"><?= htmlspecialchars(__('app.supervisor.fields.not_available')) ?></span>
+            <span class="sv-muted sv-small" data-sv-field="heartbeat_note" hidden></span>
           <?php endif; ?>
         </dd></div>
       <div><dt><?= htmlspecialchars(__('app.supervisor.fields.probe')) ?></dt>
         <dd data-sv-field="probe">
-          <span class="<?= $toneClass($probeOk ? 'ok' : 'error') ?>">
+          <span class="<?= $toneClass($probeOk ? 'ok' : 'error') ?>" data-sv-field="probe_state">
             <?= htmlspecialchars($probeOk ? __('app.supervisor.fields.probe_ok') : __('app.supervisor.fields.probe_failed')) ?>
           </span>
-          <?php if (($service['probe_detail'] ?? '') !== ''): ?>
-            <span class="sv-muted sv-small"><?= htmlspecialchars((string) $service['probe_detail']) ?></span>
-          <?php endif; ?>
+          <span class="sv-muted sv-small" data-sv-field="probe_detail"<?= $probeDetail === '' ? ' hidden' : '' ?>><?= htmlspecialchars($probeDetail) ?></span>
         </dd></div>
       <div><dt><?= htmlspecialchars(__('app.supervisor.fields.restarts')) ?></dt>
         <dd data-sv-field="restarts"><?= (int) ($service['restarts'] ?? 0) ?></dd></div>
@@ -235,6 +267,10 @@ $formatDuration = static function (?int $seconds): string {
             <?= htmlspecialchars((string) ($last['action'] ?? '')) ?> / <?= htmlspecialchars((string) ($last['target'] ?? '')) ?>
           </span>
           <?= htmlspecialchars((string) ($last['message'] ?? '')) ?>
+          <?php if (($last['age_seconds'] ?? null) !== null): ?>
+            <span class="sv-muted sv-small" data-sv-field="last_command_age">·
+              <?= htmlspecialchars(__('app.supervisor.meta.command_age', ['seconds' => (int) $last['age_seconds']])) ?></span>
+          <?php endif; ?>
         <?php endif; ?>
       </dd></div>
   </dl>

@@ -57,6 +57,9 @@ return [
         'uptime' => 'Uptime',
         'heartbeat' => 'World-loop heartbeat',
         'heartbeat_ago' => ':seconds s ago',
+        'heartbeat_raised' => 'configured :configured s, effective :effective s (raised by the server cadence)',
+        'heartbeat_interval' => 'server writes one line every :seconds s',
+        'heartbeat_cadence' => 'measured cadence :seconds s',
         'not_available' => 'n/a',
         'probe' => 'Port probe',
         'probe_ok' => 'reachable',
@@ -107,6 +110,7 @@ return [
         'status_file' => 'Status file',
         'last_command' => 'Last command',
         'no_command' => 'no command received yet',
+        'command_age' => ':seconds s ago',
     ],
 
     'messages' => [
