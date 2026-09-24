@@ -150,7 +150,7 @@ return [
     ],
     'ext' => [
         'title' => '扩展配置（脚本私有）',
-        'note' => '保存后写入本区配置库的 boss_activity_config_ext，并立即通过 SOAP 执行 .boss config reload。这张表是 boss.lua 的私有配置（喊话 / 战斗嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军模板 / 职业 / 受管模板 / 定时启停），面板用 upsert 只改自己提交的列。喊话与嘲讽留空 = 该场景不喊；标注「留空沿用脚本默认值」的字段留空则不改动。',
+        'note' => '保存后写入本区配置库的 boss_activity_config_ext，并立即通过 SOAP 执行 .boss config reload。这张表是 boss.lua 的私有配置（喊话 / 战斗嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军模板 / 职业 / 受管模板 / 定时启停），面板用 upsert 只改自己提交的列，未提交的字段一律保持数据库现值（不会被重置为默认值）。喊话与嘲讽留空 = 该场景不喊；标注「留空沿用脚本默认值」的字段留空则不改动。',
         'save' => '保存扩展配置并热加载',
         'unavailable' => '扩展配置表尚未由 boss.lua 创建，当前只能查看默认值。',
         'tabs_label' => '扩展配置分区',
@@ -372,6 +372,7 @@ return [
         'config_save_failed' => 'Boss 配置保存失败。',
         'ext_storage_missing' => 'Boss 扩展配置表尚未由 boss.lua 初始化，当前只能查看默认值，不能保存。',
         'ext_save_failed' => 'Boss 扩展配置保存失败。',
+        'nothing_to_save' => '这次请求没有提交任何 Boss 配置字段，已拒绝保存（未提交的字段一律保持数据库现值，不会被重置为默认值）。',
         'schedule_invalid' => '时间段「:token」看不懂。正确写法如 08:00-09:00；多段用分号分隔；要限定星期写 1-5@08:00-09:00（1=周一 … 7=周日）；跨夜写 22:00-02:00。',
         'schedule_too_long' => '时间段太长了（当前 :length 个字符，最多 :max 个）：请减少段数或缩短写法。',
         'reload_failed' => 'Lua 热加载失败。',

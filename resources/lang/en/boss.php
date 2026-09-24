@@ -150,7 +150,7 @@ return [
     ],
     'ext' => [
         'title' => 'Extended config (script-private)',
-        'note' => 'Saving writes to boss_activity_config_ext in the realm config schema and immediately runs .boss config reload through SOAP. That table holds boss.lua private settings (yells, combat taunts, AI cadence, phase thresholds, patrol, minions, helper entries, classes, managed tiers, schedule); the panel upserts only the columns it submits. An empty yell or taunt list means "do not yell in that situation"; fields marked as falling back to script defaults are left untouched when empty.',
+        'note' => 'Saving writes to boss_activity_config_ext in the realm config schema and immediately runs .boss config reload through SOAP. That table holds boss.lua private settings (yells, combat taunts, AI cadence, phase thresholds, patrol, minions, helper entries, classes, managed tiers, schedule); the panel upserts only the columns it submits, and an unsubmitted field always keeps the database value (it is never reset to a default). An empty yell or taunt list means "do not yell in that situation"; fields marked as falling back to script defaults are left untouched when empty.',
         'save' => 'Save extended config and reload',
         'unavailable' => 'boss.lua has not created the extended config table yet, so only defaults can be shown.',
         'tabs_label' => 'Extended config sections',
@@ -372,6 +372,7 @@ return [
         'config_save_failed' => 'Boss config could not be saved.',
         'ext_storage_missing' => 'Boss extended config storage has not been initialized by boss.lua yet. AGMP can only show defaults until Lua creates the table.',
         'ext_save_failed' => 'Boss extended config could not be saved.',
+        'nothing_to_save' => 'The request did not submit any Boss config field, so it was rejected (unsubmitted fields always keep the database value and are never reset to defaults).',
         'schedule_invalid' => 'The window ":token" cannot be parsed. Use forms like 08:00-09:00; separate windows with a semicolon; add a weekday prefix as 1-5@08:00-09:00 (1=Mon … 7=Sun); overnight windows are written 22:00-02:00.',
         'schedule_too_long' => 'Those windows are too long (:length characters, :max allowed): use fewer windows or a shorter form.',
         'reload_failed' => 'Lua reload failed.',

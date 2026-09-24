@@ -431,6 +431,21 @@ class BossController extends Controller
             $config['gold_max_copper'] = $config['gold_min_copper'];
         }
 
+        // 未提交 = 不改（见 onlySubmittedFields 的说明：面板表单总是提交全部字段）
+        $config = $this->onlySubmittedFields($request, $config, [
+            'boss_scale_scaled' => 'boss_scale',
+            'boss_health_multiplier_scaled' => 'boss_health_multiplier',
+            'ally_health_multiplier_scaled' => 'ally_health_multiplier',
+        ]);
+
+        // 一个字段都没提交：拒绝，而不是把整行按现值重写一遍（避免空请求触发一次无意义的热加载）
+        if ($config === []) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.nothing_to_save'),
+            ], 422);
+        }
+
         try {
             $savedConfig = $this->repo()->saveConfig($config);
         } catch (Throwable $exception) {
@@ -531,7 +546,8 @@ class BossController extends Controller
      * 保存扩展配置（脚本私有列），随后热加载。
      *
      * 与主表保存的差别：这里用 INSERT ... ON DUPLICATE KEY UPDATE（脚本新增的列不会被 reset），
-     * 空值语义也按 Lua 侧的约定处理（keep_default_when_empty 的字段留空 = 不改）。
+     * 空值语义也按 Lua 侧的约定处理：未提交的字段不改（normalizeExtPayload），
+     * keep_default_when_empty 的字段提交空值也不改。
      */
     public function apiExtConfigSave(Request $request): Response
     {
@@ -551,6 +567,14 @@ class BossController extends Controller
             return $this->json([
                 'success' => false,
                 'message' => $this->extPayloadErrorMessage($exception),
+            ], 422);
+        }
+
+        // 一个字段都没提交：拒绝，而不是把整行按现值重写一遍（避免空请求触发一次无意义的热加载）
+        if ($config === []) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.nothing_to_save'),
             ], 422);
         }
 
@@ -611,22 +635,25 @@ class BossController extends Controller
 
     /**
      * 按 schema 归一化扩展配置表单：逐字段按 kind 处理，只保留能安全落库的值。
+     *
+     * 「未提交 = 不改」是这里的硬规则：面板表单（含开关的 hidden 0）永远提交全部字段，
+     * 所以跳过未提交的字段不会影响正常保存；而任何只提交部分字段的调用方（脚本 / curl /
+     * 半截表单）都不会再把其余字段写成默认值 —— 2026-09-23 线上扩展配置整行的文本被清空、
+     * 整数被写成最小值，就是"缺字段按默认值提交"造成的。
      */
     private function normalizeExtPayload(Request $request): array
     {
         $payload = [];
 
         foreach ($this->repo()->extFieldSchema() as $name => $spec) {
+            if ($request->input($name) === null) {
+                continue;
+            }
+
             $kind = (string) ($spec['kind'] ?? 'text');
 
-            // 时间段字段比普通文本多一层语义：**没提交 = 不改**，提交空串 = 清空时间段。
-            // （面板表单永远会带上这个字段，所以"清空"照常生效；只发部分字段的调用方
-            //   不会因为少带一个字段就把线上的时间段清掉。）
+            // 时间段字段除了归一化，还要在保存前校验（非法写法直接 422，附上看不懂的那一段）
             if ($kind === 'schedule_windows') {
-                if ($request->input($name) === null) {
-                    continue;
-                }
-
                 $payload[$name] = $this->normalizedScheduleWindows(
                     (string) $request->input($name, ''),
                     (int) ($spec['maxlength'] ?? 255)
@@ -666,7 +693,8 @@ class BossController extends Controller
                     $value = $this->limitedSingleLine($text, (int) ($spec['maxlength'] ?? 255));
             }
 
-            // 留空 = 不改（Lua 侧对空值会回退到脚本默认值，写空只会让两边显示不一致）
+            // 提交了空值也不改（列表/映射类字段：Lua 侧空值会回退到脚本默认值，
+            // 写空只会让两边显示不一致）
             if (!empty($spec['keep_default_when_empty']) && $value === '') {
                 continue;
             }
@@ -675,6 +703,36 @@ class BossController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * 只保留「请求里确实提交过」的字段 —— 未提交的字段交给仓储保留数据库现值。
+     *
+     * 为什么是硬规则：面板表单总会提交全部字段（扩展配置的开关还带一个 hidden 0，
+     * 主表配置的开关由 boss.js 显式补 0/1），所以正常保存完全不受影响；而"只提交一个字段"
+     * 的调用方以前会把其余字段写成各自的默认值（bool→0、int→最小值、text→空串）。
+     * 2026-09-23 线上 boss_activity_config_ext 整行文本被清空、整数被写成最小值，
+     * 就是这么来的（已从 binlog 逐列还原）。
+     *
+     * @param array<string,mixed> $config     归一化后的候选值（键 = 数据库列名）
+     * @param array<string,string> $inputNames 列名 → 请求字段名（只有缩放列不同名）
+     * @return array<string,mixed>
+     */
+    private function onlySubmittedFields(Request $request, array $config, array $inputNames = []): array
+    {
+        $submitted = [];
+
+        foreach ($config as $key => $value) {
+            $inputName = $inputNames[$key] ?? (string) $key;
+
+            if ($request->input($inputName) === null) {
+                continue;
+            }
+
+            $submitted[$key] = $value;
+        }
+
+        return $submitted;
     }
 
     /**
