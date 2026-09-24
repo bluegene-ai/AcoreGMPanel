@@ -46,6 +46,16 @@ class AuctionatorController extends Controller
     private const QUALITIES = ['poor', 'normal', 'uncommon', 'rare', 'epic', 'legendary'];
     private const HOUSES = [2, 6, 7];
 
+    /**
+     * Listing shapes the panel is allowed to write for a GM listing.
+     *
+     * The module also knows a third value, `legacy` (follow the realm-wide
+     * Auctionator.Seller.BidOnly switch). Rows carried over from before the mode column
+     * exist are still on it, but the panel never writes it: the GM picks a real mode so a
+     * listing's shape is never left to a global switch by accident.
+     */
+    private const LISTING_MODES = ['buyout', 'bid'];
+
     private ?AuctionatorRepository $repo = null;
 
     /** @var array{supported: bool, reason: string}|null 本区是否可管理（每请求只判定一次） */
@@ -279,19 +289,27 @@ class AuctionatorController extends Controller
                     if (!$this->repo()->itemExists($item)) {
                         return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.item_not_found', ['item' => $item])], 422);
                     }
-                    $price = $this->boundedInt($request, 'price', 0, 0, (int) Config::get('auctionator.price_max_copper', 4294967295));
+                    $pricing = $this->listingPricing($request);
+                    if ($pricing['error'] !== '') {
+                        return $this->json(['success' => false, 'message' => $pricing['error']], 422);
+                    }
                     $hours = $this->boundedInt($request, 'hours', 48, (int) Config::get('auctionator.listing_hours_min', 1), (int) Config::get('auctionator.listing_hours_max', 720));
                     $house = $this->normalizedEnum($request, 'house', ['2', '6', '7'], '7');
                     $this->repo()->saveGmListRow(
                         $item,
-                        $price,
+                        $pricing['mode'],
+                        $pricing['price'],
+                        $pricing['bid'],
                         $this->boundedInt($request, 'stack', 1, 1, 1000),
                         $hours,
                         (int) $house,
                         $this->boundedInt($request, 'owner', 0, 0, 4294967295),
                         $this->normalizedBoolFlag($request, 'enabled') ? 1 : 0
                     );
-                    $message = Lang::get('app.auctionator.feedback.gm_saved', ['item' => $item]);
+                    $message = Lang::get('app.auctionator.feedback.gm_saved', [
+                        'item' => $item,
+                        'mode' => Lang::get('app.auctionator.modes.' . $pricing['mode']),
+                    ]);
                     break;
 
                 case 'gm_toggle':
@@ -505,6 +523,105 @@ class AuctionatorController extends Controller
         return '';
     }
 
+    // ------------------------------------------------------------------ listing parameters
+
+    /**
+     * Normalise the mode + 起拍单价 + 买断单价 triple the two GM listing surfaces take.
+     *
+     * 一口价 (buyout) is one price the buyer pays and nobody can underbid: the module pins
+     * the start bid to the buyout, so a start bid sent alongside it would only be a second,
+     * disagreeing source of truth. 竞拍 (bid) needs a start bid and takes an optional
+     * buyout that may not sit below it.
+     *
+     * All three values are UNIT copper: the listing price is the value times the stack,
+     * which is what the card's preview spells out.
+     *
+     * @return array{mode: string, price: int, bid: int, error: string}
+     */
+    private function listingPricing(Request $request): array
+    {
+        $max = (int) Config::get('auctionator.price_max_copper', 4294967295);
+        $mode = $this->normalizedEnum($request, 'mode', self::LISTING_MODES, '');
+        $price = $this->boundedInt($request, 'price', 0, 0, $max);
+        $bid = $this->boundedInt($request, 'bid', 0, 0, $max);
+
+        if ($mode === 'buyout') {
+            if ($price <= 0) {
+                return ['mode' => $mode, 'price' => $price, 'bid' => 0, 'error' => Lang::get('app.auctionator.errors.buyout_price_required')];
+            }
+
+            return ['mode' => $mode, 'price' => $price, 'bid' => 0, 'error' => ''];
+        }
+
+        if ($mode === 'bid') {
+            if ($bid <= 0) {
+                return ['mode' => $mode, 'price' => $price, 'bid' => $bid, 'error' => Lang::get('app.auctionator.errors.bid_price_required')];
+            }
+
+            if ($price !== 0 && $price < $bid) {
+                return [
+                    'mode' => $mode,
+                    'price' => $price,
+                    'bid' => $bid,
+                    'error' => Lang::get('app.auctionator.errors.buyout_below_bid', ['bid' => $bid, 'price' => $price]),
+                ];
+            }
+
+            return ['mode' => $mode, 'price' => $price, 'bid' => $bid, 'error' => ''];
+        }
+
+        return ['mode' => '', 'price' => 0, 'bid' => 0, 'error' => Lang::get('app.auctionator.errors.mode_required')];
+    }
+
+    /**
+     * The owner argument of ".auctionator add": "bot" recycles the sale money (gold sink),
+     * a character guid pays that character.
+     *
+     * "me" is deliberately not offered: the panel reaches the worldserver over SOAP, whose
+     * console handler has no session, so the module always answers "me is only available for
+     * an in-game GM". Any other unrecognised value used to fall back to "bot" silently, which
+     * would pay the wrong character; it is refused instead.
+     *
+     * @return array{value: string, error: string}
+     */
+    private function normalizedOwner(Request $request): array
+    {
+        $owner = trim((string) $request->input('owner', 'bot'));
+        if ($owner === '' || $owner === 'bot') {
+            return ['value' => 'bot', 'error' => ''];
+        }
+
+        if (preg_match('/^\d{1,10}$/', $owner) === 1) {
+            return ['value' => $owner, 'error' => ''];
+        }
+
+        return ['value' => '', 'error' => Lang::get('app.auctionator.errors.invalid_owner')];
+    }
+
+    /**
+     * addlist's optional owner override: "row" keeps each row's own owner column, "bot"
+     * forces the gold sink, a guid pays that character.
+     *
+     * @return array{value: string, error: string}
+     */
+    private function addlistOwnerOverride(Request $request): array
+    {
+        $owner = trim((string) $request->input('owner_override', 'row'));
+        if ($owner === '' || $owner === 'row') {
+            return ['value' => 'row', 'error' => ''];
+        }
+
+        if ($owner === 'bot') {
+            return ['value' => 'bot', 'error' => ''];
+        }
+
+        if (preg_match('/^\d{1,10}$/', $owner) === 1) {
+            return ['value' => $owner, 'error' => ''];
+        }
+
+        return ['value' => '', 'error' => Lang::get('app.auctionator.errors.invalid_owner')];
+    }
+
     // ------------------------------------------------------------------ command builder
     /**
      * @return array{command: string, error: string}
@@ -512,7 +629,6 @@ class AuctionatorController extends Controller
     private function buildCommand(string $action, Request $request): array
     {
         $house = $this->normalizedEnum($request, 'house', ['2', '6', '7'], '7');
-        $owner = $this->normalizedOwner($request);
 
         switch ($action) {
             case 'status':
@@ -522,7 +638,17 @@ class AuctionatorController extends Controller
                 return ['command' => '.auctionator market', 'error' => ''];
 
             case 'addlist':
-                return ['command' => trim('.auctionator addlist ' . $house . ' ' . $owner), 'error' => ''];
+                $override = $this->addlistOwnerOverride($request);
+                if ($override['error'] !== '') {
+                    return ['command' => '', 'error' => $override['error']];
+                }
+
+                // Omitting the owner argument is what keeps each row's own owner column; the
+                // panel used to always send one, which overrode every row with "bot".
+                return [
+                    'command' => '.auctionator addlist ' . $house . ($override['value'] === 'row' ? '' : ' ' . $override['value']),
+                    'error' => '',
+                ];
 
             case 'expireall':
                 $all = $this->normalizedBoolFlag($request, 'all') ? ' all' : '';
@@ -570,16 +696,22 @@ class AuctionatorController extends Controller
                 return ['command' => '.auctionator bidonown ' . ($this->normalizedBoolFlag($request, 'value') ? '1' : '0'), 'error' => ''];
 
             default:
-                return $this->buildAddCommand($request, $house, $owner);
+                return $this->buildAddCommand($request, $house);
         }
     }
 
     /**
-     * ".auctionator add <house> <item[,item...]> <price> [stack] [hours] [owner]"
+     * ".auctionator add <house> <item[,item...]> mode=<buyout|bid> [bid=<n>] [buyout=<n>]
+     *  stack=<n> hours=<n> owner=<bot|guid>"
+     *
+     * The option form is used on purpose. The positional form takes a bare <price> and lets
+     * the realm-wide Auctionator.Seller.BidOnly switch decide whether that price is a buyout
+     * or a start bid, which is exactly the ambiguity this card had; the option form states
+     * the mode and both prices for this one listing.
      *
      * @return array{command: string, error: string}
      */
-    private function buildAddCommand(Request $request, string $house, string $owner): array
+    private function buildAddCommand(Request $request, string $house): array
     {
         $itemsRaw = trim((string) $request->input('items', ''));
         $items = array_values(array_filter(array_map('trim', explode(',', $itemsRaw)), static fn (string $value): bool => $value !== ''));
@@ -599,9 +731,14 @@ class AuctionatorController extends Controller
             }
         }
 
-        $price = $this->boundedInt($request, 'price', 0, 0, (int) Config::get('auctionator.price_max_copper', 4294967295));
-        if ($price <= 0) {
-            return ['command' => '', 'error' => Lang::get('app.auctionator.errors.price_required')];
+        $pricing = $this->listingPricing($request);
+        if ($pricing['error'] !== '') {
+            return ['command' => '', 'error' => $pricing['error']];
+        }
+
+        $owner = $this->normalizedOwner($request);
+        if ($owner['error'] !== '') {
+            return ['command' => '', 'error' => $owner['error']];
         }
 
         $stack = $this->boundedInt($request, 'stack', 1, 1, 1000);
@@ -613,23 +750,23 @@ class AuctionatorController extends Controller
             (int) Config::get('auctionator.listing_hours_max', 720)
         );
 
-        $command = '.auctionator add ' . $house . ' ' . implode(',', $items) . ' ' . $price . ' ' . $stack . ' ' . $hours . ' ' . $owner;
+        $options = ['mode=' . $pricing['mode']];
+        if ($pricing['mode'] === 'bid') {
+            $options[] = 'bid=' . $pricing['bid'];
+            if ($pricing['price'] > 0) {
+                $options[] = 'buyout=' . $pricing['price'];
+            }
+        } else {
+            $options[] = 'buyout=' . $pricing['price'];
+        }
+
+        $options[] = 'stack=' . $stack;
+        $options[] = 'hours=' . $hours;
+        $options[] = 'owner=' . $owner['value'];
+
+        $command = '.auctionator add ' . $house . ' ' . implode(',', $items) . ' ' . implode(' ', $options);
 
         return ['command' => $command, 'error' => ''];
-    }
-
-    private function normalizedOwner(Request $request): string
-    {
-        $owner = trim((string) $request->input('owner', 'bot'));
-        if ($owner === '' || $owner === 'bot') {
-            return 'bot';
-        }
-
-        if ($owner === 'me') {
-            return 'me';
-        }
-
-        return preg_match('/^\d{1,10}$/', $owner) ? $owner : 'bot';
     }
 
     // ------------------------------------------------------------------ snapshot

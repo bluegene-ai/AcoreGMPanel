@@ -185,7 +185,7 @@ final class AuctionatorRepository extends MultiServerRepository
         );
 
         $gmRows = $this->tryAll(
-            'SELECT item, price, stack, hours, house, owner, enabled
+            'SELECT item, mode, price, bid, stack, hours, house, owner, enabled
                FROM mod_auctionator_gm_list
               ORDER BY house ASC, item ASC LIMIT ' . max(1, $gmListLimit),
             [],
@@ -230,7 +230,9 @@ final class AuctionatorRepository extends MultiServerRepository
             $gmList[] = [
                 'item' => $entry,
                 'name' => $names[$entry] ?? '',
+                'mode' => (string) ($row['mode'] ?? 'legacy'),
                 'price' => (int) $row['price'],
+                'bid' => (int) $row['bid'],
                 'stack' => (int) $row['stack'],
                 'hours' => (int) $row['hours'],
                 'house' => (int) $row['house'],
@@ -249,6 +251,10 @@ final class AuctionatorRepository extends MultiServerRepository
                 'disabled_items' => $this->hasTable('mod_auctionator_disabled_items', $world) === true,
                 'itemclass_config' => $this->hasTable('mod_auctionator_itemclass_config', $world) === true,
                 'gm_list' => $this->hasTable('mod_auctionator_gm_list', $world) === true,
+                // The mode/bid columns arrive with the 2026_09_24_00 SQL update. A realm
+                // whose world database still predates it must be told so instead of being
+                // shown an empty list, because the SELECT above silently returns no rows.
+                'gm_list_mode' => $this->hasColumn('mod_auctionator_gm_list', 'mode', $world) === true,
                 'market_price' => $this->hasTable('mod_auctionator_market_price', $this->characters()) === true,
             ],
         ];
@@ -347,18 +353,39 @@ final class AuctionatorRepository extends MultiServerRepository
         return $statement->rowCount() > 0;
     }
 
-    public function saveGmListRow(int $item, int $price, int $stack, int $hours, int $house, int $owner, int $enabled): void
-    {
+    /**
+     * Upsert one curated GM listing row.
+     *
+     * `mode` decides what the two prices mean (see the module's gm_list SQL):
+     *   legacy - follow the realm-wide Auctionator.Seller.BidOnly switch (price is the
+     *            unit buyout, or the unit start bid when that switch is on)
+     *   buyout - one fixed price: `price` is the unit buyout, the start bid is pinned to it
+     *   bid    - auction: `bid` is the unit start bid, `price` the optional unit buyout
+     */
+    public function saveGmListRow(
+        int $item,
+        string $mode,
+        int $price,
+        int $bid,
+        int $stack,
+        int $hours,
+        int $house,
+        int $owner,
+        int $enabled
+    ): void {
         $statement = $this->world()->prepare(
-            'INSERT INTO mod_auctionator_gm_list (item, price, stack, hours, house, owner, enabled)
-             VALUES (:item, :price, :stack, :hours, :house, :owner, :enabled)
-             ON DUPLICATE KEY UPDATE price = VALUES(price), stack = VALUES(stack), hours = VALUES(hours),
-                                     house = VALUES(house), owner = VALUES(owner), enabled = VALUES(enabled)'
+            'INSERT INTO mod_auctionator_gm_list (item, mode, price, bid, stack, hours, house, owner, enabled)
+             VALUES (:item, :mode, :price, :bid, :stack, :hours, :house, :owner, :enabled)
+             ON DUPLICATE KEY UPDATE mode = VALUES(mode), price = VALUES(price), bid = VALUES(bid),
+                                     stack = VALUES(stack), hours = VALUES(hours), house = VALUES(house),
+                                     owner = VALUES(owner), enabled = VALUES(enabled)'
         );
 
         $statement->execute([
             ':item' => $item,
+            ':mode' => $mode,
             ':price' => $price,
+            ':bid' => $bid,
             ':stack' => $stack,
             ':hours' => $hours,
             ':house' => $house,
@@ -459,6 +486,28 @@ final class AuctionatorRepository extends MultiServerRepository
             return $row !== false && (int) ($row['n'] ?? 0) > 0;
         } catch (Throwable $exception) {
             $this->warn('hasTable(' . $table . '): ' . $exception->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
+     * Does this column exist? Used to keep a realm whose world database still predates a
+     * module SQL update readable instead of letting the SELECT fail silently.
+     */
+    private function hasColumn(string $table, string $column, PDO $pdo): ?bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) AS n FROM information_schema.columns
+                  WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column'
+            );
+            $statement->execute([':table' => $table, ':column' => $column]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+            return $row !== false && (int) ($row['n'] ?? 0) > 0;
+        } catch (Throwable $exception) {
+            $this->warn('hasColumn(' . $table . '.' . $column . '): ' . $exception->getMessage());
 
             return null;
         }

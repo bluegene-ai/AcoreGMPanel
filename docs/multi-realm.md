@@ -154,6 +154,10 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
       没装的区只读且**整页 0 处 SQL 报错**、只读说明与原因一致、写接口返回 422。
 - [ ] `php tools/verify_auctionator_autodetect.php` —— 判定顺序回归：白名单/黑名单/自动探测
       （有表→`deployed`、无表→`not_deployed`、库连不上→`db_unreachable`）。
+- [ ] `php tools/verify_auctionator_listing.php [区索引]` —— GM 上架参数回归（只读，不写库不发 SOAP）：
+      一口价/竞拍两种模式拼出的 `.auctionator add … mode=/bid=/buyout=` 命令、`addlist` 不再
+      覆盖每行 owner、面板侧参数校验（缺模式/缺买断价/缺起拍价/买断价低于起拍价/收款角色非法）、
+      以及页面两张卡片的模式与整组推导价渲染。
 
 手工：
 - [ ] 面板切到新区，`Boss 活动管理` 页头显示的 `state_key` = 该区 `boss.lua` §2 的 key。

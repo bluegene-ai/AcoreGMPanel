@@ -32,6 +32,18 @@
     return fallback || path;
   }
 
+  // 带占位符的文案：把 :name 替换成实际值（面板的 moduleLocale 不做替换）。
+  // 占位符按长度从长到短替换，否则 :bid 会先把 :bid_total 咬掉一半。
+  function tt(path, replace, fallback) {
+    let text = t(path, fallback);
+    if (replace) {
+      Object.keys(replace).sort(function (a, b) { return b.length - a.length; }).forEach(function (key) {
+        text = text.split(':' + key).join(String(replace[key]));
+      });
+    }
+    return text;
+  }
+
   function withServer(path) {
     if (!currentServer) return path;
     return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
@@ -209,6 +221,94 @@
     });
   });
 
+  // ------------------------------------------------------------------ listing mode + price preview
+  /**
+   * Both GM listing surfaces (the addlist pick-list form and the ".auctionator add" form) take a
+   * mode plus two UNIT prices, and the mode decides which of them the module uses. So the fields
+   * follow the chosen mode and the preview spells out the whole-stack prices that will actually be
+   * listed - "unit price x stack" is exactly what used to be ambiguous.
+   */
+  function copperText(value) {
+    const copper = Math.max(0, Math.floor(Number(value) || 0));
+    const gold = Math.floor(copper / 10000);
+    const silver = Math.floor((copper % 10000) / 100);
+    const rest = copper % 100;
+    const parts = [];
+    if (gold > 0) parts.push(gold + 'g');
+    if (silver > 0) parts.push(silver + 's');
+    if (rest > 0 || parts.length === 0) parts.push(rest + 'c');
+    return parts.join(' ') + ' (' + copper + 'c)';
+  }
+
+  function unitText(copper) {
+    return tt('listing.unit', { copper: copperText(copper) }, ':copper copper/unit');
+  }
+
+  function syncListingForm(form) {
+    const modeNode = form.querySelector('[name="mode"]');
+    if (!modeNode) return;
+
+    const mode = modeNode.value;
+    const bidMode = mode === 'bid';
+    const buyoutMode = mode === 'buyout';
+    const bidWrap = form.querySelector('[data-au-listing-field="bid"]');
+    const bidInput = form.querySelector('[name="bid"]');
+    const priceInput = form.querySelector('[name="price"]');
+    const stackInput = form.querySelector('[name="stack"]');
+    const preview = form.querySelector('[data-au-listing-preview]');
+
+    // A fixed price has no start bid of its own (the module pins it to the buyout), so the
+    // field is hidden and must not block the submit with a stale `required`.
+    if (bidWrap) bidWrap.hidden = !bidMode;
+    if (bidInput) bidInput.required = bidMode;
+    if (priceInput) priceInput.required = buyoutMode;
+
+    if (!preview) return;
+
+    const stack = Math.max(1, Math.floor(Number(stackInput && stackInput.value) || 1));
+    const bid = Math.max(0, Math.floor(Number(bidInput && bidInput.value) || 0));
+    const price = Math.max(0, Math.floor(Number(priceInput && priceInput.value) || 0));
+    const stackNote = ' ' + tt('listing.per_stack', { stack: stack }, ':stack per stack');
+
+    if (mode === '') {
+      preview.textContent = t('listing.choose_mode', 'Choose a listing mode first.');
+      return;
+    }
+
+    if (buyoutMode) {
+      preview.textContent = price <= 0
+        ? t('listing.missing_buyout', 'Provide a buyout above 0.')
+        : tt('listing.buyout', {
+            unit: unitText(price),
+            total: copperText(price * stack)
+          }, 'Fixed price: buyout :unit, whole stack :total.') + stackNote;
+      return;
+    }
+
+    if (bid <= 0) {
+      preview.textContent = t('listing.missing_bid', 'Provide a start bid above 0.');
+      return;
+    }
+
+    preview.textContent = price > 0
+      ? tt('listing.bid_with_buyout', {
+          bid: unitText(bid),
+          bid_total: copperText(bid * stack),
+          buyout: unitText(price),
+          buyout_total: copperText(price * stack)
+        }, 'Auction: start bid :bid, buyout :buyout.') + stackNote
+      : tt('listing.bid_no_buyout', {
+          bid: unitText(bid),
+          bid_total: copperText(bid * stack)
+        }, 'Auction: start bid :bid, no buyout.') + stackNote;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-au-listing-form]'), function (form) {
+    form.addEventListener('change', function () { syncListingForm(form); });
+    form.addEventListener('input', function () { syncListingForm(form); });
+    syncListingForm(form);
+  });
+
   // ------------------------------------------------------------------ GM actions
   function actionExtraFields() {
     const extra = {};
@@ -282,6 +382,9 @@
   if (dom.addForm) {
     dom.addForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      // The form owns house/mode/price/... for this action. runAction merges the page-wide
+      // [data-au-action-field] values first and this payload last, so the form wins for the
+      // keys they share (house) - the shared field is only there for addlist/expireall.
       runAction('add', formPayload(dom.addForm, 'add'));
     });
   }

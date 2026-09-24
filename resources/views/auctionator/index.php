@@ -64,6 +64,62 @@ $houseLabel = static function (int $house): string {
         default => '#' . $house,
     };
 };
+$modeLabel = static function (string $mode): string {
+    return match ($mode) {
+        'buyout' => __('app.auctionator.modes.buyout'),
+        'bid' => __('app.auctionator.modes.bid'),
+        default => __('app.auctionator.modes.legacy'),
+    };
+};
+// A GM listing card has to state what will actually end up on the auction house, so each
+// row's stored parameters are resolved into the effective start bid / buyout of the whole
+// stack. Rows still on the module's `legacy` mode are resolved with this realm's own
+// Auctionator.Seller.BidOnly / BidStartModifier, which is exactly what ".auctionator
+// addlist" applies to them.
+$gmListing = static function (array $row) use ($typed): array {
+    $cap = 2147483647;
+    $mode = (string) ($row['mode'] ?? 'legacy');
+    $stack = max(1, (int) ($row['stack'] ?? 1));
+    $price = max(0, (int) ($row['price'] ?? 0));
+    $bid = max(0, (int) ($row['bid'] ?? 0));
+
+    if ($mode === 'buyout') {
+        $total = min($cap, $price * $stack);
+
+        return ['mode' => 'buyout', 'start' => $total, 'buyout' => $total];
+    }
+
+    if ($mode === 'bid') {
+        return [
+            'mode' => 'bid',
+            'start' => min($cap, $bid * $stack),
+            'buyout' => $price > 0 ? min($cap, $price * $stack) : 0,
+        ];
+    }
+
+    if ((int) ($typed['Auctionator.Seller.BidOnly'] ?? 0) === 1) {
+        return ['mode' => 'legacy', 'start' => min($cap, $price * $stack), 'buyout' => 0];
+    }
+
+    $buyout = min($cap, $price * $stack);
+    $modifier = max(0.0, min(1.0, (float) ($typed['Auctionator.Seller.BidStartModifier'] ?? 0.0)));
+
+    return [
+        'mode' => 'legacy',
+        'start' => max(1, (int) round($buyout * (1.0 - $modifier))),
+        'buyout' => $buyout,
+    ];
+};
+$gmPriceCell = static function (int $copper) use ($formatCopper): string {
+    if ($copper <= 0) {
+        return '<span class="muted small">—</span>';
+    }
+
+    return (int) $copper . ' <span class="muted small">' . htmlspecialchars($formatCopper($copper), ENT_QUOTES, 'UTF-8') . '</span>';
+};
+$gmOwnerLabel = static function (int $owner): string {
+    return $owner > 0 ? (string) $owner : __('app.auctionator.policy.owner_bot');
+};
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -394,24 +450,65 @@ $houseLabel = static function (int $house): string {
         <?php endif; ?>
         <?php if (!$tables['gm_list']): ?>
           <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . $policyTableKey, ['table' => 'mod_auctionator_gm_list'])) ?></p>
+        <?php elseif (!($tables['gm_list_mode'] ?? true)): ?>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.gm_columns_missing')) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
-            <form class="au-inline-form" data-au-policy="gm_save">
-              <input class="au-input" type="number" min="1" name="item" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?>" required>
-              <input class="au-input" type="number" min="0" name="price" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.unit_price')) ?>" required>
-              <input class="au-input" type="number" min="1" name="stack" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.stack')) ?>" value="1">
-              <input class="au-input" type="number" min="1" max="720" name="hours" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.hours')) ?>" value="48">
-              <select class="au-input" name="house">
-                <option value="7"><?= htmlspecialchars(__('app.auctionator.houses.neutral')) ?></option>
-                <option value="2"><?= htmlspecialchars(__('app.auctionator.houses.alliance')) ?></option>
-                <option value="6"><?= htmlspecialchars(__('app.auctionator.houses.horde')) ?></option>
-              </select>
-              <input class="au-input" type="number" min="0" name="owner" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.owner')) ?>" value="0">
-              <select class="au-input" name="enabled">
-                <option value="1"><?= htmlspecialchars(__('app.auctionator.state.on')) ?></option>
-                <option value="0"><?= htmlspecialchars(__('app.auctionator.state.off')) ?></option>
-              </select>
-              <button type="submit" class="btn btn-sm"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
+            <form class="au-form au-form--gm" data-au-policy="gm_save" data-au-listing-form>
+              <div class="au-form__grid">
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></span>
+                  <input class="au-input" type="number" min="1" name="item" placeholder="5500" required>
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></span>
+                  <select class="au-input" name="mode" required>
+                    <option value=""><?= htmlspecialchars(__('app.auctionator.policy.mode_choose')) ?></option>
+                    <option value="buyout"><?= htmlspecialchars(__('app.auctionator.modes.buyout_hint')) ?></option>
+                    <option value="bid"><?= htmlspecialchars(__('app.auctionator.modes.bid_hint')) ?></option>
+                  </select>
+                </label>
+                <label class="au-form__row" data-au-listing-field="bid" hidden>
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></span>
+                  <input class="au-input" type="number" min="1" name="bid" placeholder="500">
+                </label>
+                <label class="au-form__row" data-au-listing-field="price">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.buyout_price')) ?></span>
+                  <input class="au-input" type="number" min="0" name="price" placeholder="10000">
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></span>
+                  <input class="au-input" type="number" min="1" name="stack" value="1">
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></span>
+                  <input class="au-input" type="number" min="1" max="720" name="hours" value="48">
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></span>
+                  <select class="au-input" name="house">
+                    <option value="7"><?= htmlspecialchars(__('app.auctionator.houses.neutral')) ?></option>
+                    <option value="2"><?= htmlspecialchars(__('app.auctionator.houses.alliance')) ?></option>
+                    <option value="6"><?= htmlspecialchars(__('app.auctionator.houses.horde')) ?></option>
+                  </select>
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?></span>
+                  <input class="au-input" type="number" min="0" name="owner" value="0" placeholder="0">
+                </label>
+                <label class="au-form__row">
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.enabled')) ?></span>
+                  <select class="au-input" name="enabled">
+                    <option value="1"><?= htmlspecialchars(__('app.auctionator.state.on')) ?></option>
+                    <option value="0"><?= htmlspecialchars(__('app.auctionator.state.off')) ?></option>
+                  </select>
+                </label>
+              </div>
+              <p class="muted small" data-au-listing-preview></p>
+              <div class="au-form__actions">
+                <button type="submit" class="btn btn-sm primary"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
+                <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_form_hint')) ?></span>
+              </div>
             </form>
           <?php endif; ?>
           <div class="au-table-wrap">
@@ -420,7 +517,10 @@ $houseLabel = static function (int $house): string {
                 <tr>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.unit_price')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.buyout_price')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.listing_totals')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
@@ -431,14 +531,29 @@ $houseLabel = static function (int $house): string {
               </thead>
               <tbody>
               <?php foreach (($policy['gm_list'] ?? []) as $row): ?>
+                <?php $listing = $gmListing($row); ?>
                 <tr>
                   <td><?= (int) ($row['item'] ?? 0) ?></td>
                   <td><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
-                  <td><?= (int) ($row['price'] ?? 0) ?> <span class="muted small"><?= htmlspecialchars($formatCopper((int) ($row['price'] ?? 0))) ?></span></td>
+                  <td>
+                    <span class="au-badge au-badge--<?= $listing['mode'] === 'legacy' ? 'muted' : 'ok' ?>"><?= htmlspecialchars($modeLabel($listing['mode'])) ?></span>
+                    <?php if ($listing['mode'] === 'legacy'): ?>
+                      <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.legacy_note')) ?></span>
+                    <?php endif; ?>
+                  </td>
+                  <td><?= $gmPriceCell((int) ($row['bid'] ?? 0)) ?></td>
+                  <td><?= $gmPriceCell((int) ($row['price'] ?? 0)) ?></td>
+                  <td>
+                    <?= htmlspecialchars(__('app.auctionator.policy.totals_start')) ?>
+                    <?= $gmPriceCell((int) $listing['start']) ?>
+                    <br>
+                    <?= htmlspecialchars(__('app.auctionator.policy.totals_buyout')) ?>
+                    <?= $gmPriceCell((int) $listing['buyout']) ?>
+                  </td>
                   <td><?= (int) ($row['stack'] ?? 0) ?></td>
                   <td><?= (int) ($row['hours'] ?? 0) ?></td>
                   <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
-                  <td><?= (int) ($row['owner'] ?? 0) ?></td>
+                  <td><?= htmlspecialchars($gmOwnerLabel((int) ($row['owner'] ?? 0))) ?></td>
                   <td><span class="<?= $toneClass(((int) ($row['enabled'] ?? 0)) === 1 ? 'ok' : 'muted') ?>"><?= htmlspecialchars(((int) ($row['enabled'] ?? 0)) === 1 ? __('app.auctionator.state.on') : __('app.auctionator.state.off')) ?></span></td>
                   <td class="au-table__actions">
                     <?php if ($canManage && $supported): ?>
@@ -449,7 +564,7 @@ $houseLabel = static function (int $house): string {
                 </tr>
               <?php endforeach; ?>
               <?php if (($policy['gm_list'] ?? []) === []): ?>
-                <tr><td colspan="9" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.empty')) ?></td></tr>
+                <tr><td colspan="12" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.empty')) ?></td></tr>
               <?php endif; ?>
               </tbody>
             </table>
@@ -485,14 +600,19 @@ $houseLabel = static function (int $house): string {
         </div>
       </div>
 
-      <div class="au-card">
+      <div class="au-card au-card--wide">
         <h3><?= htmlspecialchars(__('app.auctionator.actions.gm_title')) ?></h3>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.gm_hint')) ?></p>
+
         <div class="au-actions">
-          <select class="au-input" data-au-action-field="house">
+          <select class="au-input" data-au-action-field="house" title="<?= htmlspecialchars(__('app.auctionator.policy.house')) ?>">
             <option value="7"><?= htmlspecialchars(__('app.auctionator.houses.neutral')) ?></option>
             <option value="2"><?= htmlspecialchars(__('app.auctionator.houses.alliance')) ?></option>
             <option value="6"><?= htmlspecialchars(__('app.auctionator.houses.horde')) ?></option>
+          </select>
+          <select class="au-input" data-au-action-field="owner_override" title="<?= htmlspecialchars(__('app.auctionator.actions.addlist_owner')) ?>">
+            <option value="row"><?= htmlspecialchars(__('app.auctionator.actions.addlist_owner_row')) ?></option>
+            <option value="bot"><?= htmlspecialchars(__('app.auctionator.policy.owner_bot')) ?></option>
           </select>
           <button type="button" class="btn primary" data-au-action="addlist"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.addlist')) ?></button>
           <label class="au-checkbox">
@@ -501,26 +621,40 @@ $houseLabel = static function (int $house): string {
           </label>
           <button type="button" class="btn outline danger" data-au-action="expireall"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.expireall')) ?></button>
         </div>
-        <form class="au-form au-form--add" id="auAddForm">
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.addlist_hint')) ?></p>
+
+        <form class="au-form au-form--add" id="auAddForm" data-au-listing-form>
           <div class="au-form__grid">
             <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.actions.items')) ?></span>
               <input class="au-input" type="text" name="items" placeholder="19019,4359"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
-            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.unit_price')) ?></span>
-              <input class="au-input" type="number" min="1" name="price"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
+            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></span>
+              <select class="au-input" name="house"<?= $canControl && $supported ? '' : ' disabled' ?>>
+                <option value="7"><?= htmlspecialchars(__('app.auctionator.houses.neutral')) ?></option>
+                <option value="2"><?= htmlspecialchars(__('app.auctionator.houses.alliance')) ?></option>
+                <option value="6"><?= htmlspecialchars(__('app.auctionator.houses.horde')) ?></option>
+              </select></label>
+            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></span>
+              <select class="au-input" name="mode"<?= $canControl && $supported ? '' : ' disabled' ?>>
+                <option value="buyout" selected><?= htmlspecialchars(__('app.auctionator.modes.buyout_hint')) ?></option>
+                <option value="bid"><?= htmlspecialchars(__('app.auctionator.modes.bid_hint')) ?></option>
+              </select></label>
+            <label class="au-form__row" data-au-listing-field="bid" hidden><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></span>
+              <input class="au-input" type="number" min="1" name="bid"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
+            <label class="au-form__row" data-au-listing-field="price"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.buyout_price_short')) ?></span>
+              <input class="au-input" type="number" min="0" name="price"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
             <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></span>
               <input class="au-input" type="number" min="1" name="stack" value="1"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
             <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></span>
               <input class="au-input" type="number" min="1" max="720" name="hours" value="48"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
             <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?></span>
-              <select class="au-input" name="owner"<?= $canControl && $supported ? '' : ' disabled' ?>>
-                <option value="bot">bot</option>
-                <option value="me">me</option>
-              </select></label>
+              <input class="au-input" type="text" name="owner" placeholder="bot"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
           </div>
+          <p class="muted small" data-au-listing-preview></p>
           <div class="au-form__actions">
             <button type="submit" class="btn primary"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.add')) ?></button>
             <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_hint', ['hours' => (int) ($notes['listing_hours'] ?? 12)])) ?></span>
           </div>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint')) ?></p>
         </form>
       </div>
 
