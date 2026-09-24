@@ -374,7 +374,7 @@ class TriviaController extends Controller
             $values[$column] = max((int) $range[0], min((int) $range[1], $request->int($column, $default)));
         }
 
-        foreach (['enabled', 'answer_say', 'answer_yell', 'answer_emote', 'answer_whisper',
+        foreach (['enabled', 'paused', 'answer_say', 'answer_yell', 'answer_emote', 'answer_whisper',
                   'allow_number_answer', 'allow_latin_letters', 'allow_text_answer', 'use_builtin_questions',
                   'announce_on_login', 'reply_wrong_answer', 'reply_already_answered',
                   'schedule_enabled', 'debug_log', 'allow_loose_letter', 'ignore_gms'] as $column) {
@@ -1344,6 +1344,8 @@ class TriviaController extends Controller
             'pool_presets' => '',
             'use_builtin_questions' => 1,
             'announce_on_login' => 1,
+            // 默认暂停：新装/缺行时服务器重启后不会自动出题，需手动开启或等定时计划
+            'paused' => 1,
             'reply_wrong_answer' => 0,
             'reply_already_answered' => 1,
             'min_gm_rank_for_command' => 2,

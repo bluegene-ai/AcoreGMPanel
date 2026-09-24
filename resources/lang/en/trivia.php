@@ -127,8 +127,9 @@ return [
     ],
 
     'fields' => [
-        'enabled' => 'Trivia system (baseline switch at startup)',
-        'enabled_hint' => 'This switch is the baseline read when worldserver starts or reloads. The Enable/Disable buttons on the Runtime status tab only change the runtime state and reset to this value after a restart. An active schedule takes precedence.',
+        'enabled' => 'Trivia system (master switch)',
+        'enabled_hint' => 'Master switch: whether the system is online at all (answers accepted, single questions can run). Turning it off stops everything; turning it on still will NOT ask questions automatically — automatic questions are controlled solely by "Pause automatic questions" below. Both this switch and the Runtime status buttons persist to the database across restarts. An active schedule takes precedence.',
+        'paused' => 'Pause automatic questions (checked by default: no questions after a server restart until you resume manually or a schedule opens it)',
         'interval_seconds' => 'Interval between questions (s)',
         'answer_seconds' => 'Answer window (s)',
         'remind_every_seconds' => 'Repeat reminder every (s, 0 = off)',

@@ -27,6 +27,8 @@ class TriviaRepository extends MultiServerRepository
      */
     public const SETTINGS_COLUMNS = [
         'enabled' => 'bool',
+        // 暂停状态持久化：默认 1 = 暂停，服务器重启后不会自动出题（与 Lua 的 SETTING_FIELDS 对应）
+        'paused' => 'bool',
         'interval_seconds' => 'int',
         'answer_seconds' => 'int',
         'remind_every_seconds' => 'int',

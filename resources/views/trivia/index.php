@@ -515,6 +515,12 @@ if ($canManage) {
             <input type="checkbox" name="enabled" value="1" <?= ((int) ($settings['enabled'] ?? 0) === 1) ? 'checked' : '' ?>>
             <span><?= htmlspecialchars(__('app.trivia.fields.enabled')) ?></span>
           </label>
+          <?php // 暂停状态也是持久化的（默认勾选 = 服务器重启后不自动出题） ?>
+          <label class="tv-field tv-field--check">
+            <input type="hidden" name="paused" value="0">
+            <input type="checkbox" name="paused" value="1" <?= ((int) ($settings['paused'] ?? 1) === 1) ? 'checked' : '' ?>>
+            <span><?= htmlspecialchars(__('app.trivia.fields.paused')) ?></span>
+          </label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.interval_seconds')) ?></span>
             <input type="number" name="interval_seconds" min="60" max="86400" value="<?= (int) ($settings['interval_seconds'] ?? 900) ?>"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.answer_seconds')) ?></span>
