@@ -21,9 +21,10 @@ return [
         'config_unavailable' => 'Boss config storage is unavailable. AGMP fell back to built-in defaults.',
         'ext_unavailable' => 'Boss extended config storage (boss_activity_config_ext) is unavailable. Built-in defaults are shown instead.',
         'events_unavailable' => 'Boss event data is unavailable.',
+        'realm_key_missing' => ':table has no state_key column: this realm still runs a boss.lua from before the shared-schema change. Update that realm\'s script (one load adds the column and its index). Until then the panel shows no events/contributors instead of mixing in another realm\'s rows.',
         'contributors_unavailable' => 'Boss contributor snapshots are unavailable.',
         'dashboard_degraded' => 'Reading Boss data failed. The page fell back to default values; see storage/logs/boss_repository_warnings.log for details.',
-        'server_not_supported' => 'This module only works on the level-80 realm. The current realm (:server) does not deploy boss.lua, so AGMP will not send Boss commands to it. Switch to the level-80 realm first.',
+        'server_not_supported' => 'The current realm (:server) does not deploy boss.lua (it is not in config/boss.php supported_server_ids), so AGMP will not send Boss commands to it. Switch to a realm that has it, or deploy it there first and add that realm to the list.',
     ],
     'runtime' => [
         'title' => 'Current Runtime',

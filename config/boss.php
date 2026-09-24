@@ -23,11 +23,13 @@ return [
     //           'server_overrides' => [0 => ['custom_db_name' => '<realm_a_db>']]];
     'supported_server_ids' => [],
 
-    // 每个区一条：custom_db_name 必须与该区 lua_scripts/boss.lua 的 §2 BOSS_DB_NAME 一致，
-    // runtime_key 必须与 BOSS_RUNTIME_KEY 一致，否则面板看到的是另一个区的活动状态。
-    // 表结构由 boss.lua 自举（CREATE DATABASE / CREATE TABLE IF NOT EXISTS），新区的库第一次
-    // 启动时自动建好；也可以按该区副本的 DDL 手工预建。
-    // 留空 = 所有区共用顶层的 custom_db_name（= boss.lua 的默认库名）。
+    // 每个区一条：**runtime_key 就是该区 boss.lua §2 的 key**（BOSS_RUNTIME_KEY /
+    // BOSS_CONFIG_KEY，两行必须相同）。多区共用同一个库，靠这个 key 分租四张表：
+    //   boss_activity_config / _ext / _runtime  → 主键就是 state_key
+    //   boss_activity_events / _contributors    → state_key 列（老库由 boss.lua 自动补列+索引）
+    // 所以 custom_db_name 通常各区都一样（共用库），真正必须**每区不同**的是 runtime_key；
+    // 两个区用同一个 key 就是共用同一份配置/运行态/事件。
+    // 留空 = 所有区共用顶层的 custom_db_name / runtime_key（单区部署就是这样）。
     'server_overrides' => [],
 
     // 难度档位（= ac_eluna.boss_activity_config.boss_entry）。

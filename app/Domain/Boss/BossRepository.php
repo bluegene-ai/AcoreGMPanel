@@ -536,7 +536,7 @@ class BossRepository extends MultiServerRepository
         $lastDay = $now - 86400;
         $lastWeek = $now - 604800;
 
-        if ($this->tableExists('boss_activity_events')) {
+        if ($this->tableExists('boss_activity_events') && $this->realmKeyColumnReady('boss_activity_events')) {
             try {
                 $eventStmt = $this->characters()->prepare(
                     'SELECT '
@@ -545,10 +545,12 @@ class BossRepository extends MultiServerRepository
                     . 'SUM(CASE WHEN event_type = :death_type '
                     . 'AND created_at >= :last_week THEN 1 ELSE 0 END) AS kills_7d '
                     . 'FROM ' . $this->table('boss_activity_events')
+                    . ' WHERE state_key = :state_key'
                 );
                 $eventStmt->bindValue(':last_day', $lastDay, PDO::PARAM_INT);
                 $eventStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
                 $eventStmt->bindValue(':death_type', 'death', PDO::PARAM_STR);
+                $eventStmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
                 $eventStmt->execute();
                 $eventRow = $eventStmt->fetch(PDO::FETCH_ASSOC) ?: [];
             } catch (Throwable $exception) {
@@ -561,12 +563,14 @@ class BossRepository extends MultiServerRepository
         } else {
             $this->warn(
                 $warnings,
-                Lang::get('app.boss.warnings.events_unavailable')
+                $this->tableExists('boss_activity_events')
+                    ? Lang::get('app.boss.warnings.realm_key_missing', ['table' => 'boss_activity_events'])
+                    : Lang::get('app.boss.warnings.events_unavailable')
             );
             $eventRow = [];
         }
 
-        if ($this->tableExists('boss_activity_contributors')) {
+        if ($this->tableExists('boss_activity_contributors') && $this->realmKeyColumnReady('boss_activity_contributors')) {
             try {
                 $contributorStmt = $this->characters()->prepare(
                     'SELECT '
@@ -575,8 +579,10 @@ class BossRepository extends MultiServerRepository
                     . 'SUM(CASE WHEN created_at >= :last_week THEN rewarded_random '
                     . 'ELSE 0 END) AS random_rewarded_7d '
                     . 'FROM ' . $this->table('boss_activity_contributors')
+                    . ' WHERE state_key = :state_key'
                 );
                 $contributorStmt->bindValue(':last_week', $lastWeek, PDO::PARAM_INT);
+                $contributorStmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
                 $contributorStmt->execute();
                 $contributorRow = $contributorStmt->fetch(PDO::FETCH_ASSOC) ?: [];
             } catch (Throwable $exception) {
@@ -607,14 +613,25 @@ class BossRepository extends MultiServerRepository
             return [];
         }
 
+        if (!$this->realmKeyColumnReady('boss_activity_events')) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.realm_key_missing', ['table' => 'boss_activity_events'])
+            );
+
+            return [];
+        }
+
         try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
                 . 'id, boss_guid, boss_entry, boss_name, event_type, '
                 . 'event_note, actor_name, actor_guid, payload_json, created_at '
                 . 'FROM ' . $this->table('boss_activity_events')
+                . ' WHERE state_key = :state_key'
                 . ' ORDER BY id DESC LIMIT :limit'
             );
+            $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->execute();
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -653,6 +670,15 @@ class BossRepository extends MultiServerRepository
             return [];
         }
 
+        if (!$this->realmKeyColumnReady('boss_activity_contributors')) {
+            $this->warn(
+                $warnings,
+                Lang::get('app.boss.warnings.realm_key_missing', ['table' => 'boss_activity_contributors'])
+            );
+
+            return [];
+        }
+
         try {
             $stmt = $this->characters()->prepare(
                 'SELECT '
@@ -661,8 +687,10 @@ class BossRepository extends MultiServerRepository
                 . 'threat_samples, presence_samples, contribution_score, '
                 . 'was_killer, rewarded_random, guaranteed_reward, created_at '
                 . 'FROM ' . $this->table('boss_activity_contributors')
+                . ' WHERE state_key = :state_key'
                 . ' ORDER BY id DESC LIMIT :limit'
             );
+            $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->execute();
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -747,6 +775,32 @@ class BossRepository extends MultiServerRepository
         $this->tableAvailability[$table] = $exists;
 
         return $exists;
+    }
+
+    /**
+     * 按区读事件/贡献表的前提：该表有 state_key 列（多区共用一个库时分租用）。
+     *
+     * 面板宁可**失败关闭**（显示"本区脚本未升级"警告、不显示数据），也不能在缺列时退化成
+     * "不带过滤地全读" —— 那正好会把别的区的事件显示出来，正是这套设计要避免的事。
+     */
+    private function realmKeyColumnReady(string $table): bool
+    {
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT 1 FROM information_schema.COLUMNS '
+                . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table AND COLUMN_NAME = :column LIMIT 1'
+            );
+            $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
+            $stmt->bindValue(':table', $table, PDO::PARAM_STR);
+            $stmt->bindValue(':column', 'state_key', PDO::PARAM_STR);
+            $stmt->execute();
+
+            return $stmt->fetchColumn() !== false;
+        } catch (Throwable $exception) {
+            $this->logWarning('realm_key_probe_failed:' . $table, $exception);
+
+            return false;
+        }
     }
 
     /**
