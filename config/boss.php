@@ -33,7 +33,7 @@ return [
     'server_overrides' => [],
 
     // 难度档位（= ac_eluna.boss_activity_config.boss_entry）。
-    // 190090–190093 是 acore_world80 上的活动 Boss 专用模板，AIName 为空、
+    // 190090–190093 是部署到各区 world 库里的活动 Boss 专用模板，AIName 为空、
     // 无 smart_scripts、无掉落；实际强度由模板的 HealthModifier/DamageModifier 决定。
     'tiers' => [
         190090 => [

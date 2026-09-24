@@ -1,7 +1,7 @@
 # AGMP — Acore GM Panel (project conventions)
 
-Panel at `E:\Server\web\WWW\AGMP`, PHP 8.4 (ZTS) + self-rolled lightweight MVC,
-served by Apache at `http://localhost/agmp/` (lowercase, case-sensitive).
+Panel at `<web root>/AGMP`, PHP 8.4 (ZTS) + self-rolled lightweight MVC,
+served by Apache at `http://<host>/agmp/` (lowercase, case-sensitive).
 
 Keep this file short and normative. Design write-ups belong in `docs/`.
 
