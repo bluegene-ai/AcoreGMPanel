@@ -219,7 +219,7 @@ return [
 
     'import' => [
         'title' => 'Question template import / export',
-        'hint' => 'CSV / TSV / JSON supported. The header row is optional (when present, columns are matched by name). Answers may be 1-4, A-D, or the option text. Lines starting with # are ignored, so pasting from Excel works as-is. Questions live in ac_eluna.trivia_reward_questions and take effect immediately.',
+        'hint' => 'CSV / TSV / JSON supported. The header row is optional (when present, columns are matched by name). Answers may be 1-4, A-D, or the option text. Lines starting with # are ignored, so pasting from Excel works as-is. A file saved by Excel as ANSI/GBK or as "Unicode text" (UTF-16) is detected and converted to UTF-8 automatically. Questions live in ac_eluna.trivia_reward_questions and take effect immediately.',
         'placeholder' => "question,option1,option2,option3,option4,answer,labels,reward_preset,reward_items,reward_money,enabled",
         'download_template' => 'Download template',
         'export' => 'Export bank',

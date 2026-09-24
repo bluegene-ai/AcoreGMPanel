@@ -219,7 +219,7 @@ return [
 
     'import' => [
         'title' => '题库模板导入 / 导出',
-        'hint' => '支持 CSV / TSV / JSON；表头可选（写了就按列名认列，中英文表头都能识别）。答案可以写 1-4、A-D、甲-丁 或选项原文；以 # 开头的行会被忽略，方便从 Excel 直接复制粘贴。题库存在 ac_eluna.trivia_reward_questions，导入后立即生效。',
+        'hint' => '支持 CSV / TSV / JSON；表头可选（写了就按列名认列，中英文表头都能识别）。答案可以写 1-4、A-D、甲-丁 或选项原文；以 # 开头的行会被忽略，方便从 Excel 直接复制粘贴。Excel 另存为 ANSI/GBK 或「Unicode 文本」(UTF-16) 也能识别，会自动转成 UTF-8。题库存在 ac_eluna.trivia_reward_questions，导入后立即生效。',
         'placeholder' => "题干,选项A,选项B,选项C,选项D,答案,标号,奖励预设,奖励物品,金钱,启用\n巫妖王的本名是谁？,阿尔萨斯·米奈希尔,耐奥祖,克尔苏加德,伊利丹·怒风,1,,cloth5,,0,1",
         'download_template' => '下载模板',
         'export' => '导出题库',

@@ -877,6 +877,39 @@
     });
   }
 
+  // ------------------------------------------------------------------ 导入文件解码
+  // 浏览器 readAsText(file, 'utf-8') 会把非 UTF-8 的字节直接替换成 U+FFFD（�），
+  // 这一步是不可逆的：中文 Windows 上 Excel「另存为 CSV」写的是 ANSI/GB18030，
+  // 「Unicode 文本」写的是 UTF-16，两者都会在预览框里变成一堆 �。
+  // 所以按字节读进来，自己判断编码再解码，解出来的是正确的字符串（提交时就是 UTF-8 了）。
+  function decodeImportBytes(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const decode = function (label, fatal) {
+      try {
+        return new TextDecoder(label, { fatal: !!fatal }).decode(bytes);
+      } catch (error) {
+        return null;
+      }
+    };
+
+    if (typeof TextDecoder !== 'function') return null;
+
+    // 1) BOM 最可靠（UTF-16 的 ASCII 部分含 NUL，不能靠"是不是合法 UTF-8"来判断）
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return decode('utf-16le');
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return decode('utf-16be');
+
+    // 2) 严格 UTF-8：成功说明本来就是 UTF-8
+    const utf8 = decode('utf-8', true);
+    if (utf8 !== null) return utf8;
+
+    // 3) 中文 Windows 的 Excel ANSI 另存 = GB18030（GBK 的超集）
+    const gb = decode('gb18030') || decode('gbk');
+    if (gb !== null) return gb;
+
+    // 4) 兜底：宽松 UTF-8（把坏字节替换掉，至少能预览出问题在哪）
+    return decode('utf-8');
+  }
+
   if (dom.importFile && dom.importText) {
     dom.importFile.addEventListener('change', function () {
       const file = dom.importFile.files && dom.importFile.files[0];
@@ -887,13 +920,19 @@
       }
       const reader = new FileReader();
       reader.onload = function () {
-        dom.importText.value = String(reader.result || '');
+        const decoded = decodeImportBytes(reader.result);
+        dom.importText.value = decoded === null ? String(reader.result || '') : decoded;
         if (dom.importCommit) dom.importCommit.disabled = true;
         if (dom.importResult) dom.importResult.innerHTML = '';
         previewImport();
       };
       reader.onerror = function () { show('error', t('errors.import_read_failed', 'Failed to read the file.')); };
-      reader.readAsText(file, 'utf-8');
+      // 按字节读：编码由 decodeImportBytes 判断（readAsText 的默认行为会把 GBK/UTF-16 弄坏）
+      if (typeof TextDecoder === 'function') {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file, 'utf-8');
+      }
     });
   }
 

@@ -47,6 +47,11 @@ final class QuestionTemplate
             $text = substr($text, 3);
         }
 
+        // 非 UTF-8（中文 Windows 上 Excel 的 ANSI/GBK 另存、UTF-16「Unicode 文本」）先转成 UTF-8，
+        // 否则中文会整片变成问号/替换字符 —— 面板侧 JS 已经按字节判编码，这里再兜一层，
+        // 让直接 POST 原文的调用方（curl / 脚本 / 其他客户端）也能正常导入。
+        $text = self::normalizeEncoding($text);
+
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $trimmed = ltrim($text);
 
@@ -55,6 +60,37 @@ final class QuestionTemplate
         }
 
         return self::parseDelimited($text);
+    }
+
+    /**
+     * 把常见的非 UTF-8 编码统一成 UTF-8。
+     *
+     * BOM 判断必须在 mb_check_encoding 之前：UTF-16 文本里 ASCII 字符带 NUL 字节，
+     * 字节序列本身仍然"是合法 UTF-8"，只看合法性会把它当成 UTF-8 而解码成一堆 NUL。
+     */
+    private static function normalizeEncoding(string $text): string
+    {
+        if (str_starts_with($text, "\xFF\xFE")) {
+            return self::convertToUtf8(substr($text, 2), 'UTF-16LE');
+        }
+
+        if (str_starts_with($text, "\xFE\xFF")) {
+            return self::convertToUtf8(substr($text, 2), 'UTF-16BE');
+        }
+
+        if (mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
+
+        // 中文 Windows 的 ANSI 代码页是 GBK，GB18030 是它的超集（也能吃 GBK 字节）
+        return self::convertToUtf8($text, 'GB18030');
+    }
+
+    private static function convertToUtf8(string $text, string $from): string
+    {
+        $converted = @mb_convert_encoding($text, 'UTF-8', $from);
+
+        return is_string($converted) && $converted !== '' ? $converted : $text;
     }
 
     /**
