@@ -92,6 +92,12 @@ final class SupervisorManager
 
     private ?string $resolvedDir = null;
 
+    /** @var array{ini_file:string,ini_found:bool,status_file:string,control_file:string,log_file:string}|null */
+    private ?array $iniPaths = null;
+
+    /** @var array<string,string> where each resolved path came from (configured|ini|discovered|default|none) */
+    private array $pathSources = [];
+
     /**
      * One manager instance represents ONE supervisor instance (one acore_supervisor.exe).
      *
@@ -357,24 +363,162 @@ final class SupervisorManager
         }
 
         $dir = $this->resolveDirectory();
+        $ini = $this->iniFilePaths();
 
-        $pick = static function (string $configured, string $dir, string $relative): string {
-            $configured = trim($configured);
-            if ($configured !== '') {
-                return $configured;
+        // Priority: what the panel config says, then the names the supervisor's own ini declares,
+        // then what is actually lying in the directory, then the defaults. A deployment is free to
+        // rename all three files (e.g. supervisor_test_status.json); without the ini step the panel
+        // would look for supervisor_status.json, report "not running" and - worse - write commands
+        // into a control file the supervisor never reads.
+        $pick = function (string $configured, string $fromIni, string $discovered, string $relative, string $sourceKey) use ($dir): string {
+            $sources = [
+                ['configured', $configured],
+                ['ini', $fromIni],
+                ['discovered', $discovered],
+            ];
+            foreach ($sources as [$source, $candidate]) {
+                if (trim((string) $candidate) !== '') {
+                    $this->pathSources[$sourceKey] = $source;
+
+                    return trim((string) $candidate);
+                }
             }
+
+            $this->pathSources[$sourceKey] = $dir === '' ? 'none' : 'default';
 
             return $dir === '' ? '' : $dir . DIRECTORY_SEPARATOR . $relative;
         };
 
+        $exe = trim((string) ($this->config['exe'] ?? ''));
+        $configFile = trim((string) ($this->config['config_file'] ?? ''));
+        if ($exe === '' && $dir !== '') {
+            $exe = $dir . DIRECTORY_SEPARATOR . 'acore_supervisor.exe';
+        }
+        if ($configFile === '' && $dir !== '') {
+            $configFile = $dir . DIRECTORY_SEPARATOR . 'supervisor.ini';
+        }
+
         return [
             'dir' => $dir,
-            'exe' => $pick((string) ($this->config['exe'] ?? ''), $dir, 'acore_supervisor.exe'),
-            'config_file' => $pick((string) ($this->config['config_file'] ?? ''), $dir, 'supervisor.ini'),
-            'status_file' => $pick((string) ($this->config['status_file'] ?? ''), $dir, 'logs' . DIRECTORY_SEPARATOR . 'supervisor_status.json'),
-            'control_file' => $pick((string) ($this->config['control_file'] ?? ''), $dir, 'logs' . DIRECTORY_SEPARATOR . 'supervisor_control.txt'),
-            'log_file' => $pick((string) ($this->config['log_file'] ?? ''), $dir, 'logs' . DIRECTORY_SEPARATOR . 'supervisor.log'),
+            'exe' => $exe,
+            'config_file' => $configFile,
+            'status_file' => $pick((string) ($this->config['status_file'] ?? ''), $ini['status_file'], $this->newestInDirectory($dir, ['logs' . DIRECTORY_SEPARATOR . '*status*.json', '*status*.json']), 'logs' . DIRECTORY_SEPARATOR . 'supervisor_status.json', 'status_file'),
+            // the control file is usually ABSENT (the supervisor consumes it), so it is never
+            // guessed from the filesystem - a wrong guess would send commands into the void
+            'control_file' => $pick((string) ($this->config['control_file'] ?? ''), $ini['control_file'], '', 'logs' . DIRECTORY_SEPARATOR . 'supervisor_control.txt', 'control_file'),
+            'log_file' => $pick((string) ($this->config['log_file'] ?? ''), $ini['log_file'], $this->newestInDirectory($dir, ['logs' . DIRECTORY_SEPARATOR . '*supervisor*.log', '*supervisor*.log']), 'logs' . DIRECTORY_SEPARATOR . 'supervisor.log', 'log_file'),
         ];
+    }
+
+    /**
+     * GuardLog / StatusFile / ControlFile out of the supervisor's own supervisor.ini.
+     *
+     * The supervisor resolves relative values against the folder that contains the ini (the same
+     * rule for every path in that file), so the panel does the same here.
+     *
+     * @return array{ini_file:string,ini_found:bool,status_file:string,control_file:string,log_file:string}
+     */
+    private function iniFilePaths(): array
+    {
+        if ($this->iniPaths !== null) {
+            return $this->iniPaths;
+        }
+
+        $dir = $this->resolveDirectory();
+        $configured = trim((string) ($this->config['config_file'] ?? ''));
+        $iniFile = $configured !== ''
+            ? $configured
+            : ($dir === '' ? '' : $dir . DIRECTORY_SEPARATOR . 'supervisor.ini');
+
+        $this->iniPaths = [
+            'ini_file' => $iniFile,
+            'ini_found' => false,
+            'status_file' => '',
+            'control_file' => '',
+            'log_file' => '',
+        ];
+
+        $raw = $iniFile === '' ? false : @file_get_contents($iniFile);
+        if ($raw === false || trim($raw) === '') {
+            return $this->iniPaths;
+        }
+
+        // the supervisor tolerates comments and blank values; scan instead of parse_ini_file() so a
+        // value containing ':' / '%' / '|' can never make the whole file unreadable
+        $values = [];
+        foreach (preg_split('/\R/', $raw) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === ';' || $line[0] === '#') {
+                continue;
+            }
+            $eq = strpos($line, '=');
+            if ($eq === false) {
+                continue;
+            }
+            $values[strtolower(trim(substr($line, 0, $eq)))] = trim(substr($line, $eq + 1));
+        }
+
+        $iniDir = dirname($iniFile);
+        $this->iniPaths = [
+            'ini_file' => $iniFile,
+            'ini_found' => true,
+            'status_file' => $this->resolveIniPath($values['statusfile'] ?? '', $iniDir),
+            'control_file' => $this->resolveIniPath($values['controlfile'] ?? '', $iniDir),
+            'log_file' => $this->resolveIniPath($values['guardlog'] ?? '', $iniDir),
+        ];
+
+        return $this->iniPaths;
+    }
+
+    /**
+     * A path from supervisor.ini: absolute stays as it is, relative is resolved against the ini's
+     * folder (exactly like the supervisor itself does).
+     */
+    private function resolveIniPath(string $value, string $iniDir): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $isAbsolute = preg_match('#^[A-Za-z]:[\\\\/]#', $value) === 1 || str_starts_with($value, '\\\\');
+        if ($isAbsolute) {
+            return rtrim($value, '\\/');
+        }
+
+        return $iniDir . DIRECTORY_SEPARATOR . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $value), DIRECTORY_SEPARATOR);
+    }
+
+    /**
+     * Newest file matching one of the globs, relative to the supervisor directory ('' when none).
+     *
+     * @param array<int,string> $globs
+     */
+    private function newestInDirectory(string $dir, array $globs): string
+    {
+        if ($dir === '') {
+            return '';
+        }
+
+        $newest = '';
+        $newestTime = -1;
+        foreach ($globs as $glob) {
+            foreach (glob($dir . DIRECTORY_SEPARATOR . $glob) ?: [] as $match) {
+                if (!is_file($match)) {
+                    continue;
+                }
+                $time = (int) @filemtime($match);
+                if ($time > $newestTime) {
+                    $newestTime = $time;
+                    $newest = $match;
+                }
+            }
+            if ($newest !== '') {
+                break;                                  // the first glob that matches wins
+            }
+        }
+
+        return $newest;
     }
 
     /**
@@ -789,6 +933,7 @@ final class SupervisorManager
 
         $paths = $this->paths();
         $statusExists = $paths['status_file'] !== '' && is_file($paths['status_file']);
+        $ini = $this->iniFilePaths();
 
         return [
             'instance' => $this->instanceId,
@@ -800,6 +945,13 @@ final class SupervisorManager
             'status_file' => $paths['status_file'],
             'status_file_exists' => $statusExists,
             'status_file_age_seconds' => $statusExists ? $this->statusAge($paths['status_file']) : null,
+            'control_file' => $paths['control_file'],
+            'log_file' => $paths['log_file'],
+            // which supervisor.ini was read, and where every path came from: the usual reason a
+            // running supervisor looks "not running" is a renamed status/control file
+            'ini_file' => $ini['ini_file'],
+            'ini_found' => $ini['ini_found'],
+            'file_sources' => $this->pathSources,
             'exe' => $paths['exe'],
             'exe_exists' => $paths['exe'] !== '' && is_file($paths['exe']),
             'config_file' => $paths['config_file'],

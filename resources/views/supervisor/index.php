@@ -66,6 +66,25 @@ $heartbeatNote = static function (array $service): string {
 
     return implode(' · ', $bits);
 };
+/**
+ * Where a resolved path came from: the panel config, the supervisor's own ini, a file found in the
+ * directory, or the built-in default name. A renamed status/control file looks exactly like a
+ * "supervisor not running" until you can see which of those applied.
+ */
+$sourceBadge = static function (array $diagnostics, string $key): string {
+    $source = (string) ($diagnostics['file_sources'][$key] ?? '');
+    $labels = [
+        'configured' => __('app.supervisor.diagnostics.source_configured'),
+        'ini' => __('app.supervisor.diagnostics.source_ini'),
+        'discovered' => __('app.supervisor.diagnostics.source_discovered'),
+        'default' => __('app.supervisor.diagnostics.source_default'),
+        'none' => __('app.supervisor.diagnostics.source_none'),
+    ];
+
+    return isset($labels[$source])
+        ? '<span class="sv-muted sv-small">· ' . htmlspecialchars($labels[$source]) . '</span>'
+        : '';
+};
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -212,6 +231,26 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
         <?php elseif (($diagnostics['status_file_age_seconds'] ?? null) !== null): ?>
           <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.status_file_age', ['seconds' => (int) $diagnostics['status_file_age_seconds']])) ?></span>
         <?php endif; ?>
+        <?= $sourceBadge($diagnostics, 'status_file') ?>
+      </dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.control_file')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['control_file'] ?? '') ?: '--') ?></code>
+        <?php if (($diagnostics['control_file'] ?? '') !== '' && !is_file((string) $diagnostics['control_file'])): ?>
+          <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.control_file_absent')) ?></span>
+        <?php endif; ?>
+        <?= $sourceBadge($diagnostics, 'control_file') ?>
+      </dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.log_file')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['log_file'] ?? '') ?: '--') ?></code>
+        <?= $sourceBadge($diagnostics, 'log_file') ?>
+      </dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.ini_file')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($diagnostics['ini_file'] ?? '') ?: '--') ?></code>
+        <span class="sv-muted sv-small">
+          <?= htmlspecialchars(($diagnostics['ini_found'] ?? false)
+              ? __('app.supervisor.diagnostics.ini_read')
+              : __('app.supervisor.diagnostics.ini_missing')) ?>
+        </span>
       </dd></div>
     <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.process_user')) ?></dt>
       <dd><?= htmlspecialchars((string) ($diagnostics['process_user'] ?? '') ?: '--') ?></dd></div>
