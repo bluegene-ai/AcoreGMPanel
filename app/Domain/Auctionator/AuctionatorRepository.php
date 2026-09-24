@@ -162,6 +162,7 @@ final class AuctionatorRepository extends MultiServerRepository
 
     /**
      * @return array{disabled: array<int, array<string, mixed>>, itemclass: array<int, array<string, mixed>>,
+     *               itemclass_by_class: array<int, array<string, mixed>>,
      *               gm_list: array<int, array<string, mixed>>, tables: array<string, bool>}
      */
     public function policyRows(int $limit, int $disabledLimit, int $itemclassLimit, int $gmListLimit, int $disabledFrom = 0): array
@@ -244,7 +245,12 @@ final class AuctionatorRepository extends MultiServerRepository
         return [
             'disabled' => $disabled,
             'itemclass' => $itemclass,
+            // The same rows, grouped per item class and merged with the module's own class label
+            // list, so the page can offer one "list / do not list this whole type" control per
+            // class - including the classes that have no row yet and are therefore not listed.
+            'itemclass_by_class' => $this->itemclassByClass($itemclass, $classNames['class']),
             'gm_list' => $gmList,
+            'quality' => $this->qualityRows(),
             'totals' => $this->policyTotals($world),
             'disabled_from' => max(0, $disabledFrom),
             'tables' => [
@@ -255,9 +261,141 @@ final class AuctionatorRepository extends MultiServerRepository
                 // whose world database still predates it must be told so instead of being
                 // shown an empty list, because the SELECT above silently returns no rows.
                 'gm_list_mode' => $this->hasColumn('mod_auctionator_gm_list', 'mode', $world) === true,
+                // Same idea for the per-quality gate (2026_09_24_01).
+                'quality_config' => $this->hasTable('mod_auctionator_quality_config', $world) === true,
                 'market_price' => $this->hasTable('mod_auctionator_market_price', $this->characters()) === true,
             ],
         ];
+    }
+
+    /**
+     * Group the itemclass_config rows by item class, padded with every class the module has a
+     * label for. `listed` counts the subclasses whose quota is above 0; a class with 0 rows is
+     * not in the seller's whitelist at all, which is a different state from "quota 0".
+     *
+     * @param array<int, array<string, mixed>> $itemclass
+     * @param array<int, string> $classLabels
+     * @return array<int, array<string, mixed>>
+     */
+    private function itemclassByClass(array $itemclass, array $classLabels): array
+    {
+        $classes = [];
+        foreach ($classLabels as $classId => $label) {
+            $classes[(int) $classId] = [
+                'class' => (int) $classId,
+                'label' => (string) $label,
+                'subclasses' => [],
+                'rows' => 0,
+                'listed' => 0,
+            ];
+        }
+
+        foreach ($itemclass as $row) {
+            $class = (int) ($row['class'] ?? 0);
+            if (!isset($classes[$class])) {
+                $classes[$class] = [
+                    'class' => $class,
+                    'label' => (string) ($row['class_label'] ?? ('#' . $class)),
+                    'subclasses' => [],
+                    'rows' => 0,
+                    'listed' => 0,
+                ];
+            }
+
+            $classes[$class]['subclasses'][] = $row;
+            $classes[$class]['rows']++;
+            if ((int) ($row['max_count'] ?? 0) > 0) {
+                $classes[$class]['listed']++;
+            }
+        }
+
+        ksort($classes);
+
+        return array_values($classes);
+    }
+
+    /**
+     * The automatic seller's per-quality gate, plus how many item_template rows hang off each
+     * quality so the switch is not a blind toggle.
+     *
+     * A quality with no row is *allowed*: that is the module's documented default (its query only
+     * rejects a quality whose row says enabled = 0), so an unconfigured quality is reported as
+     * enabled rather than as "missing".
+     *
+     * @return array<int, array{quality: int, enabled: int, items: int, configured: bool}>
+     */
+    public function qualityRows(): array
+    {
+        $world = $this->world();
+
+        $itemCounts = [];
+        foreach ($this->tryAll('SELECT quality, COUNT(*) AS n FROM item_template GROUP BY quality', [], $world) as $row) {
+            $itemCounts[(int) $row['quality']] = (int) $row['n'];
+        }
+
+        $configured = [];
+        foreach ($this->tryAll('SELECT quality, enabled FROM mod_auctionator_quality_config', [], $world) as $row) {
+            $configured[(int) $row['quality']] = (int) $row['enabled'];
+        }
+
+        // item_template.quality is 0..7 (poor .. heirloom); anything beyond that has no row in
+        // the shipped data, so the range is fixed rather than taken from the counts.
+        $rows = [];
+        for ($quality = 0; $quality <= 7; $quality++) {
+            $rows[] = [
+                'quality' => $quality,
+                'enabled' => $configured[$quality] ?? 1,
+                'items' => $itemCounts[$quality] ?? 0,
+                'configured' => array_key_exists($quality, $configured),
+            ];
+        }
+
+        return $rows;
+    }
+
+    public function saveQualityRow(int $quality, int $enabled): void
+    {
+        $statement = $this->world()->prepare(
+            'INSERT INTO mod_auctionator_quality_config (quality, enabled)
+             VALUES (:quality, :enabled)
+             ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)'
+        );
+
+        $statement->execute([':quality' => $quality, ':enabled' => $enabled]);
+    }
+
+    /**
+     * Apply one quota to a whole item class: 0 means "never list this type", anything above 0
+     * brings the type (back) into the seller's whitelist.
+     *
+     * The whitelist is a plain INNER JOIN on mod_auctionator_itemclass_config, so a class with no
+     * row is simply never listed. Enabling therefore has to *create* the missing rows: every
+     * subclass the module has a label for is inserted with stack_count = 0, which the seller reads
+     * as "use the item's own max stack", and bonding = 0 (no extra constraint).
+     *
+     * @return array{updated: int, inserted: int}
+     */
+    public function saveItemclassQuotaForClass(int $class, int $maxCount): array
+    {
+        $world = $this->world();
+
+        $update = $world->prepare('UPDATE mod_auctionator_itemclass_config SET max_count = :max_count WHERE class = :class');
+        $update->execute([':max_count' => $maxCount, ':class' => $class]);
+        $updated = $update->rowCount();
+
+        $inserted = 0;
+        if ($maxCount > 0) {
+            $insert = $world->prepare(
+                'INSERT IGNORE INTO mod_auctionator_itemclass_config (class, subclass, bonding, max_count, stack_count)
+                 SELECT :class, ic.subclass, 0, :max_count, 0
+                   FROM mod_auctionator_item_class ic
+                  WHERE ic.class = :class_scope AND ic.subclass IS NOT NULL'
+            );
+            $insert->execute([':class' => $class, ':max_count' => $maxCount, ':class_scope' => $class]);
+            $inserted = $insert->rowCount();
+        }
+
+        return ['updated' => $updated, 'inserted' => $inserted];
     }
 
     /**

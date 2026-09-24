@@ -153,6 +153,7 @@
     if (source.dataset.auItem !== undefined) payload.item = source.dataset.auItem;
     if (source.dataset.auClass !== undefined) payload['class'] = source.dataset.auClass;
     if (source.dataset.auSubclass !== undefined) payload.subclass = source.dataset.auSubclass;
+    if (source.dataset.auQuality !== undefined) payload.quality = source.dataset.auQuality;
     if (source.dataset.auEnabled !== undefined) payload.enabled = source.dataset.auEnabled;
     return payload;
   }
@@ -205,7 +206,8 @@
 
     node.addEventListener('click', function () {
       let payload = policyPayload(node);
-      if (action === 'itemclass_save') {
+      const rowScoped = action === 'itemclass_save' || action === 'itemclass_class_save';
+      if (rowScoped) {
         payload = rowValues(node, payload);
       }
       if (action === 'disabled_remove') {
@@ -213,6 +215,14 @@
       }
       if (action === 'itemclass_delete') {
         if (!window.confirm(t('confirm.itemclass_delete', 'Delete this class/subclass row? The class becomes unlisted for the seller.'))) return;
+      }
+      if (action === 'itemclass_class_save') {
+        // One click can flip a whole item type, so say out loud which way it is about to go.
+        const quota = parseInt(payload.max_count, 10) || 0;
+        const message = quota > 0
+          ? t('confirm.itemclass_class_enable', 'Give every subclass of this type this quota?')
+          : t('confirm.itemclass_class_disable', 'Set every subclass of this type to "not listed"? The seller stops restocking it on its next run.');
+        if (!window.confirm(message)) return;
       }
       if (action === 'gm_delete') {
         if (!window.confirm(t('confirm.gm_delete', 'Delete this gm_list row?'))) return;
@@ -376,6 +386,42 @@
   document.querySelectorAll('[data-au-power]').forEach(function (node) {
     node.addEventListener('click', function () {
       runPower(node.dataset.auPower === 'start');
+    });
+  });
+
+  // ------------------------------------------------------------------ buyout mode (this realm)
+  /**
+   * The quick buyout switch is the master switch's twin: it writes Auctionator.Seller.BidOnly into
+   * this realm's conf (so the choice survives a restart) and sends ".auctionator buyout 0|1" so the
+   * seller follows it on its very next run. Note the inversion - buyout OFF means BidOnly = 1.
+   */
+  async function runBuyout(enable) {
+    const confirmMessage = t(enable ? 'confirm.buyout_enable' : 'confirm.buyout_disable', '');
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
+
+    setBusy(true);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/buyout', { enable: enable ? 1 : 0 });
+    } finally {
+      setBusy(false);
+    }
+
+    const output = json && json.payload ? json.payload.output : '';
+    if (output) printOutput(output);
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.buyout_failure', 'The buyout switch could not be applied.'));
+      return;
+    }
+
+    show('success', json.message || t('feedback.action_success', 'Command executed.'));
+    reload(1200);
+  }
+
+  document.querySelectorAll('[data-au-buyout]').forEach(function (node) {
+    node.addEventListener('click', function () {
+      runBuyout(node.dataset.auBuyout === '1');
     });
   });
 

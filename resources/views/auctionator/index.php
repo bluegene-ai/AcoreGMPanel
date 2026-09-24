@@ -120,6 +120,14 @@ $gmPriceCell = static function (int $copper) use ($formatCopper): string {
 $gmOwnerLabel = static function (int $owner): string {
     return $owner > 0 ? (string) $owner : __('app.auctionator.policy.owner_bot');
 };
+// The filter cards are meant to be understood at a glance, so the item class and the quality get
+// a localised name here; the module's own label table is English and only a fallback.
+$typeLabel = static function (int $class, string $fallback): string {
+    return (string) __('app.auctionator.types.' . $class, [], $fallback !== '' ? $fallback : ('#' . $class));
+};
+$qualityLabel = static function (int $quality): string {
+    return (string) __('app.auctionator.qualities.' . $quality, [], '#' . $quality);
+};
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -155,7 +163,11 @@ $gmOwnerLabel = static function (int $owner): string {
           <dt><?= htmlspecialchars(__('app.auctionator.fields.enabled')) ?></dt>
           <dd><span class="<?= $toneClass(((int) ($typed['Auctionator.Enabled'] ?? 0)) === 1 ? 'ok' : 'muted') ?>"><?= htmlspecialchars(((int) ($typed['Auctionator.Enabled'] ?? 0)) === 1 ? __('app.auctionator.state.on') : __('app.auctionator.state.off')) ?></span></dd>
           <dt><?= htmlspecialchars(__('app.auctionator.fields.bid_only')) ?></dt>
-          <dd><span class="<?= $toneClass(((int) ($typed['Auctionator.Seller.BidOnly'] ?? 0)) === 1 ? 'warn' : 'muted') ?>"><?= htmlspecialchars(((int) ($typed['Auctionator.Seller.BidOnly'] ?? 0)) === 1 ? __('app.auctionator.state.on') : __('app.auctionator.state.off')) ?></span></dd>
+          <dd>
+            <?php $bidOnly = (int) ($typed['Auctionator.Seller.BidOnly'] ?? 0) === 1; ?>
+            <span class="<?= $toneClass($bidOnly ? 'warn' : 'ok') ?>"><?= htmlspecialchars($bidOnly ? __('app.auctionator.state.buyout_off') : __('app.auctionator.state.buyout_on')) ?></span>
+            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.master.buyout_conf', ['key' => 'Auctionator.Seller.BidOnly', 'value' => $bidOnly ? '1' : '0'])) ?></span>
+          </dd>
           <dt><?= htmlspecialchars(__('app.auctionator.fields.character_id')) ?></dt>
           <dd><?= htmlspecialchars((string) ($typed['Auctionator.CharacterId'] ?? '--')) ?></dd>
           <dt><?= htmlspecialchars(__('app.auctionator.fields.character_guid')) ?></dt>
@@ -177,6 +189,17 @@ $gmOwnerLabel = static function (int $owner): string {
               <button type="button" class="btn outline danger" data-au-power="stop"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.power_stop')) ?></button>
             </div>
             <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.power_hint')) ?></p>
+          </div>
+
+          <?php // 买断模式快速开关：同样两步（写 conf + 运行时命令），下一轮卖家即生效 ?>
+          <?php $buyoutOn = (int) ($typed['Auctionator.Seller.BidOnly'] ?? 0) !== 1; ?>
+          <div class="au-power" data-au-buyout-panel>
+            <strong class="au-power__title"><?= htmlspecialchars(__('app.auctionator.master.buyout_title')) ?></strong>
+            <div class="au-power__actions">
+              <button type="button" class="btn <?= $buyoutOn ? 'primary' : 'outline' ?>" data-au-buyout="1"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.buyout_on')) ?></button>
+              <button type="button" class="btn <?= $buyoutOn ? 'outline' : 'primary' ?>" data-au-buyout="0"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.buyout_off')) ?></button>
+            </div>
+            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.buyout_hint')) ?></p>
           </div>
         <?php endif; ?>
       </div>
@@ -284,7 +307,10 @@ $gmOwnerLabel = static function (int $owner): string {
                   $spec = is_array($fields[$key] ?? null) ? $fields[$key] : [];
                   $type = (string) ($spec['type'] ?? 'string');
                   $label = __('app.auctionator.fields.' . (string) ($spec['label'] ?? 'value'));
-                  $value = $typed[$key] ?? '';
+                  // A key that is absent from the conf falls back to the module's own default
+                  // (when the spec declares one) instead of an empty field: showing "off" for a
+                  // key the server treats as on is worse than showing nothing.
+                  $value = $typed[$key] ?? ($spec['default'] ?? '');
                   $disabled = $canManage && $supported ? '' : ' disabled';
                 ?>
                 <label class="au-form__row">
@@ -377,14 +403,18 @@ $gmOwnerLabel = static function (int $owner): string {
         <h3><?= htmlspecialchars(__('app.auctionator.policy.itemclass_title')) ?></h3>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint')) ?></p>
         <?php if ($tables['itemclass_config']): ?>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.showing', ['shown' => count($policy['itemclass'] ?? []), 'total' => (int) ($totals['itemclass'] ?? 0)])) ?></p>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_totals', [
+              'shown' => count($policy['itemclass'] ?? []),
+              'total' => (int) ($totals['itemclass'] ?? 0),
+              'listed' => count(array_filter($policy['itemclass'] ?? [], static fn (array $row): bool => (int) ($row['max_count'] ?? 0) > 0)),
+          ])) ?></p>
         <?php endif; ?>
         <?php if (!$tables['itemclass_config']): ?>
           <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . $policyTableKey, ['table' => 'mod_auctionator_itemclass_config'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="itemclass_save">
-              <input class="au-input" type="number" min="0" max="15" name="class" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.class')) ?>" required>
+              <input class="au-input" type="number" min="0" max="16" name="class" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.class')) ?>" required>
               <input class="au-input" type="number" min="0" max="255" name="subclass" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.subclass')) ?>" required>
               <input class="au-input" type="number" min="0" max="3" name="bonding" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.bonding')) ?>" value="0">
               <input class="au-input" type="number" min="0" name="max_count" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.max_count')) ?>" value="2">
@@ -405,29 +435,109 @@ $gmOwnerLabel = static function (int $owner): string {
                 </tr>
               </thead>
               <tbody>
-              <?php foreach (($policy['itemclass'] ?? []) as $row): ?>
-                <tr data-au-itemclass="<?= (int) ($row['class'] ?? 0) ?>:<?= (int) ($row['subclass'] ?? 0) ?>">
-                  <td><?= htmlspecialchars((string) ($row['class_label'] ?? '')) ?> <span class="muted small">#<?= (int) ($row['class'] ?? 0) ?></span></td>
-                  <td><?= htmlspecialchars((string) ($row['subclass_label'] ?? '')) ?> <span class="muted small">#<?= (int) ($row['subclass'] ?? 0) ?></span></td>
-                  <td>
+              <?php foreach (($policy['itemclass_by_class'] ?? []) as $group): ?>
+                <?php
+                  $classId = (int) ($group['class'] ?? 0);
+                  $classRows = count($group['subclasses'] ?? []);
+                  $classListed = (int) ($group['listed'] ?? 0);
+                ?>
+                <?php // 整类一行：一个下拉 + 一个按钮就能把这一类全部上架或全部停掉 ?>
+                <tr class="au-table__group">
+                  <td colspan="6">
+                    <strong><?= htmlspecialchars($typeLabel($classId, (string) ($group['label'] ?? ''))) ?></strong>
+                    <span class="muted small">#<?= $classId ?></span>
+                    <span class="<?= $toneClass($classListed > 0 ? 'ok' : 'muted') ?>"><?= htmlspecialchars($classListed > 0 ? __('app.auctionator.state.listed') : __('app.auctionator.state.not_listed')) ?></span>
+                    <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_class_state', ['rows' => $classRows, 'listed' => $classListed])) ?></span>
                     <?php if ($canManage && $supported): ?>
-                      <input class="au-input au-input--tiny" type="number" min="0" max="3" data-au-field-name="bonding" value="<?= (int) ($row['bonding'] ?? 0) ?>">
-                    <?php else: ?><?= (int) ($row['bonding'] ?? 0) ?><?php endif; ?>
+                      <span class="au-table__actions">
+                        <label class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.class_quota')) ?></label>
+                        <select class="au-input au-input--tiny" data-au-field-name="max_count">
+                          <option value="0"><?= htmlspecialchars(__('app.auctionator.state.not_listed')) ?> (0)</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="5">5</option>
+                        </select>
+                        <button type="button" class="btn btn-xs" data-au-policy="itemclass_class_save" data-au-class="<?= $classId ?>"><?= htmlspecialchars(__('app.auctionator.policy.apply_to_class')) ?></button>
+                      </span>
+                    <?php endif; ?>
                   </td>
+                </tr>
+                <?php if ($classRows === 0): ?>
+                  <tr>
+                    <td colspan="6" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.class_no_rows', [
+                        'class' => $typeLabel($classId, (string) ($group['label'] ?? '')),
+                    ])) ?></td>
+                  </tr>
+                <?php endif; ?>
+                <?php foreach (($group['subclasses'] ?? []) as $row): ?>
+                  <?php $rowListed = (int) ($row['max_count'] ?? 0) > 0; ?>
+                  <tr data-au-itemclass="<?= (int) ($row['class'] ?? 0) ?>:<?= (int) ($row['subclass'] ?? 0) ?>">
+                    <td></td>
+                    <td><?= htmlspecialchars((string) ($row['subclass_label'] ?? '')) ?> <span class="muted small">#<?= (int) ($row['subclass'] ?? 0) ?></span></td>
+                    <td>
+                      <?php if ($canManage && $supported): ?>
+                        <input class="au-input au-input--tiny" type="number" min="0" max="3" data-au-field-name="bonding" value="<?= (int) ($row['bonding'] ?? 0) ?>">
+                      <?php else: ?><?= (int) ($row['bonding'] ?? 0) ?><?php endif; ?>
+                    </td>
+                    <td>
+                      <?php if ($canManage && $supported): ?>
+                        <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="max_count" value="<?= (int) ($row['max_count'] ?? 0) ?>">
+                      <?php else: ?><?= (int) ($row['max_count'] ?? 0) ?><?php endif; ?>
+                      <span class="<?= $toneClass($rowListed ? 'ok' : 'muted') ?>"><?= htmlspecialchars($rowListed ? __('app.auctionator.state.listed') : __('app.auctionator.state.not_listed')) ?></span>
+                    </td>
+                    <td>
+                      <?php if ($canManage && $supported): ?>
+                        <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="stack_count" value="<?= (int) ($row['stack_count'] ?? 0) ?>">
+                      <?php else: ?><?= (int) ($row['stack_count'] ?? 0) ?><?php endif; ?>
+                    </td>
+                    <td class="au-table__actions">
+                      <?php if ($canManage && $supported): ?>
+                        <button type="button" class="btn btn-xs outline" data-au-policy="itemclass_save" data-au-class="<?= (int) ($row['class'] ?? 0) ?>" data-au-subclass="<?= (int) ($row['subclass'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
+                        <button type="button" class="btn btn-xs outline danger" data-au-policy="itemclass_delete" data-au-class="<?= (int) ($row['class'] ?? 0) ?>" data-au-subclass="<?= (int) ($row['subclass'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.policy.delete')) ?></button>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+
+      <?php // 品质白名单：模块的候选查询直接读这张表，所以热生效、不必重启 ?>
+      <div class="au-card au-card--wide">
+        <h3><?= htmlspecialchars(__('app.auctionator.policy.quality_title')) ?></h3>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_hint')) ?></p>
+        <?php if (!($tables['quality_config'] ?? false)): ?>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.quality_table_missing')) ?></p>
+        <?php else: ?>
+          <div class="au-table-wrap">
+            <table class="au-table">
+              <thead>
+                <tr>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality_items')) ?></th>
+                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality_state')) ?></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach (($policy['quality'] ?? []) as $row): ?>
+                <?php $qualityListed = (int) ($row['enabled'] ?? 1) === 1; ?>
+                <tr>
+                  <td><?= htmlspecialchars($qualityLabel((int) ($row['quality'] ?? 0))) ?> <span class="muted small">#<?= (int) ($row['quality'] ?? 0) ?></span></td>
+                  <td><?= (int) ($row['items'] ?? 0) ?></td>
                   <td>
-                    <?php if ($canManage && $supported): ?>
-                      <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="max_count" value="<?= (int) ($row['max_count'] ?? 0) ?>">
-                    <?php else: ?><?= (int) ($row['max_count'] ?? 0) ?><?php endif; ?>
-                  </td>
-                  <td>
-                    <?php if ($canManage && $supported): ?>
-                      <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="stack_count" value="<?= (int) ($row['stack_count'] ?? 0) ?>">
-                    <?php else: ?><?= (int) ($row['stack_count'] ?? 0) ?><?php endif; ?>
+                    <span class="<?= $toneClass($qualityListed ? 'ok' : 'muted') ?>"><?= htmlspecialchars($qualityListed ? __('app.auctionator.state.listed') : __('app.auctionator.state.not_listed')) ?></span>
+                    <?php if (!($row['configured'] ?? false)): ?>
+                      <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_default')) ?></span>
+                    <?php endif; ?>
                   </td>
                   <td class="au-table__actions">
                     <?php if ($canManage && $supported): ?>
-                      <button type="button" class="btn btn-xs outline" data-au-policy="itemclass_save" data-au-class="<?= (int) ($row['class'] ?? 0) ?>" data-au-subclass="<?= (int) ($row['subclass'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
-                      <button type="button" class="btn btn-xs outline danger" data-au-policy="itemclass_delete" data-au-class="<?= (int) ($row['class'] ?? 0) ?>" data-au-subclass="<?= (int) ($row['subclass'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.policy.delete')) ?></button>
+                      <button type="button" class="btn btn-xs outline<?= $qualityListed ? ' danger' : '' ?>" data-au-policy="quality_save" data-au-quality="<?= (int) ($row['quality'] ?? 0) ?>" data-au-enabled="<?= $qualityListed ? '0' : '1' ?>"><?= htmlspecialchars($qualityListed ? __('app.auctionator.policy.disable') : __('app.auctionator.policy.enable')) ?></button>
                     <?php endif; ?>
                   </td>
                 </tr>
@@ -660,6 +770,11 @@ $gmOwnerLabel = static function (int $owner): string {
 
       <div class="au-card">
         <h3><?= htmlspecialchars(__('app.auctionator.actions.market_title')) ?></h3>
+        <?php // 采样本区拍卖行：聚合完全在模块里的一条 SQL 里做，面板只负责触发（SOAP） ?>
+        <div class="au-actions">
+          <button type="button" class="btn primary" data-au-action="marketscan"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketscan')) ?></button>
+          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint')) ?></span>
+        </div>
         <div class="au-actions">
           <button type="button" class="btn outline" data-au-action="marketimport"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketimport')) ?></button>
           <label class="au-checkbox">

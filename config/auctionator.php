@@ -67,6 +67,10 @@ return [
      * min/max: accepted range (the module clamps these too; the panel must never write
      *          something the module would silently change, because the file would then
      *          disagree with what the server actually uses).
+     * default: what the module falls back to when the key is absent from the file. The form
+     *          shows this instead of an empty field, so a conf written before the key existed
+     *          does not display a value the server is not using. Only needed where the
+     *          module's built-in default is not the type's zero value.
      */
     'fields' => [
         'Auctionator.Enabled' => ['group' => 'master', 'type' => 'bool', 'label' => 'enabled'],
@@ -113,6 +117,11 @@ return [
         'Auctionator.MarketData.ImportSource' => ['group' => 'market', 'type' => 'string', 'label' => 'import_source'],
         'Auctionator.MarketData.ImportIntervalMinutes' => ['group' => 'market', 'type' => 'int', 'label' => 'import_interval_minutes', 'min' => 5, 'max' => 10080],
         'Auctionator.MarketData.ImportMaxRows' => ['group' => 'market', 'type' => 'int', 'label' => 'import_max_rows', 'min' => 1, 'max' => 1000000],
+        // Sampling this realm's own auction house. 0 = only when the GM asks (the button / command).
+        'Auctionator.MarketData.ScanIntervalMinutes' => ['group' => 'market', 'type' => 'int', 'label' => 'scan_interval_minutes', 'min' => 0, 'max' => 10080, 'default' => 0],
+        // The module's built-in default is 1 ("leave the bot's own listings out"), so an older
+        // conf that lacks the key must not be shown as "off".
+        'Auctionator.MarketData.ScanExcludeSelf' => ['group' => 'market', 'type' => 'bool', 'label' => 'scan_exclude_self', 'default' => 1],
         'Auctionator.MarketData.RetentionDays' => ['group' => 'market', 'type' => 'int', 'label' => 'retention_days', 'min' => 1, 'max' => 3650],
 
         'Auctionator.Multipliers.Seller.Poor' => ['group' => 'multipliers_seller', 'type' => 'float', 'label' => 'multiplier_poor', 'min' => 0, 'max' => 1000],

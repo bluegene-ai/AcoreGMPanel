@@ -6,15 +6,16 @@
  * Four surfaces, one page:
  *   - dashboard : live listing counters, market table state, log tail, warnings
  *   - settings  : read/write the Auctionator.* keys of mod_auctionator.conf
- *   - policy    : mod_auctionator_disabled_items / itemclass_config / gm_list CRUD
+ *   - policy    : mod_auctionator_disabled_items / itemclass_config / quality_config / gm_list CRUD
  *   - actions   : the module's own GM commands through the worldserver SOAP channel
  *
  * The module reads its configuration while the worldserver builds the Auctionator
  * singleton, so a saved setting is inert until the worldserver is restarted; the page
- * says so and links to /supervisor. The one exception is the master switch
- * (Auctionator.Enabled): POST /auctionator/api/power writes this realm's option file and
- * then sends ".auctionator start|stop" over this realm's SOAP channel, so one realm's bot
- * can be started or stopped immediately without restarting its worldserver.
+ * says so and links to /supervisor. Two exceptions apply the change at once by also sending a
+ * runtime command: the master switch (Auctionator.Enabled → ".auctionator start|stop") and the
+ * buyout-mode switch (Auctionator.Seller.BidOnly → ".auctionator buyout 0|1"). The item policy
+ * tables  the disabled blacklist, the class/subclass whitelist and the per-quality gate  are
+ * read by the seller on every run, so those edits never need a restart.
  *
  * Every path, table and command on this page belongs to the realm selected in the header
  * (config/auctionator.php server_overrides), which is what makes the module manageable
@@ -88,6 +89,28 @@ class AuctionatorController extends Controller
     private function requireControlCapability(): void
     {
         $this->requireCapability('auctionator.control');
+    }
+
+    /**
+     * Read an integer that must be present and inside a range.
+     *
+     * Deliberately not boundedInt(): that clamps, so `boundedInt($request, 'class', -1, 0, 15)`
+     * turned a *missing* class into class 0 and made the "-1 means invalid" check below it dead
+     * code - a malformed request silently edited the wrong row. The old 0..15 range also cut off
+     * class 16 (glyphs), which is a real row of the item class table.
+     *
+     * @return array{value: int, ok: bool}
+     */
+    private function requiredInt(Request $request, string $key, int $min, int $max): array
+    {
+        $raw = $request->input($key, null);
+        if ($raw === null || $raw === '' || !is_numeric($raw)) {
+            return ['value' => 0, 'ok' => false];
+        }
+
+        $value = (int) $raw;
+
+        return ['value' => $value, 'ok' => $value >= $min && $value <= $max];
     }
 
     public function index(Request $request): Response
@@ -230,7 +253,8 @@ class AuctionatorController extends Controller
 
         $action = $this->normalizedEnum($request, 'action', [
             'disabled_add', 'disabled_remove',
-            'itemclass_save', 'itemclass_delete',
+            'itemclass_save', 'itemclass_delete', 'itemclass_class_save',
+            'quality_save',
             'gm_save', 'gm_delete', 'gm_toggle',
         ], '');
 
@@ -259,29 +283,63 @@ class AuctionatorController extends Controller
                     break;
 
                 case 'itemclass_save':
-                    $class = $this->boundedInt($request, 'class', -1, 0, 15);
-                    $subclass = $this->boundedInt($request, 'subclass', -1, 0, 255);
-                    if ($class < 0 || $subclass < 0) {
+                    $class = $this->requiredInt($request, 'class', 0, 16);
+                    $subclass = $this->requiredInt($request, 'subclass', 0, 255);
+                    if (!$class['ok'] || !$subclass['ok']) {
                         return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_class')], 422);
                     }
                     $this->repo()->saveItemclassRow(
-                        $class,
-                        $subclass,
+                        $class['value'],
+                        $subclass['value'],
                         $this->boundedInt($request, 'bonding', 0, 0, 3),
                         $this->boundedInt($request, 'max_count', 1, 0, 1000),
                         $this->boundedInt($request, 'stack_count', 1, 0, 1000)
                     );
-                    $message = Lang::get('app.auctionator.feedback.itemclass_saved', ['class' => $class, 'subclass' => $subclass]);
+                    $message = Lang::get('app.auctionator.feedback.itemclass_saved', ['class' => $class['value'], 'subclass' => $subclass['value']]);
                     break;
 
                 case 'itemclass_delete':
-                    $class = $this->boundedInt($request, 'class', -1, 0, 15);
-                    $subclass = $this->boundedInt($request, 'subclass', -1, 0, 255);
-                    if ($class < 0 || $subclass < 0) {
+                    $class = $this->requiredInt($request, 'class', 0, 16);
+                    $subclass = $this->requiredInt($request, 'subclass', 0, 255);
+                    if (!$class['ok'] || !$subclass['ok']) {
                         return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_class')], 422);
                     }
-                    $this->repo()->deleteItemclassRow($class, $subclass);
-                    $message = Lang::get('app.auctionator.feedback.itemclass_deleted', ['class' => $class, 'subclass' => $subclass]);
+                    $this->repo()->deleteItemclassRow($class['value'], $subclass['value']);
+                    $message = Lang::get('app.auctionator.feedback.itemclass_deleted', ['class' => $class['value'], 'subclass' => $subclass['value']]);
+                    break;
+
+                // Whole-type switch: one quota for every subclass of an item class, so "stop
+                // listing armour" is one click instead of eleven saved rows. Quota 0 means never
+                // list the type; a quota above 0 also (re)creates the rows a type needs to be in
+                // the seller's whitelist at all.
+                case 'itemclass_class_save':
+                    $class = $this->requiredInt($request, 'class', 0, 16);
+                    if (!$class['ok']) {
+                        return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_class')], 422);
+                    }
+                    $quota = $this->boundedInt($request, 'max_count', 1, 0, 1000);
+                    $applied = $this->repo()->saveItemclassQuotaForClass($class['value'], $quota);
+                    $message = Lang::get('app.auctionator.feedback.itemclass_class_saved', [
+                        'class' => Lang::get('app.auctionator.types.' . $class['value']),
+                        'quota' => $quota,
+                        'updated' => $applied['updated'],
+                        'inserted' => $applied['inserted'],
+                    ]);
+                    break;
+
+                // Per-quality gate of the automatic seller. Read by the seller's own candidate
+                // query, so it applies on the next run without a worldserver restart.
+                case 'quality_save':
+                    $quality = $this->requiredInt($request, 'quality', 0, 7);
+                    if (!$quality['ok']) {
+                        return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_quality')], 422);
+                    }
+                    $listed = $this->normalizedBoolFlag($request, 'enabled');
+                    $this->repo()->saveQualityRow($quality['value'], $listed ? 1 : 0);
+                    $message = Lang::get('app.auctionator.feedback.quality_saved', [
+                        'quality' => Lang::get('app.auctionator.qualities.' . $quality['value']),
+                        'state' => Lang::get($listed ? 'app.auctionator.state.listed' : 'app.auctionator.state.not_listed'),
+                    ]);
                     break;
 
                 case 'gm_save':
@@ -359,7 +417,7 @@ class AuctionatorController extends Controller
 
         $action = $this->normalizedEnum($request, 'action', [
             'status', 'market', 'addlist', 'expireall', 'enable', 'disable',
-            'multiplier', 'marketimport', 'marketprune', 'auctionspercycle', 'bidspercycle', 'bidonown', 'add',
+            'multiplier', 'marketimport', 'marketscan', 'marketprune', 'auctionspercycle', 'bidspercycle', 'bidonown', 'add',
         ], '');
 
         if ($action === '') {
@@ -467,6 +525,111 @@ class AuctionatorController extends Controller
             ]);
         } else {
             $message = Lang::get('app.auctionator.feedback.power_offline', [
+                'server' => $this->serverLabel(),
+                'message' => $this->firstNonEmptyString([
+                    (string) ($result['message'] ?? ''),
+                    (string) ($result['output'] ?? ''),
+                    Lang::get('app.auctionator.errors.command_failed'),
+                ]),
+                'state' => $confWritten
+                    ? Lang::get('app.auctionator.feedback.power_conf_saved')
+                    : Lang::get('app.auctionator.feedback.power_conf_failed'),
+            ]);
+        }
+
+        return $this->json([
+            'success' => $commandOk,
+            'message' => $message,
+            'payload' => [
+                'enable' => $enable,
+                'command' => $command,
+                'command_ok' => $commandOk,
+                'conf_written' => $confWritten,
+                'conf_error' => $confError,
+                'conf_file' => $paths['conf_file'],
+                'restart_required' => !$commandOk,
+                'output' => (string) ($result['output'] ?? ''),
+                'snapshot' => $this->snapshot(),
+            ],
+        ], $commandOk ? 200 : 422);
+    }
+
+    /**
+     * 买断模式快速开关（按区，立即生效）。
+     *
+     * 和总开关一样是两步，缺一不可：
+     *   1. 写本区 configs/modules/mod_auctionator.conf 的 Auctionator.Seller.BidOnly —— 跨重启保持；
+     *   2. 向本区 worldserver 发 ".auctionator buyout 0|1" —— 卖家每条挂单都会重读该开关，
+     *      所以下一轮就按新值上架，不必重启该区。
+     *
+     * 注意配置键与界面上的开关是**反向**的：买断模式关闭 = Auctionator.Seller.BidOnly = 1，
+     * 也就是条目完全不设一口价、只能靠竞拍成交。
+     *
+     * 返回值同样区分"已落库"与"已生效"：命令没送到（该区 worldserver 没在跑）时 conf 仍然写好，
+     * 页面据此提示"下次启动生效"，而不是谎报成功。
+     */
+    public function apiBuyout(Request $request): Response
+    {
+        $this->requireControlCapability();
+        $this->maybeSwitchServer($request);
+
+        if (($refusal = $this->unsupportedServerResponse()) !== null) {
+            return $refusal;
+        }
+
+        $enable = $this->normalizedBoolFlag($request, 'enable');
+        $serverId = ServerContext::currentId();
+        $paths = $this->realmPaths();
+
+        $fields = (array) Config::get('auctionator.fields', []);
+        if (!isset($fields['Auctionator.Seller.BidOnly'])) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.auctionator.errors.buyout_field_missing'),
+            ], 500);
+        }
+
+        // The switch and the config key are inverses: buyout mode ON is BidOnly = 0.
+        $confWritten = false;
+        $confError = '';
+        try {
+            $file = new AuctionatorConfigFile($paths['conf_file']);
+            $written = $file->write(['Auctionator.Seller.BidOnly' => $enable ? 0 : 1], $fields);
+            if ($written['ok']) {
+                $confWritten = true;
+            } else {
+                $confError = (string) $written['error'];
+            }
+        } catch (Throwable $exception) {
+            $confError = $exception->getMessage();
+        }
+
+        $command = '.auctionator buyout ' . ($enable ? '1' : '0');
+        $result = SoapCommandRunner::execute($command, ['server_id' => $serverId]);
+        $commandOk = (bool) ($result['success'] ?? false);
+
+        Audit::log('auctionator', 'buyout', $command, [
+            'server_id' => $serverId,
+            'enable' => $enable,
+            'conf_file' => $paths['conf_file'],
+            'conf_written' => $confWritten,
+            'conf_error' => $confError,
+            'command_ok' => $commandOk,
+            'output' => (string) ($result['output'] ?? ''),
+        ]);
+
+        if ($commandOk && $confWritten) {
+            $message = Lang::get($enable
+                ? 'app.auctionator.feedback.buyout_enabled'
+                : 'app.auctionator.feedback.buyout_disabled', ['server' => $this->serverLabel()]);
+        } elseif ($commandOk) {
+            $message = Lang::get('app.auctionator.feedback.power_runtime_only', [
+                'message' => $confError !== ''
+                    ? $confError
+                    : Lang::get('app.auctionator.errors.config_unreadable'),
+            ]);
+        } else {
+            $message = Lang::get('app.auctionator.feedback.buyout_offline', [
                 'server' => $this->serverLabel(),
                 'message' => $this->firstNonEmptyString([
                     (string) ($result['message'] ?? ''),
@@ -681,6 +844,11 @@ class AuctionatorController extends Controller
             case 'marketimport':
                 return ['command' => '.auctionator marketimport' . ($this->normalizedBoolFlag($request, 'force') ? ' force' : ''), 'error' => ''];
 
+            // Samples this realm's auction house into mod_auctionator_market_price: the
+            // aggregation is pure SQL inside the module, so the panel just triggers it.
+            case 'marketscan':
+                return ['command' => '.auctionator marketscan', 'error' => ''];
+
             case 'marketprune':
                 $days = $this->boundedInt($request, 'days', 30, 1, 3650);
 
@@ -811,6 +979,8 @@ class AuctionatorController extends Controller
                     'disabled_from' => $disabledFrom,
                     'disabled' => [],
                     'itemclass' => [],
+                    'itemclass_by_class' => [],
+                    'quality' => [],
                     'gm_list' => [],
                     'tables' => [],
                     'totals' => [],

@@ -258,6 +258,8 @@ return static function (Router $router): void {
             $router->post('/auctionator/api/action', [AuctionatorController::class, 'apiAction']);
             // 按区一键启停：写本区 conf 的 Auctionator.Enabled + 发本区 .auctionator start|stop
             $router->post('/auctionator/api/power', [AuctionatorController::class, 'apiPower']);
+            // 按区买断模式开关：写本区 conf 的 Auctionator.Seller.BidOnly + 发本区 .auctionator buyout 0|1
+            $router->post('/auctionator/api/buyout', [AuctionatorController::class, 'apiBuyout']);
         });
     });
 };
