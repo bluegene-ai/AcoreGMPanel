@@ -160,7 +160,7 @@ the whole data source:
 |---|---|---|
 | Data | `config/boss.php` → `server_overrides[<realm>].custom_db_name` (that realm's own Eluna schema) | `config/auctionator.php` → `server_overrides[<realm>].server_root` (that realm's worldserver directory) |
 | Start / stop | spawn / kill / reset buttons, sent to that realm's SOAP port only | "start / stop this realm's bot" in the status card: writes `Auctionator.Enabled` into that realm's conf **and** sends `.auctionator start`·`stop`, so it applies at once and survives a restart |
-| A realm without the module | outside `supported_server_ids` → the page is read-only with a warning and every mutating endpoint answers 422 instead of touching another realm | same |
+| A realm without the module | outside `supported_server_ids` → the page is read-only with a warning and every mutating endpoint answers 422 instead of touching another realm | auto-detected per realm (probes that realm's world database for `mod_auctionator_disabled_items`): deployed → manageable, missing → read-only with one realm-named note and no SQL error wall; `supported_server_ids` / `unsupported_server_ids` force either verdict |
 
 Topology, the steps for adding a realm and the acceptance checklist live in `docs/multi-realm.md`.
 

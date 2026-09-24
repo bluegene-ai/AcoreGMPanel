@@ -27,10 +27,15 @@ return [
     'conf_file' => 'configs/modules/mod_auctionator.conf',
     'log_file' => 'logs/auctionator.log',
 
-    // 这个列表 = **已经部署了 mod-auctionator 的区**；不在列表内的区服：
-    // dashboard 追加 warning，且写配置 / 发 SOAP 的接口一律返回 422，绝不误写别的区。
-    // 留空 = 所有已配置区都支持。
+    // 白名单：写在这里的区**直接算已部署**，跳过下面的自动探测（部署信息明确时更快、更省一次查询）。
+    // 不在名单里的区不再一律判"未部署"——面板会去查该区 world 库里有没有模块自己的表
+    // （mod_auctionator_disabled_items）：装了就能管，没装 / 库连不上才退化成只读 + 说明。
+    // 留空 = 只靠自动探测（推荐：模块装到哪个区，哪个区就能管）。
     'supported_server_ids' => [],
+
+    // 黑名单：明确**不**在面板里管的区（优先于白名单与自动探测），例如只开放给内部测试、
+    // 不希望运维从面板改动的区。留空 = 不排除任何区。
+    'unsupported_server_ids' => [],
 
     // 每个区一条 server_root（该区 worldserver 根目录，conf/log 相对它解析）。
     // 留空 = 所有区共用顶层的 server_root。

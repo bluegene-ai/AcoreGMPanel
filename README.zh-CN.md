@@ -142,7 +142,7 @@ AcoreGMPanel/
 |---|---|---|
 | 数据 | `config/boss.php` → `server_overrides[<区>].custom_db_name`（该区自己的 Eluna 库） | `config/auctionator.php` → `server_overrides[<区>].server_root`（该区 worldserver 目录） |
 | 启动 / 停止 | 「生成 Boss」/「击杀」/「重置」→ 只发给该区的 SOAP 端口 | 「模块状态 → 启动/停止本区机器人」→ 写该区 conf 的 `Auctionator.Enabled` 并发送 `.auctionator start`·`stop`，**立即生效且重启后保持** |
-| 未部署的区 | `supported_server_ids` 之外 → 页面给只读警告，接口一律 422，绝不误写别的区 | 同左 |
+| 未部署的区 | `supported_server_ids` 之外 → 页面给只读警告，接口一律 422，绝不误写别的区 | **按区自动判定**（探测该区 world 库有没有 `mod_auctionator_disabled_items`）：装了就能管，没装才只读，且只给一条带区名的说明、不再刷 SQL 报错；`supported_server_ids` / `unsupported_server_ids` 可强制任一结论 |
 
 完整拓扑、加区步骤与验收清单见 `docs/multi-realm.md`。
 

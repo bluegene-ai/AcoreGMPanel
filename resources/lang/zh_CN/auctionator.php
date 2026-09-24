@@ -129,6 +129,7 @@ return [
         'itemclass_hint' => 'mod_auctionator_itemclass_config：max_count 是该物品条目的挂单配额（0 = 该类永不上架），stack_count 是每条的堆叠数量（受物品最大堆叠限制）。热生效。',
         'table_missing' => '缺少数据表 :table，请先执行模块自带的 SQL 更新。',
         'table_not_deployed' => '本区没有部署 mod-auctionator，以下策略表不可用。',
+        'table_unavailable' => '连不上本区数据库，暂时读不到策略表（恢复连接后刷新即可，不用重导 SQL）。',
         'class' => '类别',
         'subclass' => '子类别',
         'bonding' => '绑定门槛',
@@ -224,7 +225,9 @@ return [
     'warnings' => [
         'conf_missing' => '配置文件不存在：:path（模块会使用内置默认值，其中总开关默认为 0）。',
         'conf_unreadable' => '配置文件无法读取：:path',
-        'server_not_supported' => '当前区服（:server）没有部署 mod-auctionator（它的索引不在 config/auctionator.php 的 supported_server_ids 里），页面为只读。要在本区使用：先把模块 SQL 导进本区的 world / characters 库、在本区目录放一份 configs/modules/mod_auctionator.conf（并配好该区自己的机器人角色），再把本区索引加进 supported_server_ids。',
+        'server_not_supported' => '当前区服（:server）没有部署 mod-auctionator（本区 world 库里没有模块自己的表），页面为只读。要在本区使用：先把模块 SQL 导进本区的 world / characters 库、在本区目录放一份 configs/modules/mod_auctionator.conf（并配好该区自己的机器人角色），再把本区索引加进 config/auctionator.php 的 supported_server_ids。',
+        'server_db_unreachable' => '连不上当前区服（:server）的数据库，无法确认本区是否装了 mod-auctionator，页面暂时只读。请检查 config/generated/servers.php 里这个区的 world / characters 连接（库名、端口、账号）后刷新。',
+        'server_denied' => '当前区服（:server）被 config/auctionator.php 的 unsupported_server_ids 明确排除，页面为只读。要让本区可管理，把这个区索引从 unsupported_server_ids 移到 supported_server_ids。',
         'module_disabled' => 'Auctionator.Enabled = 0：模块已加载但事件循环不运行，不会上架、竞拍或导入。',
         'bid_only' => 'Auctionator.Seller.BidOnly = 1：所有条目都不设一口价，只能靠竞价成交；无人出价则过期销毁。',
         'bidder_enabled' => '有竞拍者处于启用状态：机器人会买断玩家拍卖且不付款，核心凭空支付卖家金币（经济水龙头）。',

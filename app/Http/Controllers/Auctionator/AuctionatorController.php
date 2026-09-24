@@ -48,6 +48,9 @@ class AuctionatorController extends Controller
 
     private ?AuctionatorRepository $repo = null;
 
+    /** @var array{supported: bool, reason: string}|null 本区是否可管理（每请求只判定一次） */
+    private ?array $support = null;
+
     private function repo(): AuctionatorRepository
     {
         if ($this->repo === null) {
@@ -645,11 +648,14 @@ class AuctionatorController extends Controller
         $read = $file->read();
         $typed = $file->typedValues($fields);
 
-        // 本区没部署模块（不在 config/auctionator.php 的 supported_server_ids 里）：
-        // 只回答"当前是哪个区、它的 conf 在哪、为什么是只读"，**不去碰该区的库表**。
-        // 否则页面会在"本区未部署"上面先刷一屏 Unknown table 的 SQL 报错，看起来像面板坏了，
-        // 而不是"这个区还没装 mod-auctionator"（表都还没有，读它本来就没有意义）。
+        // 本区管不了（没装模块 / 库连不上 / 被 denied）：只回答"当前是哪个区、它的 conf 在哪、
+        // 为什么是只读"，**不去碰该区的库表**。否则页面会在说明上面先刷一屏 Unknown table 的
+        // SQL 报错，看起来像面板坏了，而不是"这个区还没装 mod-auctionator"。
         if (!$this->serverSupported()) {
+            $reason = $this->serverSupport()['reason'];
+            // 连不上库 ≠ 没装模块：前者要按"读取失败/连接问题"说，后者才是"没部署"。
+            $unreachable = $reason === 'db_unreachable';
+
             return [
                 'paths' => $paths,
                 'conf' => [
@@ -662,8 +668,8 @@ class AuctionatorController extends Controller
                 ],
                 'fields' => $fields,
                 'groups' => $this->fieldGroups($fields),
-                'listings' => ['ok' => false, 'error' => 'not_deployed'],
-                'market' => ['ok' => false, 'error' => 'not_deployed'],
+                'listings' => ['ok' => false, 'error' => $unreachable ? 'unavailable' : 'not_deployed'],
+                'market' => ['ok' => false, 'error' => $unreachable ? 'unreadable' : 'not_deployed'],
                 'policy' => [
                     'disabled_from' => $disabledFrom,
                     'disabled' => [],
@@ -673,14 +679,11 @@ class AuctionatorController extends Controller
                     'totals' => [],
                 ],
                 'log' => [],
-                'warnings' => [
-                    Lang::get('app.auctionator.warnings.server_not_supported', [
-                        'server' => $this->serverLabel(),
-                    ]),
-                ],
+                'warnings' => [$this->serverSupportMessage()],
                 'notes' => [
                     'listing_hours' => (int) Config::get('auctionator.notes.listing_hours', 12),
                     'supported' => false,
+                    'support_reason' => $reason,
                 ],
             ];
         }
@@ -702,9 +705,6 @@ class AuctionatorController extends Controller
         $warnings = $repository->warnings();
         if (!$read['ok']) {
             $warnings[] = Lang::get('app.auctionator.warnings.conf_' . ($read['error'] === 'missing' ? 'missing' : 'unreadable'), ['path' => $paths['conf_file']]);
-        }
-        if (!$this->serverSupported()) {
-            $warnings[] = Lang::get('app.auctionator.warnings.server_not_supported', ['server' => $this->serverLabel()]);
         }
         if (($typed['Auctionator.Enabled'] ?? 0) === 0) {
             $warnings[] = Lang::get('app.auctionator.warnings.module_disabled');
@@ -743,7 +743,8 @@ class AuctionatorController extends Controller
             'warnings' => array_values(array_unique($warnings)),
             'notes' => [
                 'listing_hours' => (int) Config::get('auctionator.notes.listing_hours', 12),
-                'supported' => $this->serverSupported(),
+                'supported' => true,
+                'support_reason' => $this->serverSupport()['reason'],
             ],
         ];
     }
@@ -805,14 +806,55 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * 本区是否在 config/auctionator.php 的 `supported_server_ids` 里。
-     * 列表为空表示"所有区都算已部署"（保持旧配置的兼容行为）。
+     * 本区能不能管拍卖机器人，以及"不能"的具体原因。
+     *
+     * 多区面板里 mod-auctionator 是按区部署的，判定顺序（先否决、再显式允许、最后看实据）：
+     *   1. `unsupported_server_ids` 里 → 明确不管（denied，给不想在面板里暴露的区留出口）；
+     *   2. `supported_server_ids` 里 → 直接算已部署（显式白名单，省掉一次探测）；
+     *   3. 否则**探测本区 world 库有没有模块自己的表**——装了就能管，不必再手改白名单；
+     *      库连不上（db_unreachable）或表不存在（not_deployed）才落到"只读 + 说明"。
+     *
+     * @return array{supported: bool, reason: string} reason ∈ explicit|denied|deployed|not_deployed|db_unreachable
      */
+    private function serverSupport(): array
+    {
+        if ($this->support !== null) {
+            return $this->support;
+        }
+
+        $serverId = ServerContext::currentId();
+        $denied = array_map('intval', (array) Config::get('auctionator.unsupported_server_ids', []));
+        if (in_array($serverId, $denied, true)) {
+            return $this->support = ['supported' => false, 'reason' => 'denied'];
+        }
+
+        $allowed = array_map('intval', (array) Config::get('auctionator.supported_server_ids', []));
+        if (in_array($serverId, $allowed, true)) {
+            return $this->support = ['supported' => true, 'reason' => 'explicit'];
+        }
+
+        $probe = $this->repo()->deploymentProbe();
+
+        return $this->support = ['supported' => (bool) $probe['deployed'], 'reason' => (string) $probe['reason']];
+    }
+
     private function serverSupported(): bool
     {
-        $supported = (array) Config::get('auctionator.supported_server_ids', []);
+        return $this->serverSupport()['supported'];
+    }
 
-        return $supported === [] || in_array(ServerContext::currentId(), array_map('intval', $supported), true);
+    /**
+     * 只读原因对应的文案 key（denied / 连不上库 / 没装模块 三种说法不一样）。
+     */
+    private function serverSupportMessage(): string
+    {
+        $key = match ($this->serverSupport()['reason']) {
+            'denied' => 'server_denied',
+            'db_unreachable' => 'server_db_unreachable',
+            default => 'server_not_supported',
+        };
+
+        return Lang::get('app.auctionator.warnings.' . $key, ['server' => $this->serverLabel()]);
     }
 
     private function unsupportedServerResponse(): ?Response
@@ -823,9 +865,7 @@ class AuctionatorController extends Controller
 
         return $this->json([
             'success' => false,
-            'message' => Lang::get('app.auctionator.warnings.server_not_supported', [
-                'server' => $this->serverLabel(),
-            ]),
+            'message' => $this->serverSupportMessage(),
         ], 422);
     }
 

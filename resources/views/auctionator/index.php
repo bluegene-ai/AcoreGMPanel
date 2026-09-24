@@ -27,6 +27,10 @@ $__pageCapabilities = $capabilities;
 $canManage = (bool) ($capabilities['manage'] ?? false);
 $canControl = (bool) ($capabilities['control'] ?? false);
 $supported = (bool) ($notes['supported'] ?? true);
+// 策略表"读不到"的三种说法要分开：缺表（该执行 SQL）/ 本区没部署 / 连不上库。
+$policyTableKey = $supported
+    ? 'table_missing'
+    : (($notes['support_reason'] ?? '') === 'db_unreachable' ? 'table_unavailable' : 'table_not_deployed');
 $capabilityNotice = $canManage ? null : __('app.common.capabilities.read_only');
 
 $formatCopper = static function (int $copper): string {
@@ -64,7 +68,9 @@ $houseLabel = static function (int $house): string {
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
 
-<div class="au-page" data-au-page>
+<div class="au-page" data-au-page
+     data-au-supported="<?= (bool) ($notes['supported'] ?? true) ? '1' : '0' ?>"
+     data-au-support-reason="<?= htmlspecialchars((string) ($notes['support_reason'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
   <div class="au-tabs" role="tablist" aria-label="<?= htmlspecialchars(__('app.auctionator.tabs.label')) ?>">
     <button type="button" role="tab" class="au-tab au-tab--active" data-au-tab="status" aria-selected="true"><?= htmlspecialchars(__('app.auctionator.tabs.status')) ?></button>
     <button type="button" role="tab" class="au-tab" data-au-tab="settings" aria-selected="false"><?= htmlspecialchars(__('app.auctionator.tabs.settings')) ?></button>
@@ -279,7 +285,7 @@ $houseLabel = static function (int $house): string {
           </div>
         <?php endif; ?>
         <?php if (!$tables['disabled_items']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_disabled_items'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . $policyTableKey, ['table' => 'mod_auctionator_disabled_items'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="disabled_add">
@@ -318,7 +324,7 @@ $houseLabel = static function (int $house): string {
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.showing', ['shown' => count($policy['itemclass'] ?? []), 'total' => (int) ($totals['itemclass'] ?? 0)])) ?></p>
         <?php endif; ?>
         <?php if (!$tables['itemclass_config']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_itemclass_config'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . $policyTableKey, ['table' => 'mod_auctionator_itemclass_config'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="itemclass_save">
@@ -387,7 +393,7 @@ $houseLabel = static function (int $house): string {
           ])) ?></p>
         <?php endif; ?>
         <?php if (!$tables['gm_list']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_gm_list'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . $policyTableKey, ['table' => 'mod_auctionator_gm_list'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="gm_save">

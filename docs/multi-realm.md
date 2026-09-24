@@ -46,7 +46,9 @@
 | Boss 本区库 | `config/boss.php` → `server_overrides[].custom_db_name` | 通常各区相同（共用 `ac_eluna`）；只有给某区单独建库时才不同 |
 | Boss 支持哪些区 | `config/boss.php` → `supported_server_ids` | 留空 = 全部支持；锁成单区时不在列表里的区直接 422、不发 SOAP |
 | 拍卖机器人区服目录 / conf / 日志 | `config/auctionator.php` → `server_overrides` | 键 = server 索引；缺省值在文件顶部的 `server_root` / `conf_file` / `log_file` |
-| 拍卖机器人支持哪些区 | `config/auctionator.php` → `supported_server_ids` | 同上，留空 = 全部 |
+| 拍卖机器人**强制**可管理的区 | `config/auctionator.php` → `supported_server_ids` | 白名单：写进去的区直接算"已部署"，跳过自动探测（快路径） |
+| 拍卖机器人**强制**只读的区 | `config/auctionator.php` → `unsupported_server_ids` | 黑名单：优先于白名单与探测，给"不想从面板动"的区留出口 |
+| 拍卖机器人默认怎么判定 | 自动探测该区 world 库有没有 `mod_auctionator_disabled_items` | 装了就能管、没装就只读；**不必**为了"支持多区"再手改白名单 |
 | 守护实例（每区一个） | `config/supervisor.php` → `instances` | 一区一个 `acore_supervisor.exe`，各自 ini/logs；共享的 authserver 只交给其中一个实例守护 |
 
 > 仓库里的 `config/boss.php` / `config/auctionator.php` **只放通用默认值**（`server_overrides`
@@ -56,7 +58,22 @@
 >
 > 合并规则要留意：`Core\Config` 是**递归合并**，generated 里只写部分 `server_overrides` 不会
 > 删掉跟踪文件里的其它条目；但扁平列表 `supported_server_ids` 是整体替换，所以用
-> "`supported_server_ids` 圈定本机部署的区 + 只给这些区写 override" 就足够，其余条目不会被读到。
+> "只给本机部署的区写 override"就足够，其余条目不会被读到。
+
+### 拍卖机器人的「本区能不能管」怎么判定
+
+按区部署过模块的区**自动就能管**，不需要维护名单；判定顺序（`AuctionatorController::serverSupport()`）：
+
+1. `unsupported_server_ids` 命中 → 只读，reason `denied`；
+2. `supported_server_ids` 命中 → 可管理，reason `explicit`（不查库，快路径）；
+3. 否则探测该区 world 库有没有模块自己的表 `mod_auctionator_disabled_items`：
+   - 有 → 可管理（reason `deployed`）；
+   - 没有 → 只读，reason `not_deployed`；
+   - **连不上该区库** → 只读，reason `db_unreachable`（说的是连接问题，不是"没装模块"）。
+
+页面把结论发布在 `.au-page` 的 `data-au-supported` / `data-au-support-reason` 上，只读时
+**只给一条**带区名的说明，并且不去碰该区的库表——不会再有满屏 `SQLSTATE ... Unknown table`
+冒充"面板坏了"。写配置 / 物品查询 / GM 动作 / 按区一键启停四个接口走同一判定，只读时一律 422。
 
 ## 3. 按区独立启停
 
@@ -102,8 +119,9 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
    `configs\modules\mod_auctionator.conf`，把模块 SQL 导进**该区的** world/characters 库
    （`data/sql/db-world/base/*.sql`、`data/sql/db-characters/updates/*.sql`），
    并把 `Auctionator.CharacterId` / `CharacterGuid` 指向该区自己的机器人角色
-   （各区必须各有一个专用角色），最后把该区加进 `config/generated/auctionator.php` 的
-   `server_overrides` 与 `supported_server_ids`。
+   （各区必须各有一个专用角色），最后给该区写一条 `server_overrides`（区目录）。
+   模块一装上，面板就会自动认出这个区可管理（探测到模块自己的表）；只有想跳过探测、
+   或反过来**禁止**面板管某个区时，才需要动 `supported_server_ids` / `unsupported_server_ids`。
 5. **只部署与「按区 key」兼容的 Eluna 脚本**：`boss.lua` 已经支持；
    仍写死默认库名（`ac_eluna`）且没有按区分租的脚本——`TriviaReward.lua`、
    `RecruitAFriend*.lua`、`LevelUpReward.lua`——**不能**同时上第二个区，否则两个区共用同一份
@@ -132,6 +150,10 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
 - [ ] `php tools/verify_multi_realm_live.php --server=<区索引>` —— 对着**运行中的** worldserver
       按真实控制器路径启停机器人，并回读 `.auctionator status` 证明运行时确实被切换、对照区未受影响。
 - [ ] `php tools/verify_boss_ext_page.php <区索引> <该区 boss.lua>` —— Boss 页与 boss.lua 描述表逐列一致。
+- [ ] `php tools/verify_auctionator_pages.php` —— 每个区的拍卖页：装了模块的区可管理、
+      没装的区只读且**整页 0 处 SQL 报错**、只读说明与原因一致、写接口返回 422。
+- [ ] `php tools/verify_auctionator_autodetect.php` —— 判定顺序回归：白名单/黑名单/自动探测
+      （有表→`deployed`、无表→`not_deployed`、库连不上→`db_unreachable`）。
 
 手工：
 - [ ] 面板切到新区，`Boss 活动管理` 页头显示的 `state_key` = 该区 `boss.lua` §2 的 key。
@@ -143,6 +165,8 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
       （`verify_multi_realm_live.php` 已自动断言这条）。
 - [ ] 面板切到新区点「停止本区机器人」→ 该区 conf 的 `Auctionator.Enabled` 变 0，
       `.auctionator status` 显示 stopped；老区仍为 running。
+- [ ] 面板切到**没装模块**的区 → 拍卖页只有一条带区名的只读说明（不是一屏 SQL 报错、
+      也不是"本模块只支持单区"），字段仍能看到该区 conf 的内容。
 - [ ] `supervisor` 页每个实例都能单独启停，且不会有两个实例守护同一个 worldserver。
 - [ ] 该区脚本若是旧版（事件表还没有 `state_key` 列），Boss 页应只给一条"本区脚本未升级"警告，
       绝不能显示别的区的事件/贡献。

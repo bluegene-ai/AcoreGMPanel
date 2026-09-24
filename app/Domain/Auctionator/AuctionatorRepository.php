@@ -424,6 +424,29 @@ final class AuctionatorRepository extends MultiServerRepository
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * 本区**到底装没装** mod-auctionator：以模块自己的表（world 库 mod_auctionator_disabled_items）
+     * 为唯一证据。多区面板里这是"能不能管这个区的机器人"的判据，比手写白名单可靠——
+     * 装了模块的区自动就能管，没装的区也不会被误判成"页面故障"。
+     *
+     * @return array{deployed: bool, reason: string} reason ∈ deployed|not_deployed|db_unreachable
+     */
+    public function deploymentProbe(): array
+    {
+        try {
+            $world = $this->world();
+        } catch (Throwable) {
+            return ['deployed' => false, 'reason' => 'db_unreachable'];
+        }
+
+        $has = $this->hasTable('mod_auctionator_disabled_items', $world);
+        if ($has === null) {
+            return ['deployed' => false, 'reason' => 'db_unreachable'];
+        }
+
+        return ['deployed' => $has, 'reason' => $has ? 'deployed' : 'not_deployed'];
+    }
+
     private function hasTable(string $table, PDO $pdo): ?bool
     {
         try {
