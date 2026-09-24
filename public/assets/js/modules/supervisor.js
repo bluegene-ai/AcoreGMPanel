@@ -129,7 +129,11 @@ function boot(){
     updateInstanceUrl(id);
     clearResult();
     showResult(t('messages.switching', 'loading :instance…').replace(':instance', id), 'info');
-    await refreshStatus(true);
+    // The notice must not outlive the switch that raised it. Nothing else ever clears the result
+    // box, so a successful switch used to leave "loading <instance>…" on screen for good - the 5 s
+    // auto-refresh does not touch the box either, which makes the page look permanently stuck.
+    // Only clear on success: on failure refreshStatus has just put its own error in the same box.
+    if(await refreshStatus(true)) clearResult();
   }
 
   let pollTimer = null;
@@ -288,6 +292,12 @@ function boot(){
     }
   }
 
+  /**
+   * Reads the state and renders it. Returns true only when the state really was read and drawn,
+   * so a caller that is showing a transient notice (switchInstance) can tell "my notice is still
+   * the current message" from "an error replaced it" - clearing the box after a failed refresh
+   * would hide the reason the refresh failed.
+   */
   async function refreshStatus(withLog){
     try{
       const params = withLog ? { with_log: 1, lines: 200 } : {};
@@ -298,12 +308,15 @@ function boot(){
         if(withLog && Array.isArray(res.log)){
           if(logBox) logBox.textContent = res.log.length ? res.log.join('\n') : t('log.empty', 'no log output yet');
         }
-      }else if(res && res.message){
+        return true;
+      }
+      if(res && res.message){
         showResult(res.message, 'error');
       }
     }catch(error){
       showResult(t('errors.refresh_failed', 'cannot read the supervisor state'), 'error');
     }
+    return false;
   }
 
   async function refreshLog(){
