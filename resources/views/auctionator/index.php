@@ -82,9 +82,7 @@ $houseLabel = static function (int $house): string {
     </div>
   <?php endif; ?>
 
-  <?php if (!$supported): ?>
-    <div class="alert au-warning"><?= htmlspecialchars(__('app.auctionator.warnings.server_not_supported', ['server' => (string) ($current_server ?? '')])) ?></div>
-  <?php endif; ?>
+  <?php // 「本区未部署」的提示由 snapshot 的 warnings 统一给出（带区服名），这里不再重复一遍 ?>
 
   <!-- ============================================================ status -->
   <section class="au-panel" data-au-panel="status">
@@ -124,7 +122,8 @@ $houseLabel = static function (int $house): string {
       <div class="au-card">
         <h3><?= htmlspecialchars(__('app.auctionator.listings.title')) ?></h3>
         <?php if (!($listings['ok'] ?? false)): ?>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listings.unavailable')) ?></p>
+          <?php // 未部署区（not_deployed）与"读取失败"分开说，避免让人以为面板或库坏了 ?>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listings.' . ((string) ($listings['error'] ?? '') === 'not_deployed' ? 'not_deployed' : 'unavailable'))) ?></p>
         <?php else: ?>
           <dl class="au-kv">
             <dt><?= htmlspecialchars(__('app.auctionator.listings.total')) ?></dt>
@@ -156,9 +155,11 @@ $houseLabel = static function (int $house): string {
         <h3><?= htmlspecialchars(__('app.auctionator.market.title')) ?></h3>
         <?php if (!($market['ok'] ?? false)): ?>
           <p class="alert au-warning small">
-            <?= htmlspecialchars(($market['error'] ?? '') === 'missing_table'
-                ? __('app.auctionator.market.missing_table')
-                : __('app.auctionator.market.unreadable')) ?>
+            <?= htmlspecialchars(__('app.auctionator.market.' . match ((string) ($market['error'] ?? '')) {
+                'missing_table' => 'missing_table',
+                'not_deployed' => 'not_deployed',
+                default => 'unreadable',
+            })) ?>
           </p>
         <?php else: ?>
           <dl class="au-kv">
@@ -278,7 +279,7 @@ $houseLabel = static function (int $house): string {
           </div>
         <?php endif; ?>
         <?php if (!$tables['disabled_items']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.table_missing', ['table' => 'mod_auctionator_disabled_items'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_disabled_items'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="disabled_add">
@@ -317,7 +318,7 @@ $houseLabel = static function (int $house): string {
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.showing', ['shown' => count($policy['itemclass'] ?? []), 'total' => (int) ($totals['itemclass'] ?? 0)])) ?></p>
         <?php endif; ?>
         <?php if (!$tables['itemclass_config']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.table_missing', ['table' => 'mod_auctionator_itemclass_config'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_itemclass_config'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="itemclass_save">
@@ -386,7 +387,7 @@ $houseLabel = static function (int $house): string {
           ])) ?></p>
         <?php endif; ?>
         <?php if (!$tables['gm_list']): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.table_missing', ['table' => 'mod_auctionator_gm_list'])) ?></p>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.' . ($supported ? 'table_missing' : 'table_not_deployed'), ['table' => 'mod_auctionator_gm_list'])) ?></p>
         <?php else: ?>
           <?php if ($canManage && $supported): ?>
             <form class="au-inline-form" data-au-policy="gm_save">

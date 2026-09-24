@@ -645,6 +645,46 @@ class AuctionatorController extends Controller
         $read = $file->read();
         $typed = $file->typedValues($fields);
 
+        // 本区没部署模块（不在 config/auctionator.php 的 supported_server_ids 里）：
+        // 只回答"当前是哪个区、它的 conf 在哪、为什么是只读"，**不去碰该区的库表**。
+        // 否则页面会在"本区未部署"上面先刷一屏 Unknown table 的 SQL 报错，看起来像面板坏了，
+        // 而不是"这个区还没装 mod-auctionator"（表都还没有，读它本来就没有意义）。
+        if (!$this->serverSupported()) {
+            return [
+                'paths' => $paths,
+                'conf' => [
+                    'ok' => $read['ok'],
+                    'error' => $read['error'],
+                    'exists' => $file->exists(),
+                    'writable' => $file->exists() ? is_writable($paths['conf_file']) : is_writable(dirname($paths['conf_file'])),
+                    'values' => $read['values'],
+                    'typed' => $typed,
+                ],
+                'fields' => $fields,
+                'groups' => $this->fieldGroups($fields),
+                'listings' => ['ok' => false, 'error' => 'not_deployed'],
+                'market' => ['ok' => false, 'error' => 'not_deployed'],
+                'policy' => [
+                    'disabled_from' => $disabledFrom,
+                    'disabled' => [],
+                    'itemclass' => [],
+                    'gm_list' => [],
+                    'tables' => [],
+                    'totals' => [],
+                ],
+                'log' => [],
+                'warnings' => [
+                    Lang::get('app.auctionator.warnings.server_not_supported', [
+                        'server' => $this->serverLabel(),
+                    ]),
+                ],
+                'notes' => [
+                    'listing_hours' => (int) Config::get('auctionator.notes.listing_hours', 12),
+                    'supported' => false,
+                ],
+            ];
+        }
+
         $botGuid = (int) ($typed['Auctionator.CharacterGuid'] ?? 0);
         $maxAgeDays = (int) ($typed['Auctionator.MarketData.MaxAgeDays'] ?? 14);
 
@@ -664,7 +704,7 @@ class AuctionatorController extends Controller
             $warnings[] = Lang::get('app.auctionator.warnings.conf_' . ($read['error'] === 'missing' ? 'missing' : 'unreadable'), ['path' => $paths['conf_file']]);
         }
         if (!$this->serverSupported()) {
-            $warnings[] = Lang::get('app.auctionator.warnings.server_not_supported', ['server' => (string) (ServerContext::server()['name'] ?? ServerContext::currentId())]);
+            $warnings[] = Lang::get('app.auctionator.warnings.server_not_supported', ['server' => $this->serverLabel()]);
         }
         if (($typed['Auctionator.Enabled'] ?? 0) === 0) {
             $warnings[] = Lang::get('app.auctionator.warnings.module_disabled');
@@ -764,6 +804,10 @@ class AuctionatorController extends Controller
         return rtrim($root, "\\/") . DIRECTORY_SEPARATOR . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative), DIRECTORY_SEPARATOR);
     }
 
+    /**
+     * 本区是否在 config/auctionator.php 的 `supported_server_ids` 里。
+     * 列表为空表示"所有区都算已部署"（保持旧配置的兼容行为）。
+     */
     private function serverSupported(): bool
     {
         $supported = (array) Config::get('auctionator.supported_server_ids', []);
@@ -780,7 +824,7 @@ class AuctionatorController extends Controller
         return $this->json([
             'success' => false,
             'message' => Lang::get('app.auctionator.warnings.server_not_supported', [
-                'server' => (string) (ServerContext::server()['name'] ?? ServerContext::currentId()),
+                'server' => $this->serverLabel(),
             ]),
         ], 422);
     }

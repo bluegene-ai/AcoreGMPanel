@@ -42,6 +42,7 @@ return [
         'expiry_window' => 'Earliest / latest expiry',
         'bot_mail' => 'Bot mailbox messages',
         'unavailable' => 'The auctionhouse table could not be read; check the characters database connection and schema.',
+        'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no auctionhouse data to report.',
     ],
     'market' => [
         'title' => 'Market price table',
@@ -52,6 +53,7 @@ return [
         'oldest' => 'Oldest scan',
         'missing_table' => 'The characters database has no mod_auctionator_market_price table, so the seller falls back to item_template.BuyPrice.',
         'unreadable' => 'The market table could not be read; see storage/logs/auctionator_repository_warnings.log.',
+        'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no market price table.',
         'hint' => 'A price is only used while its scan is newer than Auctionator.MarketData.MaxAgeDays.',
         'retention_days' => 'Retention days',
     ],
@@ -126,6 +128,7 @@ return [
         'itemclass_title' => 'Class quotas and stacks',
         'itemclass_hint' => 'mod_auctionator_itemclass_config: max_count is the per-item quota (0 = never list that class), stack_count is the stack size of one listing (capped by the item max stack). Takes effect without a restart.',
         'table_missing' => 'Table :table is missing; apply the module\'s SQL updates first.',
+        'table_not_deployed' => 'mod-auctionator is not deployed on this realm, so the policy tables below are unavailable.',
         'class' => 'Class',
         'subclass' => 'Subclass',
         'bonding' => 'Bonding',
@@ -221,7 +224,7 @@ return [
     'warnings' => [
         'conf_missing' => 'Configuration file missing: :path (the module then uses its built-in defaults, where the master switch is 0).',
         'conf_unreadable' => 'Configuration file unreadable: :path',
-        'server_not_supported' => 'mod-auctionator is only deployed on the level-80 realm; the current realm (:server) has none, so this page is read-only.',
+        'server_not_supported' => 'The current realm (:server) does not deploy mod-auctionator (its index is not in config/auctionator.php supported_server_ids), so this page is read-only. To use it here: import the module SQL into this realm\'s world / characters databases, put a configs/modules/mod_auctionator.conf in this realm\'s directory (with its own bot character), then add this realm\'s index to supported_server_ids.',
         'module_disabled' => 'Auctionator.Enabled = 0: the module is loaded but its event loop never runs - nothing is listed, bid on or imported.',
         'bid_only' => 'Auctionator.Seller.BidOnly = 1: listings have no buyout at all and can only be won by bidding; an entry nobody bids on expires and its item is destroyed.',
         'bidder_enabled' => 'A bidder is enabled: the bot buys player auctions without paying, and the core pays the seller with newly created gold (an economic faucet).',

@@ -42,6 +42,7 @@ return [
         'expiry_window' => '最早/最晚到期',
         'bot_mail' => '机器人邮箱邮件',
         'unavailable' => '无法读取 auctionhouse 表，请确认角色数据库连接与表结构。',
+        'not_deployed' => '本区没有部署 mod-auctionator，因此没有 auctionhouse 数据可统计。',
     ],
     'market' => [
         'title' => '市场数据表',
@@ -52,6 +53,7 @@ return [
         'oldest' => '最旧扫描',
         'missing_table' => '角色库里没有 mod_auctionator_market_price 表，自动卖家会回退到 item_template.BuyPrice 定价。',
         'unreadable' => '市场数据表读取失败，详见 storage/logs/auctionator_repository_warnings.log。',
+        'not_deployed' => '本区没有部署 mod-auctionator，因此没有市场数据表。',
         'hint' => '价格只有在扫描时间新于 Auctionator.MarketData.MaxAgeDays 时才会被采用。',
         'retention_days' => '保留天数',
     ],
@@ -126,6 +128,7 @@ return [
         'itemclass_title' => '类别配额与堆叠',
         'itemclass_hint' => 'mod_auctionator_itemclass_config：max_count 是该物品条目的挂单配额（0 = 该类永不上架），stack_count 是每条的堆叠数量（受物品最大堆叠限制）。热生效。',
         'table_missing' => '缺少数据表 :table，请先执行模块自带的 SQL 更新。',
+        'table_not_deployed' => '本区没有部署 mod-auctionator，以下策略表不可用。',
         'class' => '类别',
         'subclass' => '子类别',
         'bonding' => '绑定门槛',
@@ -221,7 +224,7 @@ return [
     'warnings' => [
         'conf_missing' => '配置文件不存在：:path（模块会使用内置默认值，其中总开关默认为 0）。',
         'conf_unreadable' => '配置文件无法读取：:path',
-        'server_not_supported' => '本模块只部署在 80 区，当前区服（:server）没有 mod-auctionator，页面为只读。',
+        'server_not_supported' => '当前区服（:server）没有部署 mod-auctionator（它的索引不在 config/auctionator.php 的 supported_server_ids 里），页面为只读。要在本区使用：先把模块 SQL 导进本区的 world / characters 库、在本区目录放一份 configs/modules/mod_auctionator.conf（并配好该区自己的机器人角色），再把本区索引加进 supported_server_ids。',
         'module_disabled' => 'Auctionator.Enabled = 0：模块已加载但事件循环不运行，不会上架、竞拍或导入。',
         'bid_only' => 'Auctionator.Seller.BidOnly = 1：所有条目都不设一口价，只能靠竞价成交；无人出价则过期销毁。',
         'bidder_enabled' => '有竞拍者处于启用状态：机器人会买断玩家拍卖且不付款，核心凭空支付卖家金币（经济水龙头）。',
