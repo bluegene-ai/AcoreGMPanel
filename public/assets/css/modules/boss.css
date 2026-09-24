@@ -16,6 +16,11 @@
 .boss-status--spawned{background:rgba(87,136,218,.2);color:#bfd7ff;}
 .boss-status--engaged{background:rgba(228,152,58,.2);color:#ffd69b;}
 .boss-status--cooldown{background:rgba(204,84,103,.18);color:#ffc1cb;}
+.boss-schedule-state{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:14px;font-weight:700;align-self:flex-start;}
+.boss-schedule-state--open{background:rgba(63,171,116,.2);color:#b7f0cf;}
+.boss-schedule-state--closed{background:rgba(87,136,218,.2);color:#bfd7ff;}
+.boss-schedule-state--empty{background:rgba(228,152,58,.2);color:#ffd69b;}
+.boss-schedule-state--off,.boss-schedule-state--unreported{background:rgba(145,158,171,.18);color:#d0d8e0;}
 .boss-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 .boss-stat-card{min-height:112px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(180deg,rgba(33,24,16,.94),rgba(14,18,24,.98));}
 .boss-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));}

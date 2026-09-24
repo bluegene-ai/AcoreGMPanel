@@ -42,6 +42,27 @@ class BossRepository extends MultiServerRepository
     private int $decimalScale;
     private ?array $tableAvailability = null;
 
+    /**
+     * boss_activity_runtime 的列清单（面板读运行态用）。
+     *
+     * 后半段是「定时启停」的运行态上报列：老版本 boss.lua 建的表没有它们，
+     * 面板必须先探测列是否存在，缺列时**只少读这三项**（页面显示"未上报"），
+     * 而不是让整条 SELECT 失败、把整个运行态降级成默认值 + 一条 warning。
+     */
+    private const RUNTIME_BASE_COLUMNS = [
+        'state_key', 'boss_guid', 'boss_entry', 'boss_name', 'map_id',
+        'instance_id', 'home_x', 'home_y', 'home_z', 'phase', 'status',
+        'skill_preset', 'skill_difficulty', 'respawn_at', 'last_spawn_at',
+        'last_engage_at', 'last_death_at', 'last_reset_at', 'updated_at',
+    ];
+
+    private const RUNTIME_SCHEDULE_COLUMNS = [
+        'schedule_state', 'schedule_window', 'schedule_next_change_at',
+    ];
+
+    /** @var array<string,bool> information_schema 列探测缓存（键：表.列） */
+    private array $columnAvailability = [];
+
     public function __construct(?int $serverId = null)
     {
         parent::__construct($serverId);
@@ -259,12 +280,8 @@ class BossRepository extends MultiServerRepository
 
         try {
             $stmt = $this->characters()->prepare(
-                'SELECT '
-                . 'state_key, boss_guid, boss_entry, boss_name, map_id, '
-                . 'instance_id, home_x, home_y, home_z, phase, status, '
-                . 'skill_preset, skill_difficulty, respawn_at, last_spawn_at, '
-                . 'last_engage_at, last_death_at, last_reset_at, updated_at '
-                . 'FROM ' . $this->table('boss_activity_runtime')
+                'SELECT ' . implode(', ', $this->runtimeColumns())
+                . ' FROM ' . $this->table('boss_activity_runtime')
                 . ' WHERE state_key = :state_key LIMIT 1'
             );
             $stmt->bindValue(':state_key', $this->runtimeKey, PDO::PARAM_STR);
@@ -283,6 +300,54 @@ class BossRepository extends MultiServerRepository
 
             return $this->defaultRuntime();
         }
+    }
+
+    /**
+     * 运行态要读的列：基础列永远读，定时启停三列按「本区库里是否真的有这一列」决定。
+     */
+    private function runtimeColumns(): array
+    {
+        $columns = self::RUNTIME_BASE_COLUMNS;
+
+        foreach (self::RUNTIME_SCHEDULE_COLUMNS as $column) {
+            if ($this->columnExists('boss_activity_runtime', $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * information_schema 列探测（带缓存）。探测失败按「不存在」处理并记 warning：
+     * 缺列只应导致少读几项，不应把整个页面打崩。
+     */
+    private function columnExists(string $table, string $column): bool
+    {
+        $cacheKey = $table . '.' . $column;
+        if (array_key_exists($cacheKey, $this->columnAvailability)) {
+            return $this->columnAvailability[$cacheKey];
+        }
+
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT 1 FROM information_schema.COLUMNS '
+                . 'WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table AND COLUMN_NAME = :column LIMIT 1'
+            );
+            $stmt->bindValue(':schema', $this->customDbName, PDO::PARAM_STR);
+            $stmt->bindValue(':table', $table, PDO::PARAM_STR);
+            $stmt->bindValue(':column', $column, PDO::PARAM_STR);
+            $stmt->execute();
+
+            $exists = $stmt->fetchColumn() !== false;
+        } catch (Throwable $exception) {
+            $this->logWarning('column_probe_failed:' . $cacheKey, $exception);
+            $exists = false;
+        }
+
+        $this->columnAvailability[$cacheKey] = $exists;
+
+        return $exists;
     }
 
     private function loadConfig(array &$warnings): array
@@ -927,6 +992,10 @@ class BossRepository extends MultiServerRepository
             'last_engage_at' => (int) ($row['last_engage_at'] ?? 0),
             'last_death_at' => (int) ($row['last_death_at'] ?? 0),
             'last_reset_at' => (int) ($row['last_reset_at'] ?? 0),
+            // 定时启停运行态：老脚本/老表读不到这三列时为空（页面显示"未上报"）
+            'schedule_state' => (string) ($row['schedule_state'] ?? ''),
+            'schedule_window' => (string) ($row['schedule_window'] ?? ''),
+            'schedule_next_change_at' => (int) ($row['schedule_next_change_at'] ?? 0),
             'updated_at' => (int) ($row['updated_at'] ?? 0),
         ];
     }
@@ -999,6 +1068,9 @@ class BossRepository extends MultiServerRepository
             'last_engage_at' => 0,
             'last_death_at' => 0,
             'last_reset_at' => 0,
+            'schedule_state' => '',
+            'schedule_window' => '',
+            'schedule_next_change_at' => 0,
             'updated_at' => 0,
         ];
     }

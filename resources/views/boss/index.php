@@ -53,6 +53,26 @@ $bossHomeY = number_format((float) ($bossRuntime['home_y'] ?? 0), 3, '.', '');
 $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
 $bossExt = is_array($boss_ext ?? null) ? $boss_ext : [];
 
+// 定时启停（脚本 tick 上报到 boss_activity_runtime）：
+//   ''      = 本区脚本还没上报（旧版脚本 / 表里没有这三列）→ 显示"未上报"，不猜状态
+//   off     = 计划未启用；empty = 已启用但没写有效时间段；open/closed = 时段内 / 时段外
+$bossScheduleState = (string) ($bossRuntime['schedule_state'] ?? '');
+$bossScheduleStateKey = in_array($bossScheduleState, ['off', 'open', 'closed', 'empty'], true)
+    ? $bossScheduleState
+    : 'unreported';
+$bossScheduleWindow = trim((string) ($bossRuntime['schedule_window'] ?? ''));
+$bossScheduleNextChangeAt = (int) ($bossRuntime['schedule_next_change_at'] ?? 0);
+$bossScheduleNextInText = '';
+$bossScheduleRemaining = $bossScheduleNextChangeAt - time();
+if ($bossScheduleNextChangeAt > 0 && $bossScheduleRemaining > 0) {
+    $bossScheduleNextInText = $bossScheduleRemaining >= 3600
+        ? __('app.boss.runtime.schedule_hours_minutes', [
+            'hours' => (string) intdiv($bossScheduleRemaining, 3600),
+            'minutes' => (string) intdiv($bossScheduleRemaining % 3600, 60),
+        ])
+        : __('app.boss.runtime.schedule_minutes', ['minutes' => (string) max(1, intdiv($bossScheduleRemaining, 60))]);
+}
+
 // 顶层 Tab：运行控制/配置相关 Tab 需要 boss.actions 权限；事件与贡献 Tab 始终可见
 // （其内部仍按 boss.events / boss.contributors 权限位决定是否渲染表格）。
 $bossTabs = [
@@ -145,6 +165,27 @@ $bossTabs['log'] = __('app.boss.tabs.log');
         <div class="boss-runtime-card">
           <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.respawn_at')) ?></span>
           <strong class="boss-runtime-card__value"><?= htmlspecialchars(format_datetime((int) ($bossRuntime['respawn_at'] ?? 0))) ?></strong>
+        </div>
+        <div class="boss-runtime-card">
+          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.schedule')) ?></span>
+          <strong class="boss-runtime-card__value boss-schedule-state boss-schedule-state--<?= htmlspecialchars($bossScheduleStateKey) ?>">
+            <?= htmlspecialchars(__('app.boss.runtime.schedule_states.' . $bossScheduleStateKey)) ?>
+          </strong>
+          <span class="small muted">
+            <?php if ($bossScheduleWindow !== ''): ?>
+              <?= htmlspecialchars(__('app.boss.runtime.schedule_window')) ?>:
+              <?= htmlspecialchars($bossScheduleWindow) ?>
+            <?php endif; ?>
+            <?php if ($bossScheduleNextChangeAt > 0): ?>
+              <?= $bossScheduleWindow !== '' ? '·' : '' ?>
+              <?= htmlspecialchars(__('app.boss.runtime.schedule_next_change')) ?>:
+              <?= htmlspecialchars(format_datetime($bossScheduleNextChangeAt)) ?>
+              <?php if ($bossScheduleNextInText !== ''): ?>(<?= htmlspecialchars($bossScheduleNextInText) ?>)<?php endif; ?>
+            <?php endif; ?>
+            <?php if ($bossScheduleWindow === '' && $bossScheduleNextChangeAt === 0): ?>
+              <?= htmlspecialchars(__('app.boss.runtime.schedule_hint')) ?>
+            <?php endif; ?>
+          </span>
         </div>
         <div class="boss-runtime-card">
           <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.current_position')) ?></span>

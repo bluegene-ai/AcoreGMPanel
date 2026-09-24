@@ -15,6 +15,11 @@ $extConfig = is_array($ext['config'] ?? null) ? $ext['config'] : [];
 $extTabs = is_array($ext['tabs'] ?? null) ? $ext['tabs'] : [];
 $extFields = is_array($ext['fields'] ?? null) ? $ext['fields'] : [];
 $extAvailable = ($ext['available'] ?? true) !== false;
+
+// 定时启停（脚本侧 tick 执行）：面板只负责编辑 + 预览解析结果
+$extSchedule = is_array($ext['schedule'] ?? null) ? $ext['schedule'] : [];
+$extScheduleWindows = is_array($extSchedule['windows'] ?? null) ? $extSchedule['windows'] : [];
+$extScheduleSamplesRendered = false;
 ?>
 <section class="boss-panel boss-panel--config">
   <div class="boss-panel__head">
@@ -71,7 +76,7 @@ $extAvailable = ($ext['available'] ?? true) !== false;
                       $extHint = !empty($extField['hint']) ? __('app.boss.ext.hints.' . $extName, [], '') : '';
                       $extLongKinds = ['lines', 'keyedlines', 'keyedintlist'];
                       $extIsLong = in_array($extKind, $extLongKinds, true);
-                      $extIsWide = $extIsLong || $extKind === 'intlist';
+                      $extIsWide = $extIsLong || $extKind === 'intlist' || $extKind === 'schedule_windows';
                     ?>
                     <?php if ($extKind === 'bool'): ?>
                       <label class="boss-check">
@@ -104,6 +109,30 @@ $extAvailable = ($ext['available'] ?? true) !== false;
                                  max="<?= (int) ($extField['max'] ?? 2000000000) ?>"
                                  step="1"
                                  value="<?= htmlspecialchars((string) (int) $extValue) ?>">
+                        <?php elseif ($extKind === 'schedule_windows'): ?>
+                          <input type="text"
+                                 name="<?= htmlspecialchars($extName, ENT_QUOTES, 'UTF-8') ?>"
+                                 maxlength="<?= max(1, (int) ($extField['maxlength'] ?? 255)) ?>"
+                                 list="bossScheduleSamples"
+                                 autocomplete="off"
+                                 placeholder="<?= htmlspecialchars(__('app.boss.ext.placeholders.schedule_windows')) ?>"
+                                 value="<?= htmlspecialchars((string) $extValue) ?>">
+                          <?php if (!$extScheduleSamplesRendered): $extScheduleSamplesRendered = true; ?>
+                            <datalist id="bossScheduleSamples">
+                              <option value="08:00-09:00"><?= htmlspecialchars(__('app.boss.ext.schedule.sample_daily')) ?></option>
+                              <option value="08:00-09:00; 20:00-22:00"><?= htmlspecialchars(__('app.boss.ext.schedule.sample_twice')) ?></option>
+                              <option value="1-5@20:00-23:00"><?= htmlspecialchars(__('app.boss.ext.schedule.sample_weekday')) ?></option>
+                              <option value="6,7@10:00-12:00"><?= htmlspecialchars(__('app.boss.ext.schedule.sample_weekend')) ?></option>
+                              <option value="20:00-24:00; 00:00-02:00"><?= htmlspecialchars(__('app.boss.ext.schedule.sample_overnight')) ?></option>
+                            </datalist>
+                          <?php endif; ?>
+                          <small class="muted">
+                            <?= htmlspecialchars(__('app.boss.ext.schedule.preview', [
+                                'windows' => $extScheduleWindows !== []
+                                    ? implode('，', $extScheduleWindows)
+                                    : __('app.boss.ext.schedule.none'),
+                            ])) ?>
+                          </small>
                         <?php else: ?>
                           <input type="text"
                                  name="<?= htmlspecialchars($extName, ENT_QUOTES, 'UTF-8') ?>"

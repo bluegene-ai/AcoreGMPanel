@@ -105,7 +105,7 @@ AcoreGMPanel/
 | SmartAI 向导 | `/smart-ai` | 分步生成 `smart_scripts` SQL 并支持导出。 |
 | SOAP 向导 | `/soap` | 浏览 SOAP 命令、填写动态表单、预览并安全执行。 |
 | 守护管理 | `/supervisor` | 查看并控制 `acore_supervisor.exe`（worldserver / authserver 守护程序）：运行状态、世界循环心跳、登录服探活、重启次数，以及按服务启停/重启。多区部署时页面顶部会出现**实例切换**（见下）。 |
-| 活动 Boss | `/boss` | [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) 的 `boss.lua` 管理页：运行态（活跃 Boss、血量、阶段）、基础配置与扩展配置（喊话 / 嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军 / 职业 / 受管模板）、难度档位、事件流水与贡献快照，以及生成 / 击杀 / 重置 / 重载等命令。每区一个数据库（见下）。 |
+| 活动 Boss | `/boss` | [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) 的 `boss.lua` 管理页：运行态（活跃 Boss、血量、阶段、**定时启停状态**）、基础配置与扩展配置（喊话 / 嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军 / 职业 / 受管模板 / **每天时间段自动开关**）、难度档位、事件流水与贡献快照，以及生成 / 击杀 / 重置 / 重载等命令。每区一个数据库（见下）。 |
 | 聊天答题 | `/trivia` | [ac-trivia](https://github.com/bluegene-ai/ac-trivia) 的管理页：实时状态（SOAP `.trivia api`）、下一题倒计时、启停与暂停、定时启停时间段、节奏/作答频道/标号/参与门槛/播报前缀等全部配置、题库增删改与模板导入导出、奖励预设、中奖排行。数据在 `ac_eluna` 库里（表由 Lua 创建）。 |
 | 拍卖机器人 | `/auctionator` | [mod-auctionator](https://github.com/bluegene-ai/mod-auctionator) 的管理页：挂单统计（机器人/玩家、纯竞价/一口价、按拍卖行）、市场数据表状态与模块日志尾部、模块配置在线编辑（只改写变化的键，原文件保留为 `.agmp.bak`）、三张策略表的增删改，以及模块自带的 GM 命令（`.auctionator status` / `addlist` / `expireall` / `enable`·`disable` / `multiplier` / `marketimport` / `marketprune` / `add`）。另外提供**本区一键启动/停止**（写本区 conf 的 `Auctionator.Enabled` + 向本区发 `.auctionator start`·`stop`，见下）。 |
 

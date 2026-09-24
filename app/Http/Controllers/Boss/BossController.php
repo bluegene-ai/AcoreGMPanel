@@ -11,13 +11,21 @@ use Acme\Panel\Core\Request;
 use Acme\Panel\Core\Response;
 use Acme\Panel\Domain\Boss\BossRepository;
 use Acme\Panel\Domain\Boss\BossTierOptions;
+use Acme\Panel\Domain\Support\ScheduleWindows;
 use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\ServerContext;
 use Acme\Panel\Support\SoapCommandRunner;
+use RuntimeException;
 use Throwable;
 
 class BossController extends Controller
 {
+    /**
+     * normalizeExtPayload 抛出的「可以直接给用户看」的错误前缀。
+     * 其余异常一律用统一文案返回，避免把 SQL / 内部细节暴露到面板上。
+     */
+    private const USER_FACING_ERROR_PREFIX = 'user-facing: ';
+
     private ?BossRepository $repo = null;
 
     private function repo(): BossRepository
@@ -487,13 +495,36 @@ class BossController extends Controller
     private function extViewData(array $dashboard): array
     {
         $config = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
+        $scheduleEnabled = ((int) ($config['activity_schedule_enabled'] ?? 0)) === 1;
 
         return [
             'config' => $config,
             'tabs' => (array) Config::get('boss.ext_tabs', []),
             'fields' => (array) Config::get('boss.ext_fields', []),
             'available' => $this->repo()->extConfigAvailable(),
+            // 定时启停：面板侧展示用（解析出的时间段清单；真正到点开关在 Lua 的 tick 里）
+            'schedule' => [
+                'enabled' => $scheduleEnabled,
+                'clear_on_close' => ((int) ($config['activity_schedule_clear_on_close'] ?? 0)) === 1,
+                'windows' => ScheduleWindows::describe((string) ($config['activity_schedule_windows'] ?? '')),
+            ],
         ];
+    }
+
+    /**
+     * 扩展配置校验失败时的返回文案：
+     * 只有带 USER_FACING_ERROR_PREFIX 的异常（时间段写错这类可自助修正的输入问题）
+     * 才把原文回给面板，其余一律用统一提示。
+     */
+    private function extPayloadErrorMessage(Throwable $exception): string
+    {
+        $message = (string) $exception->getMessage();
+
+        if (str_starts_with($message, self::USER_FACING_ERROR_PREFIX)) {
+            return substr($message, strlen(self::USER_FACING_ERROR_PREFIX));
+        }
+
+        return Lang::get('app.boss.errors.ext_save_failed');
     }
 
     /**
@@ -519,7 +550,7 @@ class BossController extends Controller
         } catch (Throwable $exception) {
             return $this->json([
                 'success' => false,
-                'message' => Lang::get('app.boss.errors.ext_save_failed'),
+                'message' => $this->extPayloadErrorMessage($exception),
             ], 422);
         }
 
@@ -587,6 +618,21 @@ class BossController extends Controller
 
         foreach ($this->repo()->extFieldSchema() as $name => $spec) {
             $kind = (string) ($spec['kind'] ?? 'text');
+
+            // 时间段字段比普通文本多一层语义：**没提交 = 不改**，提交空串 = 清空时间段。
+            // （面板表单永远会带上这个字段，所以"清空"照常生效；只发部分字段的调用方
+            //   不会因为少带一个字段就把线上的时间段清掉。）
+            if ($kind === 'schedule_windows') {
+                if ($request->input($name) === null) {
+                    continue;
+                }
+
+                $payload[$name] = $this->normalizedScheduleWindows(
+                    (string) $request->input($name, ''),
+                    (int) ($spec['maxlength'] ?? 255)
+                );
+                continue;
+            }
 
             if ($kind === 'bool') {
                 $payload[$name] = $this->normalizedBoolFlag($request, $name) ? 1 : 0;
@@ -727,6 +773,34 @@ class BossController extends Controller
             return mb_substr($value, 0, $maxLength);
 
         return substr($value, 0, $maxLength);
+    }
+
+    /**
+     * 「定时启停」时间段：面板侧先校验并归一化（写库的是规范写法，Lua 只负责执行）。
+     *
+     * 非法片段（例如 "25:00-26:00" 或写错星期）直接拒绝保存，并把看不懂的那一段回给用户 ——
+     * 交给 Lua 只会变成"静默不生效"，用户完全不知道为什么到点没开。
+     */
+    private function normalizedScheduleWindows(string $value, int $maxLength = 255): string
+    {
+        try {
+            $normalized = ScheduleWindows::normalize($value);
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException(self::USER_FACING_ERROR_PREFIX . Lang::get(
+                'app.boss.errors.schedule_invalid',
+                ['token' => $exception->getMessage()]
+            ));
+        }
+
+        // 不截断：时间段是有语义的，砍一半只会变成"到点不生效"这种最难查的问题
+        if ($maxLength > 0 && mb_strlen($normalized) > $maxLength) {
+            throw new RuntimeException(self::USER_FACING_ERROR_PREFIX . Lang::get(
+                'app.boss.errors.schedule_too_long',
+                ['max' => (string) $maxLength, 'length' => (string) mb_strlen($normalized)]
+            ));
+        }
+
+        return $normalized;
     }
 
     /**

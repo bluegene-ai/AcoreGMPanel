@@ -126,11 +126,13 @@ return [
         'ai' => ['ai', 'phase'],
         'patrol' => ['patrol', 'minion'],
         'support' => ['helper', 'class', 'tier'],
+        'schedule' => ['schedule'],
     ],
 
-    // 扩展配置字段 schema（= boss.lua §3 BOSS_CONFIG_SCHEMA_EXT 的镜像，列名必须一致）
+    // 扩展配置字段 schema（= boss.lua §3 BOSS_CONFIG_SCHEMA_EXT 的镜像，列名与**顺序**必须一致）
     // kind: text 单行 / lines 多行逐条 / keyedlines 多行"键=值" / keyedintlist 多行"键=ID,ID"
     //       intlist 逗号分隔 ID / int 整数（min/max 边界与 Lua 描述表一致）/ bool 开关
+    //       schedule_windows 每天时间段（写法见 Domain\Support\ScheduleWindows，面板侧先校验再落库）
     'ext_fields' => [
         'yells' => [
             ['name' => 'boss_spawn_yell', 'kind' => 'text', 'maxlength' => 255, 'hint' => true],
@@ -194,6 +196,12 @@ return [
         'tier' => [
             ['name' => 'managed_tier_entries_text', 'kind' => 'intlist', 'keep_default_when_empty' => true, 'hint' => true],
         ],
+        // 定时启停：字段顺序必须与 boss.lua BOSS_CONFIG_SCHEMA_EXT 末尾三行一致（列序一致才能对上）
+        'schedule' => [
+            ['name' => 'activity_schedule_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'activity_schedule_windows', 'kind' => 'schedule_windows', 'maxlength' => 255, 'hint' => true],
+            ['name' => 'activity_schedule_clear_on_close', 'kind' => 'bool', 'hint' => true],
+        ],
     ],
 
     // 出厂默认值（= boss.lua §3 的默认值；仅在 ext 表/行缺失时用于展示）
@@ -242,5 +250,9 @@ return [
         'class_types_text' => "1=melee\n11=healer\n2=healer\n3=ranged\n4=melee\n5=healer\n6=melee\n7=healer\n8=ranged\n9=ranged",
         'class_reward_items_text' => "1=40611,40614,40617,40620,40623,40256,40371,39257,40431,40257,40372\n2=40622,40619,40616,40613,40610,40256,40371,39257,40431,40257,40372,40258,40382,39299\n3=40611,40614,40617,40620,40623,40256,40371,39257,40431\n4=40624,40621,40618,40615,40612,40256,40371,39257,40431\n5=40622,40619,40616,40613,40610,40255,40373,40432,40258,40382,39299\n6=40624,40621,40618,40615,40612,40256,40371,39257,40431,40257,40372\n7=40611,40614,40617,40620,40623,40255,40373,40432,40256,40371,39257,40431,40258,40382,39299\n8=40624,40621,40618,40615,40612,40255,40373,40432,39299\n9=40622,40619,40616,40613,40610,40255,40373,40432,39299\n11=40624,40621,40618,40615,40612,40255,40373,40432,40256,40371,39257,40431,40257,40372,40258,40382,39299",
         'managed_tier_entries_text' => '190090,190091,190092,190093',
+        // 定时启停：默认关闭、没有时间段（= 与 boss.lua §3 的出厂默认值一致）
+        'activity_schedule_enabled' => 0,
+        'activity_schedule_windows' => '',
+        'activity_schedule_clear_on_close' => 1,
     ],
 ];
