@@ -187,10 +187,36 @@ final class SupervisorManager
                 'reason' => (string) ($state['reason'] ?? ''),
                 'tone' => $this->summaryTone($state, $services),
                 'services' => $services,
+                // where this instance reads/writes: two instances on one directory would show and
+                // control the SAME supervisor, so the page warns about it (see dirCollisions())
+                'dir' => (string) ($other->paths()['dir'] ?? ''),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Instances that resolve to the same supervisor directory, keyed by directory.
+     *
+     * One acore_supervisor.exe supervises one worldserver + one authserver, so two panel instances
+     * sharing a directory means the same realm is listed twice - and a restart sent to the wrong
+     * entry would hit the other realm's servers. Empty in a correct configuration.
+     *
+     * @return array<string,array<int,string>> directory => instance labels
+     */
+    public function dirCollisions(): array
+    {
+        $byDir = [];
+        foreach ($this->summaries() as $summary) {
+            $dir = trim((string) ($summary['dir'] ?? ''));
+            if ($dir === '') {
+                continue;
+            }
+            $byDir[$dir][] = (string) ($summary['label'] ?? $summary['id'] ?? '');
+        }
+
+        return array_filter($byDir, static fn (array $labels): bool => count($labels) > 1);
     }
 
     /**
@@ -249,13 +275,24 @@ final class SupervisorManager
 
         $overrides = $this->instanceOverrides($id) ?? [];
 
-        // An instance that declares its OWN directory derives exe/status/control/log from there: the
-        // flat file paths described the flat instance's directory and must not leak into it (otherwise
-        // every instance would read and write the same status/command files). A file path given
-        // inside the instance entry still wins.
-        $ownDir = trim((string) ($overrides['dir'] ?? ''));
-        if ($id !== self::DEFAULT_INSTANCE && $ownDir !== '') {
-            foreach (['exe', 'config_file', 'status_file', 'control_file', 'log_file'] as $key) {
+        // A NAMED instance must say where ITS supervisor lives. The flat keys describe the default
+        // instance, so inheriting them would silently bind this instance to the default realm's
+        // supervisor - and the panel would show, and send commands to, the wrong realm. Measured
+        // before this guard: with a flat dir and two instances, both resolved to the same folder.
+        //   * own dir            -> the derived exe/status/control/log come from that directory, the
+        //                           flat file paths are dropped (they described another folder)
+        //   * no dir, no paths   -> look up the instance's own conventions (release/supervisor-<id>,
+        //                           release/<id>/supervisor) and, if that fails, report "directory
+        //                           not found" plus the diagnostics block
+        // A path written inside the instance entry itself always wins.
+        if ($id !== self::DEFAULT_INSTANCE) {
+            $ownDir = trim((string) ($overrides['dir'] ?? ''));
+            $inherited = ['exe', 'config_file', 'status_file', 'control_file', 'log_file'];
+            if ($ownDir === '') {
+                $inherited[] = 'dir';
+            }
+
+            foreach ($inherited as $key) {
                 if (!array_key_exists($key, $overrides)) {
                     unset($defaults[$key]);
                 }

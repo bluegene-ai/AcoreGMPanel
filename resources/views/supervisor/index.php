@@ -131,6 +131,27 @@ $heartbeatNote = static function (array $service): string {
   </div>
 </div>
 
+<?php
+// Two panel instances pointing at the same supervisor directory would show (and control) the same
+// realm twice - one acore_supervisor.exe per worldserver+authserver, so that is always a mistake.
+$dirGroups = [];
+foreach ($instances as $instanceRow) {
+    $instanceDir = trim((string) ($instanceRow['dir'] ?? ''));
+    if ($instanceDir !== '') {
+        $dirGroups[$instanceDir][] = (string) ($instanceRow['label'] ?? $instanceRow['id'] ?? '');
+    }
+}
+$dirCollisions = array_filter($dirGroups, static fn (array $labels): bool => count($labels) > 1);
+?>
+<?php foreach ($dirCollisions as $collisionDir => $collisionLabels): ?>
+  <div class="sv-notice sv-notice--error">
+    <?= htmlspecialchars(__('app.supervisor.notices.dir_collision', [
+        'instances' => implode(' / ', $collisionLabels),
+        'dir' => $collisionDir,
+    ])) ?>
+  </div>
+<?php endforeach; ?>
+
 <?php if (!($state['enabled'] ?? true)): ?>
   <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.notices.disabled')) ?></div>
 <?php elseif (!$supervisorRunning): ?>

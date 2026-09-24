@@ -57,6 +57,7 @@ return [
         'not_running' => '守护程序当前未运行，因此只能查看历史状态，无法下发启停指令。',
         'not_running_hint' => '请在服务器桌面会话中运行 release\\supervisor\\start_supervisor.bat（或通过登录时的计划任务启动），再回到本页刷新。',
         'dir_missing' => '面板配置里的守护程序目录不存在，请照下面的诊断信息改正路径。',
+        'dir_collision' => '实例 :instances 指向同一个守护目录 :dir。一个守护只管一个 worldserver + 一个 authserver，请在 config/generated/supervisor.php 里给每个区各自的 dir，否则两个入口显示和操作的是同一个区。',
         'no_services' => '状态文件中没有任何服务。',
     ],
 

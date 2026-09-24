@@ -74,6 +74,7 @@ return [
         'not_running' => 'The supervisor is not running, so only the last known state can be shown and no commands can be sent.',
         'not_running_hint' => 'Start release\\supervisor\\start_supervisor.bat inside the desktop session (or via the logon scheduled task), then refresh this page.',
         'dir_missing' => 'The supervisor directory in the panel config does not exist - fix the path using the diagnostics below.',
+        'dir_collision' => 'Instances :instances point at the same supervisor directory (:dir). One supervisor owns one worldserver + one authserver, so give every realm its own dir in config/generated/supervisor.php - otherwise both entries show and control the same realm.',
         'no_services' => 'The status file contains no services.',
     ],
 
