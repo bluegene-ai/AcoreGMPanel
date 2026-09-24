@@ -12,16 +12,16 @@
                                 │
       ┌─────────────────────────┼─────────────────────────┐
       │                         │                         │
-  release\70                release\80                release\test
+  <realm-a>\                <realm-b>\                <realm-c>\
   worldserver.exe           worldserver.exe           worldserver.exe
-  RealmID 1 / 8085          RealmID 2 / 8086          RealmID 3 / 8087
-  acore_world70             acore_world80             acore_w_test
-  acore_characters70        acore_characters80        acore_c_test
+  RealmID / 端口 A           RealmID / 端口 B           RealmID / 端口 C
+  <realm-a>_world           <realm-b>_world           <realm-c>_world
+  <realm-a>_characters      <realm-b>_characters      <realm-c>_characters
   lua_scripts\boss.lua      lua_scripts\boss.lua      lua_scripts\boss.lua
    └ BOSS_DB_NAME=           └ BOSS_DB_NAME=           └ BOSS_DB_NAME=
-     ac_eluna70                ac_eluna                  ac_eluna_test
+     <realm-a>-eluna           <eluna>（默认库名）        <realm-c>-eluna
   configs\modules\mod_auctionator.conf（每区一份，互不影响）
-  SOAP 7878                 SOAP 7879                 SOAP 7880
+  SOAP 端口 A                SOAP 端口 B                SOAP 端口 C
 ```
 
 要点：
@@ -45,8 +45,14 @@
 | 拍卖机器人支持哪些区 | `config/auctionator.php` → `supported_server_ids` | 同上，留空 = 全部 |
 | 守护实例（每区一个） | `config/supervisor.php` → `instances` | 一区一个 `acore_supervisor.exe`，各自 ini/logs；共享的 authserver 只交给其中一个实例守护 |
 
-> 改了 `config/*.php` 里的默认值不需要清缓存；覆盖项请写到 `config/generated/*.php`
-> （不随仓库发布），否则升级会被覆盖。
+> 仓库里的 `config/boss.php` / `config/auctionator.php` **只放通用默认值**（`server_overrides`
+> 为空、`server_root` 为空）；各区真实的索引、库名、路径属于部署信息，必须写到
+> `config/generated/boss.php` / `config/generated/auctionator.php`（这两个文件不入库，`git pull`
+> 不会覆盖）。改完不需要清缓存。
+>
+> 合并规则要留意：`Core\Config` 是**递归合并**，generated 里只写部分 `server_overrides` 不会
+> 删掉跟踪文件里的其它条目；但扁平列表 `supported_server_ids` 是整体替换，所以用
+> "`supported_server_ids` 圈定本机部署的区 + 只给这些区写 override" 就足够，其余条目不会被读到。
 
 ## 3. 按区独立启停
 
@@ -70,56 +76,46 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
    `WorldDatabaseInfo` / `CharacterDatabaseInfo` / `SOAP.Port` / `DataDir` / `LogsDir` / `TempDir`；
    `Data` 目录可以用 junction 指到已有副本（省几 GB）：
    `New-Item -ItemType Junction -Path <新区>\Data -Target <老区>\Data`。
-   新区的 DB 如果是旧核心导入的，第一次启动时核心的 DB 更新器会自动补齐（本机 70 区补了约 400 条）。
+   新区的 DB 如果是旧核心导入的，第一次启动时核心的 DB 更新器会自动补齐（几百条 update，
+   先备份；这一步可能耗时几分钟，期间该区起不来）。
 2. **在 acore_auth.realmlist 加一行**（端口与 `WorldServerPort` 一致）。
 3. **活动 Boss**：
    ```powershell
    pwsh -File <acore-boss-smartai>\tools\deploy-realm.ps1 `
-       -RealmRoot <区目录> -DbName <该区库> -LuaEnv <lua.exe> `
+       -RealmRoot <区目录> -DbName <该区库> -LuaExe <lua.exe> `
        -ApplyTierSql <该区 world 库> -DbPassword <pw>
    ```
    它会改写 `boss.lua` §2 的 `BOSS_DB_NAME`/`BOSS_RUNTIME_KEY`、备份原文件、做语法检查，
-   并把难度档位 SQL 导入该区（**导入前会把 SQL 里写死的 `ac_eluna` 换成 `-DbName`**，
-   否则那一步会去改 80 区的活动配置）。然后把该区加进 `config/boss.php` → `server_overrides`
-   与 `supported_server_ids`。首次启动 `boss.lua` 会自建库与表。
+   并把难度档位 SQL 导入该区（**导入前会把 SQL 里写死的默认库名换成 `-DbName`**，
+   否则那一步会去改默认区的活动配置）。然后把该区加进 `config/generated/boss.php` 的
+   `server_overrides` 与 `supported_server_ids`。首次启动 `boss.lua` 会自建库与表。
 4. **拍卖机器人**：把 `mod_auctionator.conf.dist` 复制成该区的
    `configs\modules\mod_auctionator.conf`，把模块 SQL 导进**该区的** world/characters 库
    （`data/sql/db-world/base/*.sql`、`data/sql/db-characters/updates/*.sql`），
    并把 `Auctionator.CharacterId` / `CharacterGuid` 指向该区自己的机器人角色
-   （各区必须各有一个专用角色），最后把该区加进 `config/auctionator.php` 的
+   （各区必须各有一个专用角色），最后把该区加进 `config/generated/auctionator.php` 的
    `server_overrides` 与 `supported_server_ids`。
 5. **只部署与「按区库名」兼容的 Eluna 脚本**：`boss.lua` 已经支持；
-   仍然写死 `ac_eluna` 的脚本（本机是 `TriviaReward.lua`、`RecruitAFriend*.lua`、
-   `LevelUpReward.lua`）**不能**同时上第二个区，否则两个区共用同一份数据。
-   先放在 `lua_scripts/` 之外（本机是 `<区>\lua_scripts_disabled_shared_db\`，里面有说明），
+   仍写死默认库名（`ac_eluna`）的脚本——`TriviaReward.lua`、`RecruitAFriend*.lua`、
+   `LevelUpReward.lua`——**不能**同时上第二个区，否则两个区共用同一份数据
+   （题库/开关/中奖名单、招募链接、升级奖励都会串）。把它们先放在 `lua_scripts/` 之外
+   （建议 `<区>\lua_scripts_disabled_shared_db\` 并留一份说明，Eluna 不加载该目录），
    等它们也支持按区库名后再放回来。
 6. **守护**：复制一份 `release\supervisor-<区>`，改 `InstanceName` / `WorkDir` / `ServerConf`，
    `[authserver] Enabled = false`（共享登录服只由一个实例守护），然后在
-   `config/generated/supervisor.php` → `instances` 里登记（本机已登记 `default`=80 区、
-   `70`=70 区），并用 `acore_supervisor.exe --config <ini> --once` 体检。
+   `config/generated/supervisor.php` → `instances` 里登记，并用
+   `acore_supervisor.exe --config <ini> --once` 体检。
+   面板 `instances` 的 id 建议用区服索引或区名；没写 `dir` 时面板按
+   `release/supervisor-<id>`、`release/<id>/supervisor` 依次探测。
 7. **面板验收**：页头切到该区 → Boss 页页头应显示该区的库名；拍卖页应显示该区的 conf 路径；
    两个页面的写入只影响该区。跑 `php tools/verify_multi_realm.php`（离线，含可选写入隔离）
    与 `php tools/verify_multi_realm_live.php --server=<区索引>`（对着运行中的 worldserver
    验证按区启停）。
 
-## 4.1 本机现状（70 区已实体部署）
-
-| 项 | 70 区 | 80 区 |
-|---|---|---|
-| worldserver 目录 | `E:\Server\release\70`（`Data` 是 junction → 80 区） | `E:\Server\release\80` |
-| RealmID / 世界端口 / SOAP | 1 / 8085 / 7878 | 2 / 8086 / 7879 |
-| characters / world 库 | `acore_characters70` / `acore_world70` | `acore_characters80` / `acore_world80` |
-| Boss 库 | `ac_eluna70` | `ac_eluna` |
-| boss.lua | 由 `deploy-realm.ps1` 写入（§2 = `ac_eluna70`） | 历史部署（§2 = `ac_eluna`） |
-| 拍卖机器人 conf | `release\70\configs\modules\mod_auctionator.conf`（初始 `Enabled=0`、无机器人角色） | `release\80\...`（`Enabled=1`、guid 542） |
-| 守护实例 | `release\supervisor-70`（只守护 worldserver） | `release\supervisor`（worldserver + 共享 authserver） |
-| Eluna 脚本 | 只放 `boss.lua` + `buff/chatlog/Phase/removeItem` | 全套 |
-
-
 ## 5. 验收清单（每次加区都跑一遍）
 
 > 下面的校验脚本在本地 `tools/` 目录，按本仓库约定**不入库**（`.gitignore` 里 `/tools/` 标注为
-> 本地校验工具）；`docs/multi-realm.md` 本身入库。脚本内容见本机 `E:\Server\web\WWW\AGMP\tools\`。
+> 本地校验工具）；`docs/multi-realm.md` 本身入库。
 
 自动：
 - [ ] `php tools/verify_multi_realm.php` —— 配置层/数据层/页面层/启停接线；加

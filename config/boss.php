@@ -9,37 +9,26 @@ return [
     'contributor_limit' => 18,
 
     // 多区（多个 realm 共用一套 auth）：每个区各自跑一份 worldserver 与一份 boss.lua，
-    // 活动 Boss 的配置 / 运行态 / 事件 / 贡献都按区独立。绑定关系由下面的 server_overrides
+    // 活动 Boss 的配置 / 运行态 / 事件 / 贡献都按区独立。绑定关系由 server_overrides
     // 描述（键 = config/generated/servers.php 里的 server 索引）。
     //
     // 这个列表 = **已经部署了 boss.lua 的区**；不在列表内的区服：
     // - dashboard 追加 critical warning（"本区未部署"）
     // - apiAction / apiConfigSave 直接返回 422，不发 SOAP 命令
-    // 本机现状：70 区与 80 区已部署；删档测试区（索引 2）还没部署，所以不在这里。
-    // 部署新区后把它的索引加进来；也可以清空这个列表表示"所有已配置区都支持"。
-    'supported_server_ids' => [0, 1],
+    // 留空 = 所有已配置区都支持。
+    //
+    // 具体区的索引 / 库名属于**部署信息**，请写在 config/generated/boss.php 里
+    // （该文件不入库，git pull 不会覆盖）。例：
+    //   return ['supported_server_ids' => [0, 1],
+    //           'server_overrides' => [0 => ['custom_db_name' => '<realm_a_db>']]];
+    'supported_server_ids' => [],
 
-    // 每个区一条：custom_db_name 必须与该区 lua_scripts/boss.lua 的 §3 BOSS_DB_NAME 一致，
+    // 每个区一条：custom_db_name 必须与该区 lua_scripts/boss.lua 的 §2 BOSS_DB_NAME 一致，
     // runtime_key 必须与 BOSS_RUNTIME_KEY 一致，否则面板看到的是另一个区的活动状态。
     // 表结构由 boss.lua 自举（CREATE DATABASE / CREATE TABLE IF NOT EXISTS），新区的库第一次
     // 启动时自动建好；也可以按该区副本的 DDL 手工预建。
-    'server_overrides' => [
-        // 70-阿达尔之辉
-        0 => [
-            'custom_db_name' => 'ac_eluna70',
-            'runtime_key' => 'current',
-        ],
-        // 80-女王的复仇（历史库名，保持 ac_eluna 不动）
-        1 => [
-            'custom_db_name' => 'ac_eluna',
-            'runtime_key' => 'current',
-        ],
-        // 删档测试区
-        2 => [
-            'custom_db_name' => 'ac_eluna_test',
-            'runtime_key' => 'current',
-        ],
-    ],
+    // 留空 = 所有区共用顶层的 custom_db_name（= boss.lua 的默认库名）。
+    'server_overrides' => [],
 
     // 难度档位（= ac_eluna.boss_activity_config.boss_entry）。
     // 190090–190093 是 acore_world80 上的活动 Boss 专用模板，AIName 为空、
