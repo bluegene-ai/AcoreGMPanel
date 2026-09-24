@@ -219,9 +219,13 @@ function boot(){
     setText(node, 'memory', `${Math.round(Number(service.working_set_mb) || 0)} MB`);
     setText(node, 'last_event', service.last_event || '');
 
-    // the start/stop button pair depends on the state
+    // a service this supervisor does not run must never offer controls - not even on a page that was
+    // rendered while it still was enabled (its ini can be edited under a running page)
     const actions = svQs('.sv-card__actions', node);
-    if(actions && canControl){
+    if(actions) actions.hidden = service.enabled === false;
+
+    // the start/stop button pair depends on the state
+    if(actions && canControl && service.enabled !== false){
       const restartBtn = svQs('[data-sv-action="restart"]', actions);
       const otherBtn = svQs('[data-sv-action="start"], [data-sv-action="stop"]', actions);
       if(otherBtn){

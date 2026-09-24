@@ -759,6 +759,22 @@ final class SupervisorManager
             return $this->failure(Lang::get('app.supervisor.errors.not_running'));
         }
 
+        // A service this supervisor does not run (Enabled = false in its ini) must not be commanded
+        // through it: on a shared-authserver machine that would start a SECOND authserver (the
+        // supervisor's own command handler starts whatever it is told to name). The owning realm's
+        // entry is the only one that may touch it.
+        if ($target !== 'all') {
+            foreach ((array) ($state['services'] ?? []) as $service) {
+                if (!is_array($service) || (string) ($service['name'] ?? '') !== $target) {
+                    continue;
+                }
+                if (($service['enabled'] ?? true) === false) {
+                    return $this->failure(Lang::get('app.supervisor.errors.service_disabled', ['service' => $target]));
+                }
+                break;
+            }
+        }
+
         if (!$state['control_allowed']) {
             return $this->failure(Lang::get('app.supervisor.errors.control_unavailable'));
         }
@@ -1129,13 +1145,16 @@ final class SupervisorManager
         $heartbeatTimeout = (int) ($service['heartbeatTimeoutSec'] ?? 0);
         $heartbeatTimeoutConfigured = (int) ($service['heartbeatTimeoutConfiguredSec'] ?? $heartbeatTimeout);
         $probeOk = (bool) ($service['probeOk'] ?? true);
+        // A service this supervisor does not run (Enabled = false in its ini, e.g. a shared
+        // authserver owned by another realm's supervisor) is not "down": it is out of scope here.
+        $enabled = (bool) ($service['enabled'] ?? true);
 
-        [$health, $tone] = $this->healthFor($state, $heartbeatSeen, $heartbeatAge, $heartbeatTimeout, $probeOk, (bool) ($service['stoppedByUser'] ?? false));
+        [$health, $tone] = $this->healthFor($state, $heartbeatSeen, $heartbeatAge, $heartbeatTimeout, $probeOk, (bool) ($service['stoppedByUser'] ?? false), $enabled);
 
         return [
             'name' => (string) ($service['name'] ?? ''),
             'role' => (string) ($service['role'] ?? ''),
-            'enabled' => (bool) ($service['enabled'] ?? true),
+            'enabled' => $enabled,
             'state' => $state,
             'state_label' => Lang::get('app.supervisor.states.' . $state, [], $state),
             'stopped_by_user' => (bool) ($service['stoppedByUser'] ?? false),
@@ -1179,8 +1198,15 @@ final class SupervisorManager
         int $heartbeatAge,
         int $heartbeatTimeout,
         bool $probeOk,
-        bool $stoppedByUser
+        bool $stoppedByUser,
+        bool $enabled = true
     ): array {
+        // not supervised by this instance at all (Enabled = false in its ini): never report it as
+        // down/hung, and never offer a control that could start a second copy of a shared service
+        if (!$enabled) {
+            return ['disabled', 'muted'];
+        }
+
         if ($state === 'stopped') {
             return $stoppedByUser ? ['stopped', 'muted'] : ['down', 'error'];
         }

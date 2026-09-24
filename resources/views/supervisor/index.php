@@ -410,7 +410,13 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
     <div class="sv-card__log">
       <span class="sv-muted sv-small"><?= htmlspecialchars((string) ($service['log_file'] ?? '')) ?></span>
     </div>
-    <?php if ($capabilities['control'] ?? false): ?>
+    <?php
+      // A service this supervisor does not run (Enabled = false in its ini, e.g. the shared
+      // authserver owned by another realm) gets NO control buttons: naming it in a command would
+      // start a second copy of a service that another supervisor owns.
+      $serviceEnabled = (bool) ($service['enabled'] ?? true);
+    ?>
+    <?php if (($capabilities['control'] ?? false) && $serviceEnabled): ?>
       <footer class="sv-card__actions">
         <button type="button" class="btn" data-sv-action="restart" data-sv-target="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>">
           <?= htmlspecialchars(__('app.supervisor.actions.restart')) ?>
@@ -425,6 +431,10 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
             <?= htmlspecialchars(__('app.supervisor.actions.stop')) ?>
           </button>
         <?php endif; ?>
+      </footer>
+    <?php elseif (!$serviceEnabled): ?>
+      <footer class="sv-card__note">
+        <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.notices.service_disabled')) ?></span>
       </footer>
     <?php endif; ?>
   </section>

@@ -93,6 +93,7 @@ return [
         'dir_missing' => 'The supervisor directory in the panel config does not exist - fix the path using the diagnostics below.',
         'dir_collision' => 'Instances :instances point at the same supervisor directory (:dir). One supervisor owns one worldserver + one authserver, so give every realm its own dir in config/generated/supervisor.php - otherwise both entries show and control the same realm.',
         'instance_mismatch' => 'The status file belongs to supervisor instance ":status" while :file declares InstanceName ":ini" - this directory (or the configured status_file) probably belongs to another realm, so the page may be showing that realm.',
+        'service_disabled' => 'This supervisor does not run that service (Enabled = false in its ini) - another realm\'s supervisor owns it, so no control buttons are offered here.',
         'no_services' => 'The status file contains no services.',
     ],
 
@@ -135,6 +136,7 @@ return [
         'restarting' => 'restarting',
         'stopped' => 'stopped on request',
         'down' => 'not running',
+        'disabled' => 'not run here',
         'probe_failed' => 'probe failing',
     ],
 
@@ -195,6 +197,7 @@ return [
         'start_not_configured' => 'Starting is not configured (set allow_start and start_task_name in config/supervisor.php).',
         'exec_disabled' => 'exec() is disabled, the supervisor cannot be started from the panel.',
         'start_failed' => 'Starting the scheduled task :task failed: :message',
+        'service_disabled' => 'This supervisor does not run :service (Enabled = false in its ini) - send the command to the realm that owns it.',
     ],
 
     'js' => [

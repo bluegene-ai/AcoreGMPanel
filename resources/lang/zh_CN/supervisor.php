@@ -76,6 +76,7 @@ return [
         'dir_missing' => '面板配置里的守护程序目录不存在，请照下面的诊断信息改正路径。',
         'dir_collision' => '实例 :instances 指向同一个守护目录 :dir。一个守护只管一个 worldserver + 一个 authserver，请在 config/generated/supervisor.php 里给每个区各自的 dir，否则两个入口显示和操作的是同一个区。',
         'instance_mismatch' => '状态文件里的守护实例名是「:status」，但 :file 的 InstanceName 写的是「:ini」——这个目录（或面板配置的 status_file）很可能属于另一个区，页面显示的可能是别的区的状态。',
+        'service_disabled' => '本守护未启用该服务（ini 里 Enabled = false），通常由另一个区的守护负责，因此这里不提供控制按钮。',
         'no_services' => '状态文件中没有任何服务。',
     ],
 
@@ -135,6 +136,7 @@ return [
         'restarting' => '重启中',
         'stopped' => '已按指令停止',
         'down' => '未运行',
+        'disabled' => '本守护未启用',
         'probe_failed' => '探活失败',
     ],
 
@@ -190,6 +192,7 @@ return [
         'unknown_target' => '未知目标：:target',
         'unknown_instance' => '未知守护实例：:instance（未在 config/supervisor.php 的 instances 里配置）',
         'not_running' => '守护程序未运行，无法下发指令。',
+        'service_disabled' => '本守护未运行 :service（ini 里 Enabled = false），请到负责它的那个区下发指令。',
         'control_unavailable' => '指令文件目录不可写，无法下发指令。',
         'write_failed' => '写入指令失败：:message',
         'start_not_configured' => '未配置启动方式（需要在 config/supervisor.php 里设置 allow_start 与 start_task_name）。',
