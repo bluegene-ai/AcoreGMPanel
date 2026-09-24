@@ -151,6 +151,23 @@ $sourceBadge = static function (array $diagnostics, string $key): string {
 </div>
 
 <?php
+// The status file must belong to the supervisor described by <dir>/supervisor.ini. A different
+// InstanceName means the folder (or status_file) points at ANOTHER realm's supervisor - and the
+// page would happily show that realm as running.
+$instanceCheck = is_array($state['instance_check'] ?? null) ? $state['instance_check'] : null;
+$iniInfo = is_array($state['ini'] ?? null) ? $state['ini'] : [];
+?>
+<?php if (($instanceCheck['mismatch'] ?? false)): ?>
+  <div class="sv-notice sv-notice--error">
+    <?= htmlspecialchars(__('app.supervisor.notices.instance_mismatch', [
+        'status' => (string) ($instanceCheck['status'] ?? ''),
+        'ini' => (string) ($instanceCheck['ini'] ?? ''),
+        'file' => basename((string) ($iniInfo['file'] ?? 'supervisor.ini')),
+    ])) ?>
+  </div>
+<?php endif; ?>
+
+<?php
 // Two panel instances pointing at the same supervisor directory would show (and control) the same
 // realm twice - one acore_supervisor.exe per worldserver+authserver, so that is always a mistake.
 $dirGroups = [];
@@ -211,6 +228,27 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
     <h3><?= htmlspecialchars(__('app.supervisor.diagnostics.title')) ?></h3>
   </header>
   <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro')) ?></p>
+  <?php if (($diagnostics['ini_conflicts'] ?? []) !== []): ?>
+    <div class="sv-notice sv-notice--error">
+      <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title')) ?>
+      <ul class="sv-muted sv-small">
+        <?php foreach ((array) $diagnostics['ini_conflicts'] as $conflictKey => $conflictPair): ?>
+          <?php
+            $iniKeyName = match ($conflictKey) {
+                'control_file' => 'control',
+                'log_file' => 'log',
+                default => 'status',
+            };
+          ?>
+          <li><code><?= htmlspecialchars(__('app.supervisor.diagnostics.ini_key_' . $iniKeyName)) ?></code> —
+            <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_line', [
+                'configured' => (string) ($conflictPair['configured'] ?? ''),
+                'ini' => (string) ($conflictPair['ini'] ?? ''),
+            ])) ?></li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+  <?php endif; ?>
   <dl class="sv-meta">
     <div><dt><?= htmlspecialchars(__('app.supervisor.diagnostics.configured')) ?></dt>
       <dd><code><?= htmlspecialchars((string) ($diagnostics['configured_dir'] ?? '') !== ''
@@ -414,6 +452,41 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
       <dd data-sv-field="panel_instance"><?= htmlspecialchars($currentInstanceLabel) ?></dd></div>
     <div><dt><?= htmlspecialchars(__('app.supervisor.meta.instance')) ?></dt>
       <dd><?= htmlspecialchars((string) ($supervisor['instance'] ?? '--')) ?></dd></div>
+    <div><dt><?= htmlspecialchars(__('app.supervisor.meta.ini')) ?></dt>
+      <dd><code><?= htmlspecialchars((string) ($iniInfo['file'] ?? '') ?: '--') ?></code>
+        <span class="sv-muted sv-small">
+          <?= htmlspecialchars(($iniInfo['found'] ?? false)
+              ? __('app.supervisor.meta.ini_read')
+              : __('app.supervisor.meta.ini_missing')) ?>
+        </span>
+      </dd></div>
+    <?php if (($iniInfo['found'] ?? false)): ?>
+      <div><dt><?= htmlspecialchars(__('app.supervisor.meta.ini_instance')) ?></dt>
+        <dd><?= htmlspecialchars((string) ($iniInfo['instance_name'] ?? '') ?: '--') ?></dd></div>
+      <div><dt><?= htmlspecialchars(__('app.supervisor.meta.ini_status_enabled')) ?></dt>
+        <dd><?= htmlspecialchars(($iniInfo['status_enabled'] ?? true)
+            ? __('app.supervisor.meta.yes')
+            : __('app.supervisor.meta.no_status')) ?></dd></div>
+      <div><dt><?= htmlspecialchars(__('app.supervisor.meta.ini_tick')) ?></dt>
+        <dd><?= (int) ($iniInfo['tick_ms'] ?? 0) ?> ms</dd></div>
+      <div class="sv-meta__wide"><dt><?= htmlspecialchars(__('app.supervisor.meta.ini_services')) ?></dt>
+        <dd>
+          <?php foreach ((array) ($iniInfo['services'] ?? []) as $iniService): ?>
+            <div>
+              <span class="<?= $toneClass(($iniService['enabled'] ?? false) ? 'ok' : 'muted') ?>">
+                <?= htmlspecialchars((string) ($iniService['name'] ?? '')) ?>
+              </span>
+              <?= htmlspecialchars(($iniService['enabled'] ?? false)
+                  ? __('app.supervisor.meta.ini_service_on')
+                  : __('app.supervisor.meta.ini_service_off')) ?>
+              <code><?= htmlspecialchars((string) ($iniService['exe'] ?? '')) ?></code>
+              <?php if ((int) ($iniService['probe_port'] ?? 0) > 0): ?>
+                <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.meta.ini_probe', ['port' => (int) $iniService['probe_port']])) ?></span>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </dd></div>
+    <?php endif; ?>
     <div><dt><?= htmlspecialchars(__('app.supervisor.meta.version')) ?></dt>
       <dd><?= htmlspecialchars((string) ($supervisor['version'] ?? '--')) ?></dd></div>
     <div><dt><?= htmlspecialchars(__('app.supervisor.meta.pid')) ?></dt>
