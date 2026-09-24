@@ -11,7 +11,14 @@
  *
  * The module reads its configuration while the worldserver builds the Auctionator
  * singleton, so a saved setting is inert until the worldserver is restarted; the page
- * says so and links to /supervisor.
+ * says so and links to /supervisor. The one exception is the master switch
+ * (Auctionator.Enabled): POST /auctionator/api/power writes this realm's option file and
+ * then sends ".auctionator start|stop" over this realm's SOAP channel, so one realm's bot
+ * can be started or stopped immediately without restarting its worldserver.
+ *
+ * Every path, table and command on this page belongs to the realm selected in the header
+ * (config/auctionator.php server_overrides), which is what makes the module manageable
+ * per realm when several realms share one auth database.
  *
  * Class:
  *   - AuctionatorController
@@ -368,8 +375,134 @@ class AuctionatorController extends Controller
         ], ($result['success'] ?? false) ? 200 : 422);
     }
 
-    // ------------------------------------------------------------------ command builder
+    /**
+     * 按区一键启停拍卖机器人（多区部署下每个区各自一份 conf + 一个 worldserver）。
+     *
+     * 两步都要做，缺一不可：
+     *   1. 写本区 configs/modules/mod_auctionator.conf 的 Auctionator.Enabled —— 跨重启保持；
+     *   2. 向本区 worldserver 发 ".auctionator start|stop" —— 立刻生效，不必重启该区。
+     *
+     * 返回值区分"已落库"和"已生效"：命令没送到（比如该区 worldserver 没在跑）时 conf 仍然写好，
+     * 页面据此提示"下次启动生效"，而不是谎报成功。
+     */
+    public function apiPower(Request $request): Response
+    {
+        $this->requireControlCapability();
+        $this->maybeSwitchServer($request);
 
+        if (($refusal = $this->unsupportedServerResponse()) !== null) {
+            return $refusal;
+        }
+
+        $enable = $this->normalizedBoolFlag($request, 'enable');
+        $serverId = ServerContext::currentId();
+        $paths = $this->realmPaths();
+
+        $fields = (array) Config::get('auctionator.fields', []);
+        if (!isset($fields['Auctionator.Enabled'])) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.auctionator.errors.power_field_missing'),
+            ], 500);
+        }
+
+        $confWritten = false;
+        $confError = '';
+        try {
+            $file = new AuctionatorConfigFile($paths['conf_file']);
+            $written = $file->write(['Auctionator.Enabled' => $enable ? 1 : 0], $fields);
+            if ($written['ok']) {
+                $confWritten = true;
+            } else {
+                $confError = (string) $written['error'];
+            }
+        } catch (Throwable $exception) {
+            $confError = $exception->getMessage();
+        }
+
+        $command = $enable ? '.auctionator start' : '.auctionator stop';
+        $result = SoapCommandRunner::execute($command, ['server_id' => $serverId, 'strict_marker' => true]);
+        $commandOk = (bool) ($result['success'] ?? false);
+
+        Audit::log('auctionator', 'power', $command, [
+            'server_id' => $serverId,
+            'enable' => $enable,
+            'conf_file' => $paths['conf_file'],
+            'conf_written' => $confWritten,
+            'conf_error' => $confError,
+            'command_ok' => $commandOk,
+            'output' => (string) ($result['output'] ?? ''),
+        ]);
+
+        if ($commandOk && $confWritten) {
+            $message = Lang::get($enable
+                ? 'app.auctionator.feedback.power_started'
+                : 'app.auctionator.feedback.power_stopped', ['server' => $this->serverLabel()]);
+        } elseif ($commandOk) {
+            $message = Lang::get('app.auctionator.feedback.power_runtime_only', [
+                'message' => $confError !== ''
+                    ? $confError
+                    : Lang::get('app.auctionator.errors.config_unreadable'),
+            ]);
+        } else {
+            $message = Lang::get('app.auctionator.feedback.power_offline', [
+                'server' => $this->serverLabel(),
+                'message' => $this->firstNonEmptyString([
+                    (string) ($result['message'] ?? ''),
+                    (string) ($result['output'] ?? ''),
+                    Lang::get('app.auctionator.errors.command_failed'),
+                ]),
+                'state' => $confWritten
+                    ? Lang::get('app.auctionator.feedback.power_conf_saved')
+                    : Lang::get('app.auctionator.feedback.power_conf_failed'),
+            ]);
+        }
+
+        return $this->json([
+            'success' => $commandOk,
+            'message' => $message,
+            'payload' => [
+                'enable' => $enable,
+                'command' => $command,
+                'command_ok' => $commandOk,
+                'conf_written' => $confWritten,
+                'conf_error' => $confError,
+                'conf_file' => $paths['conf_file'],
+                'restart_required' => !$commandOk,
+                'output' => (string) ($result['output'] ?? ''),
+                'snapshot' => $this->snapshot(),
+            ],
+        ], $commandOk ? 200 : 422);
+    }
+
+    /**
+     * 当前区服显示名（用于反馈文案），取不到时退回区服索引。
+     */
+    private function serverLabel(): string
+    {
+        $server = ServerContext::server();
+        $name = trim((string) ($server['name'] ?? ''));
+
+        return $name !== '' ? $name : (string) ServerContext::currentId();
+    }
+
+    /**
+     * 第一个非空字符串；全为空时返回空串。
+     *
+     * @param string[] $candidates
+     */
+    private function firstNonEmptyString(array $candidates): string
+    {
+        foreach ($candidates as $candidate) {
+            if (trim((string) $candidate) !== '') {
+                return (string) $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    // ------------------------------------------------------------------ command builder
     /**
      * @return array{command: string, error: string}
      */

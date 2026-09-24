@@ -3,7 +3,7 @@
 return [
     'page_title' => 'Boss Activity',
     'intro' => 'Review current boss runtime state, editable activity config, recent events, and contributor snapshots, then execute spawn, reload, preset, difficulty, or rebase actions through SOAP.',
-    'scope_note' => 'Current realm: :server',
+    'scope_note' => 'Current realm: :server · Data source for this realm: :database (each realm has its own)',
     'fields' => [
         'estimated_hp' => 'Estimated health',
     ],
@@ -16,8 +16,8 @@ return [
         'log' => 'Events & contributors',
     ],
     'warnings' => [
-        'schema_missing' => 'Some Boss tables are missing: :tables. Load boss.lua first so Lua can initialize the ac_eluna schema before using AGMP.',
-        'runtime_unavailable' => 'Boss runtime data is unavailable. Verify boss.lua created the ac_eluna persistence tables.',
+        'schema_missing' => 'Some Boss tables are missing: :tables. Load boss.lua first so Lua can initialize the realm Boss tables before using AGMP.',
+        'runtime_unavailable' => 'Boss runtime data is unavailable. Verify boss.lua created the realm-specific persistence tables.',
         'config_unavailable' => 'Boss config storage is unavailable. AGMP fell back to built-in defaults.',
         'ext_unavailable' => 'Boss extended config storage (boss_activity_config_ext) is unavailable. Built-in defaults are shown instead.',
         'events_unavailable' => 'Boss event data is unavailable.',
@@ -66,7 +66,7 @@ return [
         'rebase' => 'Rebase health',
         'rebase_help' => 'Re-apply the current health multiplier to the active boss. Only allowed while out of combat.',
         'reload_config' => 'Reload config',
-        'reload_config_help' => 'Reload the activity config from ac_eluna and apply the hot-reloadable pieces to the active boss when possible.',
+        'reload_config_help' => 'Reload the activity config from the realm config schema and apply the hot-reloadable pieces to the active boss when possible.',
         'preset_label' => 'Skill preset',
         'difficulty_label' => 'Difficulty',
         'apply_preset' => 'Apply preset',
@@ -74,7 +74,7 @@ return [
     ],
     'config' => [
         'title' => 'Activity Config',
-        'note' => 'Saving writes to ac_eluna.boss_activity_config and immediately runs .boss config reload through SOAP. Entry, name, and removed aura changes fully take effect on the next spawn cycle.',
+        'note' => 'Saving writes to boss_activity_config in the realm config schema and immediately runs .boss config reload through SOAP. Entry, name, and removed aura changes fully take effect on the next spawn cycle.',
         'save' => 'Save and Reload',
         'sections' => [
             'identity' => 'Boss Basics',
@@ -136,7 +136,7 @@ return [
     ],
     'ext' => [
         'title' => 'Extended config (script-private)',
-        'note' => 'Saving writes to ac_eluna.boss_activity_config_ext and immediately runs .boss config reload through SOAP. That table holds boss.lua private settings (yells, combat taunts, AI cadence, phase thresholds, patrol, minions, helper entries, classes, managed tiers); the panel upserts only the columns it submits. An empty yell or taunt list means "do not yell in that situation"; fields marked as falling back to script defaults are left untouched when empty.',
+        'note' => 'Saving writes to boss_activity_config_ext in the realm config schema and immediately runs .boss config reload through SOAP. That table holds boss.lua private settings (yells, combat taunts, AI cadence, phase thresholds, patrol, minions, helper entries, classes, managed tiers); the panel upserts only the columns it submits. An empty yell or taunt list means "do not yell in that situation"; fields marked as falling back to script defaults are left untouched when empty.',
         'save' => 'Save extended config and reload',
         'unavailable' => 'boss.lua has not created the extended config table yet, so only defaults can be shown.',
         'tabs_label' => 'Extended config sections',
@@ -323,9 +323,9 @@ return [
     'feedback' => [
         'action_success' => 'Boss action completed successfully.',
         'config_saved' => 'Boss config was saved and reloaded.',
-        'config_saved_reload_failed' => 'Boss config was saved to ac_eluna, but reload failed: :message',
+        'config_saved_reload_failed' => 'Boss config was saved to the realm config schema, but reload failed: :message',
         'ext_saved' => 'Boss extended config was saved and reloaded.',
-        'ext_saved_reload_failed' => 'Boss extended config was saved to ac_eluna, but reload failed: :message',
+        'ext_saved_reload_failed' => 'Boss extended config was saved to the realm config schema, but reload failed: :message',
     ],
     'errors' => [
         'invalid_action' => 'Invalid boss action.',
@@ -347,7 +347,7 @@ return [
                     'kill' => 'Kill the active boss? It will die through the normal flow and rewards will be granted.',
                     'clear' => 'Reset the active boss? It will be removed immediately without any rewards.',
                     'rebase' => 'Rebase the active boss health values? The boss must be out of combat.',
-                    'config_reload' => 'Reload the boss config from ac_eluna?',
+                    'config_reload' => 'Reload the boss config from the realm config schema?',
                     'preset' => 'Switch preset to :value?',
                     'difficulty' => 'Switch difficulty to :value?',
                 ],

@@ -105,12 +105,20 @@ AcoreGMPanel/
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
 | Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. On a multi-realm machine the page gets an **instance switcher** (see below). |
+| Boss Activity | `/boss` | Management page for the [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) `boss.lua` event: runtime state (active boss, health, phase), basic + extended config (yells, taunts, AI cadence, phase thresholds, patrol, minions, helpers, classes, managed tiers), difficulty tiers, event log and contributor snapshots, plus spawn / kill / reset / reload commands. One database per realm (see below). |
 | Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event, split into tabs (runtime status / question bank / reward presets / leaderboard / settings): live round state (via SOAP `.trivia api`), a next-question countdown, start / stop / pause-resume / enable-disable controls (one toggle each, labelled from the live state), daily **scheduled start/stop windows**, pacing + answer-channel + label + participation + broadcast-prefix settings (everything the retired `TriviaReward_conf.lua` used to hold), question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
 | Auction Bot | `/auctionator` | Management page for the [mod-auctionator](https://github.com/bluegene-ai/mod-auctionator) seller, split into tabs (status / settings / item policy / actions): live listing counters (bot vs player, bid-only vs buyout, per house), market-price table state and the module log tail; **in-place editing of `configs/modules/mod_auctionator.conf`** (only changed keys are rewritten, the previous file is kept as `.agmp.bak`, and the page states that the worldserver must be restarted); CRUD for the three policy tables (`mod_auctionator_disabled_items`, `mod_auctionator_itemclass_config`, `mod_auctionator_gm_list`); and the module's own GM commands through the worldserver SOAP channel (`.auctionator status`, `addlist`, `expireall`, `enable`/`disable`, `multiplier`, `marketimport`, `marketprune`, `add`). |
 
 ## Further Reading
 
 Additional focused guides live in the `docs/` directory and project root:
+
+- `docs/multi-realm.md` — multi-realm deployment (several realms sharing one auth database): the
+  per-realm bindings of the boss activity and the auction bot, how each realm is started/stopped
+  independently, the steps to add a realm and the acceptance checklist.
+- `docs/DATABASES.md` — the databases/tables the panel touches and how.
+- `docs/creature_editor.md`, `docs/quest_editor_design.md`, `docs/quest_editor_gap_analysis.md` —
+  creature and quest editor design notes.
 
 ### Several supervisors (one per realm)
 
@@ -142,6 +150,19 @@ for these entries:
 - An **unlisted instance id is refused** by the APIs (404) rather than silently falling back to
   another realm; the audit entry (`panel_audit`) records the instance.
 - Without `instances` (or with an empty array) nothing changes: one implicit instance `default`.
+
+### Per-realm management of the boss activity and the auction bot
+
+Both modules run inside each realm's own worldserver, so switching realm in the page header switches
+the whole data source:
+
+| | Boss Activity | Auction Bot |
+|---|---|---|
+| Data | `config/boss.php` → `server_overrides[<realm>].custom_db_name` (that realm's own Eluna schema) | `config/auctionator.php` → `server_overrides[<realm>].server_root` (that realm's worldserver directory) |
+| Start / stop | spawn / kill / reset buttons, sent to that realm's SOAP port only | "start / stop this realm's bot" in the status card: writes `Auctionator.Enabled` into that realm's conf **and** sends `.auctionator start`·`stop`, so it applies at once and survives a restart |
+| A realm without the module | outside `supported_server_ids` → the page is read-only with a warning and every mutating endpoint answers 422 instead of touching another realm | same |
+
+Topology, the steps for adding a realm and the acceptance checklist live in `docs/multi-realm.md`.
 
 
 

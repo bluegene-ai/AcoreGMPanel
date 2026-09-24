@@ -26,6 +26,10 @@ return [
     ],
     'master' => [
         'title' => 'Module state',
+        'power_title' => 'Master switch for this realm (takes effect at once)',
+        'power_start' => 'Start this realm\'s bot',
+        'power_stop' => 'Stop this realm\'s bot',
+        'power_hint' => 'Affects only the realm selected above: Auctionator.Enabled is written into this realm\'s own mod_auctionator.conf (so it survives a restart) and then ".auctionator start / stop" is sent to this realm\'s worldserver so it applies immediately. Other realms are untouched.',
     ],
     'listings' => [
         'title' => 'Auction house listings',
@@ -179,6 +183,12 @@ return [
         'gm_deleted' => 'gm_list item :item deleted.',
         'gm_toggled' => 'gm_list item :item toggled.',
         'command_success' => 'Command executed.',
+        'power_started' => 'The auction bot on :server is running again: the option file was written and the running module was switched on immediately.',
+        'power_stopped' => 'The auction bot on :server is stopped: the option file was written and the running module was switched off immediately (auctions already listed are untouched).',
+        'power_runtime_only' => 'The running module was switched, but the option file could not be written (:message), so a restart will bring the old state back.',
+        'power_offline' => 'Option file: :state; but the worldserver of :server did not answer, so the switch did not take effect (:message).',
+        'power_conf_saved' => 'this realm\'s option file was written',
+        'power_conf_failed' => 'this realm\'s option file was NOT written',
     ],
     'errors' => [
         'empty_payload' => 'No configuration keys were submitted.',
@@ -201,6 +211,7 @@ return [
         'price_required' => 'Provide a unit price greater than 0.',
         'policy_write_failed' => 'Writing the item policy failed: :message',
         'command_failed' => 'The command failed.',
+        'power_field_missing' => 'The configuration has no Auctionator.Enabled field definition, so the master switch cannot be toggled.',
         'not_a_number' => 'Please enter a number.',
         'below_min' => 'Must not be below :min',
         'above_max' => 'Must not be above :max',
@@ -231,6 +242,8 @@ return [
                     'disable' => 'Disable this switch at runtime?',
                     'addlist' => 'Restock from gm_list?',
                     'add' => 'List these items with the given price and duration?',
+                    'power_start' => 'Start the auction bot on this realm? This writes this realm\'s option file and applies immediately.',
+                    'power_stop' => 'Stop the auction bot on this realm? Only this realm is affected; auctions already listed stay.',
                 ],
                 'feedback' => [
                     'config_success' => 'Configuration saved.',
@@ -240,6 +253,7 @@ return [
                     'policy_failure' => 'Updating the item policy failed.',
                     'action_success' => 'Command executed.',
                     'action_failure' => 'The command failed.',
+                    'power_failure' => 'The master switch did not take effect.',
                 ],
                 'actions' => [
                     'output_empty' => '(no output yet)',

@@ -82,6 +82,20 @@ class BossRepository extends MultiServerRepository
     }
 
     /**
+     * 本区 boss.lua 的数据源绑定。多区部署时每个区一个库（config/boss.php server_overrides），
+     * 页面用它自证"现在管的是哪个区"，避免看错区还以为配置没生效。
+     *
+     * @return array{database: string, runtime_key: string}
+     */
+    public function dataSource(): array
+    {
+        return [
+            'database' => $this->customDbName,
+            'runtime_key' => $this->runtimeKey,
+        ];
+    }
+
+    /**
      * 当前区服显示名，用于 :server 占位替换；取不到时退回区服索引。
      */
     private function serverName(): string

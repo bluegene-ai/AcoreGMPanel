@@ -67,6 +67,7 @@ class BossController extends Controller
         $server = ServerContext::server();
         $dashboard = $this->repo()->dashboard($eventLimit, $contributorLimit);
         $config = is_array($dashboard['config'] ?? null) ? $dashboard['config'] : [];
+        $dataSource = $this->repo()->dataSource();
 
         return $this->pageView('boss.index', $this->serverViewData([
             'boss_dashboard' => $dashboard,
@@ -92,6 +93,7 @@ class BossController extends Controller
                 'intro' => __('app.boss.intro'),
                 'note' => __('app.boss.scope_note', [
                     'server' => (string) ($server['name'] ?? ''),
+                    'database' => (string) $dataSource['database'] . ' (state_key=' . (string) $dataSource['runtime_key'] . ')',
                 ]),
             ],
             'meta' => [

@@ -8,17 +8,35 @@ return [
     'event_limit' => 18,
     'contributor_limit' => 18,
 
-    // boss.lua 只部署在 80 区。这里的值是 ServerContext::currentId() 的取值
-    // （即 config/generated/servers.php 的 server 索引），不在列表内的区服：
-    // - dashboard 追加 critical warning
+    // 多区（多个 realm 共用一套 auth）：每个区各自跑一份 worldserver 与一份 boss.lua，
+    // 活动 Boss 的配置 / 运行态 / 事件 / 贡献都按区独立。绑定关系由下面的 server_overrides
+    // 描述（键 = config/generated/servers.php 里的 server 索引）。
+    //
+    // 这个列表 = **已经部署了 boss.lua 的区**；不在列表内的区服：
+    // - dashboard 追加 critical warning（"本区未部署"）
     // - apiAction / apiConfigSave 直接返回 422，不发 SOAP 命令
-    'supported_server_ids' => [1],
+    // 本机现状：70 区与 80 区已部署；删档测试区（索引 2）还没部署，所以不在这里。
+    // 部署新区后把它的索引加进来；也可以清空这个列表表示"所有已配置区都支持"。
+    'supported_server_ids' => [0, 1],
 
-    // 每个区服可覆盖全局的 ac_eluna 库名 / 运行时 state_key。
-    // 目前仅 80 区部署 boss.lua，且沿用全局默认值。
+    // 每个区一条：custom_db_name 必须与该区 lua_scripts/boss.lua 的 §3 BOSS_DB_NAME 一致，
+    // runtime_key 必须与 BOSS_RUNTIME_KEY 一致，否则面板看到的是另一个区的活动状态。
+    // 表结构由 boss.lua 自举（CREATE DATABASE / CREATE TABLE IF NOT EXISTS），新区的库第一次
+    // 启动时自动建好；也可以按该区副本的 DDL 手工预建。
     'server_overrides' => [
+        // 70-阿达尔之辉
+        0 => [
+            'custom_db_name' => 'ac_eluna70',
+            'runtime_key' => 'current',
+        ],
+        // 80-女王的复仇（历史库名，保持 ac_eluna 不动）
         1 => [
             'custom_db_name' => 'ac_eluna',
+            'runtime_key' => 'current',
+        ],
+        // 删档测试区
+        2 => [
+            'custom_db_name' => 'ac_eluna_test',
             'runtime_key' => 'current',
         ],
     ],

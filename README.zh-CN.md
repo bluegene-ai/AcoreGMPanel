@@ -105,6 +105,9 @@ AcoreGMPanel/
 | SmartAI 向导 | `/smart-ai` | 分步生成 `smart_scripts` SQL 并支持导出。 |
 | SOAP 向导 | `/soap` | 浏览 SOAP 命令、填写动态表单、预览并安全执行。 |
 | 守护管理 | `/supervisor` | 查看并控制 `acore_supervisor.exe`（worldserver / authserver 守护程序）：运行状态、世界循环心跳、登录服探活、重启次数，以及按服务启停/重启。多区部署时页面顶部会出现**实例切换**（见下）。 |
+| 活动 Boss | `/boss` | [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) 的 `boss.lua` 管理页：运行态（活跃 Boss、血量、阶段）、基础配置与扩展配置（喊话 / 嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军 / 职业 / 受管模板）、难度档位、事件流水与贡献快照，以及生成 / 击杀 / 重置 / 重载等命令。每区一个数据库（见下）。 |
+| 聊天答题 | `/trivia` | [ac-trivia](https://github.com/bluegene-ai/ac-trivia) 的管理页：实时状态（SOAP `.trivia api`）、下一题倒计时、启停与暂停、定时启停时间段、节奏/作答频道/标号/参与门槛/播报前缀等全部配置、题库增删改与模板导入导出、奖励预设、中奖排行。数据在 `ac_eluna` 库里（表由 Lua 创建）。 |
+| 拍卖机器人 | `/auctionator` | [mod-auctionator](https://github.com/bluegene-ai/mod-auctionator) 的管理页：挂单统计（机器人/玩家、纯竞价/一口价、按拍卖行）、市场数据表状态与模块日志尾部、模块配置在线编辑（只改写变化的键，原文件保留为 `.agmp.bak`）、三张策略表的增删改，以及模块自带的 GM 命令（`.auctionator status` / `addlist` / `expireall` / `enable`·`disable` / `multiplier` / `marketimport` / `marketprune` / `add`）。另外提供**本区一键启动/停止**（写本区 conf 的 `Auctionator.Enabled` + 向本区发 `.auctionator start`·`stop`，见下）。 |
 
 ### 多实例（每个区一个守护程序）
 
@@ -131,9 +134,26 @@ AcoreGMPanel/
 - **未配置的实例 id 会被 API 拒绝**（404），不会静默落到别的区；审计日志（`panel_audit`）会记录 `instance`。
 - 不写 `instances`（或空数组）时行为与以前完全一致：单一隐式实例 `default`。
 
+### 活动 Boss / 拍卖机器人的按区管理
+
+这两个模块跑在各区自己的 worldserver 里，所以「换区」换的是**整套数据源**：面板页头的区服下拉框会同时切换
+
+| | 活动 Boss | 拍卖机器人 |
+|---|---|---|
+| 数据 | `config/boss.php` → `server_overrides[<区>].custom_db_name`（该区自己的 Eluna 库） | `config/auctionator.php` → `server_overrides[<区>].server_root`（该区 worldserver 目录） |
+| 启动 / 停止 | 「生成 Boss」/「击杀」/「重置」→ 只发给该区的 SOAP 端口 | 「模块状态 → 启动/停止本区机器人」→ 写该区 conf 的 `Auctionator.Enabled` 并发送 `.auctionator start`·`stop`，**立即生效且重启后保持** |
+| 未部署的区 | `supported_server_ids` 之外 → 页面给只读警告，接口一律 422，绝不误写别的区 | 同左 |
+
+完整拓扑、加区步骤与验收清单见 `docs/multi-realm.md`。
+
 ## 延伸阅读
 
 更多细化说明位于根目录及 `docs/`：
+
+- `docs/multi-realm.md` —— 多区（多个 realm 共用一套 auth）部署：活动 Boss 与拍卖机器人的按区绑定、
+  按区独立启停、新增一个区的步骤与验收清单。
+- `docs/DATABASES.md` —— 各数据库/表与面板读写关系。
+- `docs/creature_editor.md`、`docs/quest_editor_design.md`、`docs/quest_editor_gap_analysis.md` —— 生物/任务编辑器设计说明。
 
 ## 贡献指南
 

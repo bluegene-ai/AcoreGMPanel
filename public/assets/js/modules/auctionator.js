@@ -1,9 +1,13 @@
 /**
  * mod-auctionator (拍卖机器人) management page.
  *
- * Talks to /auctionator/api/{status,config,item,action}. Every POST goes through
+ * Talks to /auctionator/api/{status,config,item,action,power}. Every POST goes through
  * Panel.api (csrf + base path aware); the page reloads after a successful write so the
  * server-rendered snapshot is never stale.
+ *
+ * /auctionator/api/power is the per-realm master switch: it writes this realm's own
+ * mod_auctionator.conf and sends ".auctionator start|stop" to this realm's worldserver,
+ * so one realm's bot starts or stops without touching the other realms.
  */
 (function () {
   if (document.body.dataset.module !== 'auctionator') return;
@@ -241,6 +245,37 @@
   document.querySelectorAll('[data-au-action]').forEach(function (node) {
     node.addEventListener('click', function () {
       runAction(node.dataset.auAction, {});
+    });
+  });
+
+  // ------------------------------------------------------------------ master switch (this realm)
+  async function runPower(enable) {
+    const confirmMessage = t(enable ? 'confirm.power_start' : 'confirm.power_stop', '');
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
+
+    setBusy(true);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/power', { enable: enable ? 1 : 0 });
+    } finally {
+      setBusy(false);
+    }
+
+    const output = json && json.payload ? json.payload.output : '';
+    if (output) printOutput(output);
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.power_failure', 'The master switch could not be applied.'));
+      return;
+    }
+
+    show('success', json.message || t('feedback.action_success', 'Command executed.'));
+    reload(1200);
+  }
+
+  document.querySelectorAll('[data-au-power]').forEach(function (node) {
+    node.addEventListener('click', function () {
+      runPower(node.dataset.auPower === 'start');
     });
   });
 

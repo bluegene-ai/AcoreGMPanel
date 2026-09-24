@@ -74,3 +74,8 @@
 .au-checkbox input{margin:0;}
 
 .au-output{max-height:340px;overflow:auto;background:#08111a;border:1px solid rgba(148,163,184,.14);border-radius:10px;padding:12px;margin:0;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#cfdae5;}
+
+.au-power{display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid rgba(148,163,184,.14);}
+.au-power__title{color:#eaf2fa;font-size:13px;}
+.au-power__actions{display:flex;flex-wrap:wrap;gap:8px;}
+.au-power__hint{margin:0;}

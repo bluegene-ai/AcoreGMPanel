@@ -26,6 +26,10 @@ return [
     ],
     'master' => [
         'title' => '模块状态',
+        'power_title' => '本区机器人总开关（立即生效）',
+        'power_start' => '启动本区机器人',
+        'power_stop' => '停止本区机器人',
+        'power_hint' => '只影响当前选中的区服：先把 Auctionator.Enabled 写进本区的 mod_auctionator.conf（重启后仍保持），再向本区 worldserver 发 .auctionator start / stop 让它立刻生效。各区互不影响。',
     ],
     'listings' => [
         'title' => '拍卖行挂单',
@@ -179,6 +183,12 @@ return [
         'gm_deleted' => 'gm_list 物品 :item 已删除。',
         'gm_toggled' => 'gm_list 物品 :item 的启用状态已切换。',
         'command_success' => '命令已执行。',
+        'power_started' => ':server 的拍卖机器人已启动：配置已写回，运行中的模块已立即打开。',
+        'power_stopped' => ':server 的拍卖机器人已停止：配置已写回，运行中的模块已立即关闭（已挂出的拍卖不受影响）。',
+        'power_runtime_only' => '运行中的机器人已切换，但配置没写成功（:message），重启后会回到旧状态。',
+        'power_offline' => '配置处理结果：:state；但 :server 的 worldserver 没有响应，本次开关未生效（:message）。',
+        'power_conf_saved' => '本区配置已写入',
+        'power_conf_failed' => '本区配置未写入',
     ],
     'errors' => [
         'empty_payload' => '没有提交任何配置项。',
@@ -201,6 +211,7 @@ return [
         'price_required' => '请填写大于 0 的单价。',
         'policy_write_failed' => '写入物品策略失败：:message',
         'command_failed' => '命令执行失败。',
+        'power_field_missing' => '配置里没有 Auctionator.Enabled 的字段定义，无法切换总开关。',
         'not_a_number' => '请输入数字。',
         'below_min' => '不得小于 :min',
         'above_max' => '不得大于 :max',
@@ -231,6 +242,8 @@ return [
                     'disable' => '确认在运行时停用该开关吗？',
                     'addlist' => '确认按 gm_list 批量补货吗？',
                     'add' => '确认按填写的价格与时长上架这些物品吗？',
+                    'power_start' => '确认启动当前区服的拍卖机器人吗？会写入本区配置文件并立即生效。',
+                    'power_stop' => '确认停止当前区服的拍卖机器人吗？只会停掉本区，已挂出的拍卖不受影响。',
                 ],
                 'feedback' => [
                     'config_success' => '配置已保存。',
@@ -240,6 +253,7 @@ return [
                     'policy_failure' => '物品策略更新失败。',
                     'action_success' => '命令已执行。',
                     'action_failure' => '命令执行失败。',
+                    'power_failure' => '总开关没有生效。',
                 ],
                 'actions' => [
                     'output_empty' => '（暂无输出）',

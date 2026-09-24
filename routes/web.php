@@ -256,6 +256,8 @@ return static function (Router $router): void {
             $router->post('/auctionator/api/config', [AuctionatorController::class, 'apiConfigSave']);
             $router->post('/auctionator/api/item', [AuctionatorController::class, 'apiItem']);
             $router->post('/auctionator/api/action', [AuctionatorController::class, 'apiAction']);
+            // 按区一键启停：写本区 conf 的 Auctionator.Enabled + 发本区 .auctionator start|stop
+            $router->post('/auctionator/api/power', [AuctionatorController::class, 'apiPower']);
         });
     });
 };

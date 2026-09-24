@@ -107,6 +107,18 @@ $houseLabel = static function (int $house): string {
           <dt><?= htmlspecialchars(__('app.auctionator.fields.max_auctions')) ?></dt>
           <dd><?= htmlspecialchars((string) ($typed['Auctionator.NeutralSeller.MaxAuctions'] ?? '--')) ?></dd>
         </dl>
+
+        <?php if ($supported): ?>
+          <?php // 按区一键启停：写本区 conf 的 Auctionator.Enabled + 发本区 .auctionator start|stop ?>
+          <div class="au-power" data-au-power-panel>
+            <strong class="au-power__title"><?= htmlspecialchars(__('app.auctionator.master.power_title')) ?></strong>
+            <div class="au-power__actions">
+              <button type="button" class="btn primary" data-au-power="start"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.power_start')) ?></button>
+              <button type="button" class="btn outline danger" data-au-power="stop"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.power_stop')) ?></button>
+            </div>
+            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.power_hint')) ?></p>
+          </div>
+        <?php endif; ?>
       </div>
 
       <div class="au-card">

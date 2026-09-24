@@ -12,18 +12,36 @@
  */
 
 return [
-    // Worldserver root of the realm that runs the module. The conf path is resolved
-    // relative to it (per-realm overrides below win).
+    // 多区（多个 realm 共用一套 auth）：每个区各自跑一份 worldserver 与一份 mod-auctionator，
+    // 模块的选项文件、日志、以及 mod_auctionator_* 数据表都在该区自己的目录 / 库里面。
+    // 绑定关系由下面的 server_overrides 描述（键 = config/generated/servers.php 的 server 索引）；
+    // 这里的顶层值既是默认值，也是新区服漏配时的兜底。
     'server_root' => 'E:\\Server\\release\\80',
     'conf_file' => 'configs/modules/mod_auctionator.conf',
     'log_file' => 'logs/auctionator.log',
 
-    // mod-auctionator is only deployed on the 80 realm. Other realms get a warning on the
-    // dashboard and the write/SOAP endpoints answer 422 instead of touching another server.
-    'supported_server_ids' => [1],
+    // 这个列表 = **已经部署了 mod-auctionator 的区**；不在列表内的区服：
+    // dashboard 追加 warning，且写配置 / 发 SOAP 的接口一律返回 422，绝不误写别的区。
+    // 本机现状：70 区与 80 区已部署；删档测试区（索引 2）还没部署，所以不在这里。
+    // 部署新区后把它的索引加进来；也可以清空这个列表表示"所有已配置区都支持"。
+    'supported_server_ids' => [0, 1],
+
     'server_overrides' => [
+        // 70-阿达尔之辉
+        0 => [
+            'server_root' => 'E:\\Server\\release\\70',
+            'conf_file' => 'configs/modules/mod_auctionator.conf',
+            'log_file' => 'logs/auctionator.log',
+        ],
+        // 80-女王的复仇
         1 => [
             'server_root' => 'E:\\Server\\release\\80',
+            'conf_file' => 'configs/modules/mod_auctionator.conf',
+            'log_file' => 'logs/auctionator.log',
+        ],
+        // 删档测试区
+        2 => [
+            'server_root' => 'E:\\Server\\release\\test',
             'conf_file' => 'configs/modules/mod_auctionator.conf',
             'log_file' => 'logs/auctionator.log',
         ],

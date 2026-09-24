@@ -3,7 +3,7 @@
 return [
     'page_title' => 'Boss 活动管理',
     'intro' => '查看 Boss 当前运行态、活动配置、事件流水与贡献快照，并通过 SOAP 执行生成、热加载、模板切换和倍率重基准。',
-    'scope_note' => '当前服务器：:server',
+    'scope_note' => '当前服务器：:server · 本区数据源：:database（各区独立，互不影响）',
     'fields' => [
         'estimated_hp' => '预估血量',
     ],
@@ -16,8 +16,8 @@ return [
         'log' => '事件与贡献',
     ],
     'warnings' => [
-        'schema_missing' => '未检测到部分 Boss 相关表：:tables。请先加载 boss.lua，让 Lua 完成 ac_eluna 表结构初始化后再使用 AGMP。',
-        'runtime_unavailable' => 'Boss 运行态表暂不可用，请确认 boss.lua 已创建 ac_eluna 持久化表。',
+        'schema_missing' => '未检测到部分 Boss 相关表：:tables。请先加载 boss.lua，让 Lua 完成本区 Boss 表结构初始化后再使用 AGMP。',
+        'runtime_unavailable' => 'Boss 运行态表暂不可用，请确认 boss.lua 已创建本区持久化表。',
         'config_unavailable' => 'Boss 配置表暂不可用，AGMP 将回退到内置默认值。',
         'ext_unavailable' => 'Boss 扩展配置表（boss_activity_config_ext）暂不可用，扩展配置将显示内置默认值。',
         'events_unavailable' => 'Boss 事件表暂不可用。',
@@ -66,7 +66,7 @@ return [
         'rebase' => '重基准生命',
         'rebase_help' => '用当前模板重新刷新活跃 Boss 的基础血量倍率。仅脱战后可执行。',
         'reload_config' => '热加载配置',
-        'reload_config_help' => '重新从 ac_eluna 读取活动 Boss 配置，并尝试对活跃 Boss 应用可热更的部分。',
+        'reload_config_help' => '重新从本区配置库读取活动 Boss 配置，并尝试对活跃 Boss 应用可热更的部分。',
         'preset_label' => '技能预设',
         'difficulty_label' => '强度档位',
         'apply_preset' => '应用预设',
@@ -74,7 +74,7 @@ return [
     ],
     'config' => [
         'title' => '活动配置',
-        'note' => '保存后会写入 ac_eluna.boss_activity_config，并立即通过 SOAP 执行 .boss config reload。已生成 Boss 的 Entry、名称和移除类 Aura 以新一轮生成时完全生效。',
+        'note' => '保存后会写入本区配置库的 boss_activity_config，并立即通过 SOAP 执行 .boss config reload。已生成 Boss 的 Entry、名称和移除类 Aura 以新一轮生成时完全生效。',
         'save' => '保存并热加载',
         'sections' => [
             'identity' => 'Boss 基础',
@@ -136,7 +136,7 @@ return [
     ],
     'ext' => [
         'title' => '扩展配置（脚本私有）',
-        'note' => '保存后写入 ac_eluna.boss_activity_config_ext，并立即通过 SOAP 执行 .boss config reload。这张表是 boss.lua 的私有配置（喊话 / 战斗嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军模板 / 职业 / 受管模板），面板用 upsert 只改自己提交的列。喊话与嘲讽留空 = 该场景不喊；标注「留空沿用脚本默认值」的字段留空则不改动。',
+        'note' => '保存后写入本区配置库的 boss_activity_config_ext，并立即通过 SOAP 执行 .boss config reload。这张表是 boss.lua 的私有配置（喊话 / 战斗嘲讽 / AI 节奏 / 阶段阈值 / 巡逻 / 小怪 / 援军模板 / 职业 / 受管模板），面板用 upsert 只改自己提交的列。喊话与嘲讽留空 = 该场景不喊；标注「留空沿用脚本默认值」的字段留空则不改动。',
         'save' => '保存扩展配置并热加载',
         'unavailable' => '扩展配置表尚未由 boss.lua 创建，当前只能查看默认值。',
         'tabs_label' => '扩展配置分区',
@@ -323,9 +323,9 @@ return [
     'feedback' => [
         'action_success' => 'Boss 管理动作执行成功。',
         'config_saved' => 'Boss 配置已保存并热加载。',
-        'config_saved_reload_failed' => 'Boss 配置已保存到 ac_eluna，但热加载失败：:message',
+        'config_saved_reload_failed' => 'Boss 配置已保存到本区配置库，但热加载失败：:message',
         'ext_saved' => 'Boss 扩展配置已保存并热加载。',
-        'ext_saved_reload_failed' => 'Boss 扩展配置已保存到 ac_eluna，但热加载失败：:message',
+        'ext_saved_reload_failed' => 'Boss 扩展配置已保存到本区配置库，但热加载失败：:message',
     ],
     'errors' => [
         'invalid_action' => '无效的 Boss 管理动作。',
@@ -347,7 +347,7 @@ return [
                     'kill' => '确认击杀当前活跃 Boss 吗？将按正常死亡流程结算并发放奖励。',
                     'clear' => '确认重置当前活跃 Boss 吗？Boss 会被直接移除且不发放任何奖励。',
                     'rebase' => '确认对当前活跃 Boss 执行重基准吗？（Boss 必须在脱战状态）',
-                    'config_reload' => '确认从 ac_eluna 重新热加载 Boss 配置吗？',
+                    'config_reload' => '确认从本区配置库重新热加载 Boss 配置吗？',
                     'preset' => '确认切换技能预设为 :value 吗？',
                     'difficulty' => '确认切换强度档位为 :value 吗？',
                 ],
