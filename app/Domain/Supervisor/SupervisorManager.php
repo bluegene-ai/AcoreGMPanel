@@ -682,8 +682,16 @@ final class SupervisorManager
         //    unknown instance id is refused instead of being mapped to another realm; a forgotten
         //    dir must end in "directory not found" plus the diagnostics block, never in a silently
         //    wrong realm.
+        //    The documented per-realm layouts are release/supervisor-<id> and release/<id>/supervisor
+        //    (see supervisor.ini "several realms on one machine"); the same names directly under a
+        //    root are accepted too, so a realm folder that sits next to the panel is found as well.
         $conventions = $named
-            ? ['supervisor-' . $this->instanceId, $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor']
+            ? [
+                'release' . DIRECTORY_SEPARATOR . 'supervisor-' . $this->instanceId,
+                'release' . DIRECTORY_SEPARATOR . $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor',
+                'supervisor-' . $this->instanceId,
+                $this->instanceId . DIRECTORY_SEPARATOR . 'supervisor',
+            ]
             : ['release' . DIRECTORY_SEPARATOR . 'supervisor', 'supervisor'];
 
         foreach (array_unique($roots) as $root) {
