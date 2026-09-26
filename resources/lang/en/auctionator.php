@@ -12,6 +12,7 @@ return [
     'tabs' => [
         'label' => 'Auction bot page sections',
         'status' => 'Status',
+        'listings' => 'Listings',
         'settings' => 'Settings',
         'policy' => 'Item policy',
         'actions' => 'Actions',
@@ -95,6 +96,33 @@ return [
         'bot_mail' => 'Bot mailbox messages',
         'unavailable' => 'The auctionhouse table could not be read; check the characters database connection and schema.',
         'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no auctionhouse data to report.',
+    ],
+    // Per-listing management of the bot's current stock: delist / reprice. Both must run on
+    // the worldserver side (the auctionhouse table is only a startup cache), so the panel
+    // turns them into the module's delist / reprice commands.
+    'listing_detail' => [
+        'title' => 'Bot listing detail',
+        'hint' => 'Every row of auctionhouse whose itemowner is Auctionator.CharacterGuid, one auction per row. '
+            . 'Delisting hands the entry to the core\'s own expiry flow: the item is mailed back to its owner, and '
+            . 'the auctionator\'s own auction mail is recycled, so the bot\'s stock is simply destroyed. An auction '
+            . 'that already has a bid cannot be delisted or repriced - the core settles it with the bidder, which is '
+            . 'selling it rather than undoing it. Both operations act on the live in-memory auction, so players see '
+            . 'the result immediately.',
+        'hint_short' => 'Delist or reprice one listing at a time; it applies immediately, and a listing with a bid cannot be changed.',
+        'showing' => 'Showing :shown of :total',
+        'filter_from' => 'From auction id',
+        'auction_id' => 'Auction id',
+        'startbid' => 'Start bid (copper)',
+        'buyout' => 'Buyout (copper)',
+        'expires' => 'Expires',
+        'delist' => 'Delist',
+        'reprice' => 'Reprice',
+        'has_bid' => 'Has a bid',
+        'bid_note' => 'This auction already has a bid: the core settles it with that bidder instead of undoing it, so delisting and repricing are disabled.',
+        'empty' => 'The bot currently has no auctions listed.',
+        'next_page' => 'Next page',
+        'no_bot_guid' => 'Auctionator.CharacterGuid is not configured on this realm (or is 0), so there is no owner to tell the bot\'s listings apart by; the detail cannot be listed.',
+        'price_note' => 'Both prices are TOTALS in copper - the two numbers this row already shows - not the per-unit prices the add command takes. A buyout of 0 means "no buyout" (pure auction).',
     ],
     'market' => [
         'title' => 'Market price table',
@@ -290,6 +318,7 @@ return [
         'gm_deleted' => 'gm_list item :item deleted.',
         'gm_toggled' => 'gm_list item :item toggled.',
         'command_success' => 'Command executed.',
+        'listing_success' => 'The listing change was submitted.',
         'power_started' => 'The auction bot on :server is running again: the option file was written and the running module was switched on immediately.',
         'power_stopped' => 'The auction bot on :server is stopped: the option file was written and the running module was switched off immediately (auctions already listed are untouched).',
         'power_runtime_only' => 'The running module was switched, but the option file could not be written (:message), so a restart will bring the old state back.',
@@ -306,6 +335,8 @@ return [
         'config_unreadable' => 'The configuration file cannot be read.',
         'config_not_writable' => 'The configuration file is not writable (permissions or path).',
         'invalid_action' => 'Unknown action.',
+        'listing_id_required' => 'A valid auction id is required.',
+        'startbid_invalid' => 'The start bid must be a whole number of copper between 1 and :max.',
         'invalid_class' => 'Invalid class or subclass.',
         'invalid_quality' => 'Quality must be between 0 and 7.',
         'invalid_target' => 'Invalid toggle target.',
@@ -364,6 +395,8 @@ return [
                     'add' => 'List these items with the selected mode and prices?',
                     'power_start' => 'Start the auction bot on this realm? This writes this realm\'s option file and applies immediately.',
                     'power_stop' => 'Stop the auction bot on this realm? Only this realm is affected; auctions already listed stay.',
+                    'delist' => 'Take auction :id down? Its item is mailed back to the owner on the next auction house tick (about a minute); the bot\'s own mail is recycled, so that item is destroyed.',
+                    'reprice' => 'Reprice auction :id to start bid :startbid and buyout :buyout? Players see it immediately.',
                 ],
                 'feedback' => [
                     'config_success' => 'Configuration saved.',
@@ -375,6 +408,7 @@ return [
                     'action_failure' => 'The command failed.',
                     'power_failure' => 'The master switch did not take effect.',
                     'buyout_failure' => 'The buyout switch did not take effect.',
+                    'listing_failure' => 'The listing change failed.',
                 ],
                 'actions' => [
                     'output_empty' => '(no output yet)',
@@ -389,6 +423,10 @@ return [
                     'bid_no_buyout' => 'Auction: start bid :bid (stack :bid_total), no buyout (highest bidder wins).',
                     'missing_bid' => 'Provide a start bid above 0.',
                     'missing_buyout' => 'Provide a buyout above 0.',
+                    // Delist/reprice validation (JS fills the :placeholders; both prices are stack totals)
+                    'startbid_required' => 'The start bid must be at least 1 copper.',
+                    'buyout_below_startbid' => 'The buyout must not be below the start bid (0 means "no buyout").',
+                    'no_buyout' => 'no buyout',
                 ],
             ],
         ],

@@ -259,6 +259,7 @@ return static function (Router $router): void {
             $router->post('/auctionator/api/config', [AuctionatorController::class, 'apiConfigSave']);
             $router->post('/auctionator/api/item', [AuctionatorController::class, 'apiItem']);
             $router->post('/auctionator/api/action', [AuctionatorController::class, 'apiAction']);
+            $router->post('/auctionator/api/listing', [AuctionatorController::class, 'apiListing']);
             
             $router->post('/auctionator/api/power', [AuctionatorController::class, 'apiPower']);
             

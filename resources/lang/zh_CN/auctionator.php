@@ -12,6 +12,7 @@ return [
     'tabs' => [
         'label' => '拍卖机器人页面分区',
         'status' => '状态',
+        'listings' => '挂单',
         'settings' => '配置',
         'policy' => '物品策略',
         'actions' => '操作',
@@ -94,6 +95,30 @@ return [
         'bot_mail' => '机器人邮箱邮件',
         'unavailable' => '无法读取 auctionhouse 表，请确认角色数据库连接与表结构。',
         'not_deployed' => '本区没有部署 mod-auctionator，因此没有 auctionhouse 数据可统计。',
+    ],
+    // 机器人当前挂单的逐条明细：下架 / 改价。这两件事必须由 worldserver 侧执行
+    // （auctionhouse 表只是启动缓存），所以面板把它们转成模块的 delist / reprice 命令。
+    'listing_detail' => [
+        'title' => '机器人挂单明细',
+        'hint' => '这里是 auctionhouse 里 itemowner = Auctionator.CharacterGuid 的挂单，每行一条。'
+            . '下架会把该条交给核心的到期流程：物品按邮件退回所有者，机器人自己的拍卖邮件会被回收（等于销毁）。'
+            . '已经有人出价的挂单不能下架也不能改价——核心会和出价人结算，那等于卖掉而不是撤回。'
+            . '这两个操作都在内存中的挂单上执行，玩家立刻看到结果。',
+        'hint_short' => '逐条下架或改价，立即生效；有出价的挂单不可改动。',
+        'showing' => '显示 :shown 条，共 :total 条',
+        'filter_from' => '从挂单 ID',
+        'auction_id' => '挂单 ID',
+        'startbid' => '起拍价（铜）',
+        'buyout' => '一口价（铜）',
+        'expires' => '到期时间',
+        'delist' => '下架',
+        'reprice' => '改价',
+        'has_bid' => '已有出价',
+        'bid_note' => '已经有出价：核心会把它和出价人结算，而不是撤回，所以下架/改价都被禁用。',
+        'empty' => '当前没有机器人挂单。',
+        'next_page' => '下一页',
+        'no_bot_guid' => '本区还没有配置 Auctionator.CharacterGuid（或为 0），无法确定哪些挂单属于机器人，因此列不出明细。',
+        'price_note' => '两个价格都是整组总价（铜），就是这一行当前的两个数字，不是 add 命令那种单位价。一口价填 0 表示不设一口价（纯竞拍）。',
     ],
     'market' => [
         'title' => '市场数据表',
@@ -289,6 +314,7 @@ return [
         'gm_deleted' => 'gm_list 物品 :item 已删除。',
         'gm_toggled' => 'gm_list 物品 :item 的启用状态已切换。',
         'command_success' => '命令已执行。',
+        'listing_success' => '挂单操作已提交。',
         'power_started' => ':server 的拍卖机器人已启动：配置已写回，运行中的模块已立即打开。',
         'power_stopped' => ':server 的拍卖机器人已停止：配置已写回，运行中的模块已立即关闭（已挂出的拍卖不受影响）。',
         'power_runtime_only' => '运行中的机器人已切换，但配置没写成功（:message），重启后会回到旧状态。',
@@ -305,6 +331,8 @@ return [
         'config_unreadable' => '配置文件无法读取。',
         'config_not_writable' => '配置文件不可写（权限或路径问题）。',
         'invalid_action' => '无效的操作。',
+        'listing_id_required' => '缺少或不合法的挂单 ID。',
+        'startbid_invalid' => '起拍价必须是 1 到 :max 之间的整数（铜）。',
         'invalid_class' => '类别或子类别不合法。',
         'invalid_quality' => '品质必须在 0..7 之间。',
         'invalid_target' => '无效的开关目标。',
@@ -363,6 +391,8 @@ return [
                     'add' => '确认按选定的模式与价格上架这些物品吗？',
                     'power_start' => '确认启动当前区服的拍卖机器人吗？会写入本区配置文件并立即生效。',
                     'power_stop' => '确认停止当前区服的拍卖机器人吗？只会停掉本区，已挂出的拍卖不受影响。',
+                    'delist' => '确认下架挂单 :id 吗？物品会在下一次拍卖行轮询（约一分钟）时按邮件退回所有者；机器人自己的邮件会被回收，等于销毁该物品。',
+                    'reprice' => '确认把挂单 :id 改为起拍价 :startbid、一口价 :buyout 吗？会立即对玩家生效。',
                 ],
                 'feedback' => [
                     'config_success' => '配置已保存。',
@@ -374,6 +404,7 @@ return [
                     'action_failure' => '命令执行失败。',
                     'power_failure' => '总开关没有生效。',
                     'buyout_failure' => '买断模式开关没有生效。',
+                    'listing_failure' => '挂单操作失败。',
                 ],
                 'actions' => [
                     'output_empty' => '（暂无输出）',
@@ -388,6 +419,10 @@ return [
                     'bid_no_buyout' => '竞拍：起拍 :bid（整组 :bid_total），不设一口价（价高者得）。',
                     'missing_bid' => '请填写大于 0 的起拍单价。',
                     'missing_buyout' => '请填写大于 0 的买断单价。',
+                    // 挂单明细的改价校验（JS 自己替换 :占位符；这里两个价格是整组总价）
+                    'startbid_required' => '起拍价至少要 1 铜。',
+                    'buyout_below_startbid' => '一口价不能低于起拍价（填 0 表示不设一口价）。',
+                    'no_buyout' => '不设一口价',
                 ],
             ],
         ],

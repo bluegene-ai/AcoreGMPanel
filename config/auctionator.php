@@ -48,6 +48,9 @@ return [
     'disabled_items_limit' => 300,
     'itemclass_limit' => 300,
     'gm_list_limit' => 300,
+    // 机器人挂单明细每页行数（auctionhouse 里 itemowner = Auctionator.CharacterGuid 的那些）。
+    // 这张表按挂单 id 分页（listing_from），不是按物品 id。
+    'listing_limit' => 100,
 
     
     

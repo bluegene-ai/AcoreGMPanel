@@ -312,6 +312,76 @@
     syncListingForm(form);
   });
 
+  // ---- 机器人挂单明细：逐条下架 / 改价 ----
+  /**
+   * 这两件事都不能靠直接改 auctionhouse 表：那张表只是 worldserver 启动时的缓存，真正的状态在内存里。
+   * 所以请求交给 /auctionator/api/listing，由控制器转成模块的 ".auctionator delist|reprice"，
+   * 在内存中的那条挂单上执行。
+   *
+   * 价格是整组总价（copper），就是表格里两个输入框显示的值——不是 ".auctionator add" 的单位价。
+   */
+  async function runListing(payload) {
+    setBusy(true);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/listing', payload);
+    } finally {
+      setBusy(false);
+    }
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.listing_failure', 'The listing update failed.'));
+      return;
+    }
+
+    show('success', json.message || t('feedback.listing_success', 'Listing updated.'));
+    reload();
+  }
+
+  document.querySelectorAll('[data-au-listing]').forEach(function (node) {
+    node.addEventListener('click', function () {
+      const action = node.dataset.auListing;
+      const id = node.dataset.auId;
+      const row = node.closest('tr');
+      const payload = { action: action, id: id };
+
+      if (action === 'reprice') {
+        // 起拍价 / 一口价是行内的两个输入框，和 itemclass 表用同一套 data-au-field-name 约定
+        row.querySelectorAll('[data-au-field-name]').forEach(function (input) {
+          payload[input.dataset.auFieldName] = input.value;
+        });
+
+        const startbid = parseInt(payload.startbid, 10) || 0;
+        const buyout = parseInt(payload.buyout, 10) || 0;
+
+        if (startbid <= 0) {
+          show('error', t('listing.startbid_required', 'The start bid must be at least 1 copper.'));
+          return;
+        }
+
+        // 0 = 不带一口价（纯竞拍）；非 0 就必须不低于起拍价，否则这条挂单自相矛盾
+        if (buyout !== 0 && buyout < startbid) {
+          show('error', t('listing.buyout_below_startbid', 'The buyout must not be below the start bid.'));
+          return;
+        }
+
+        const message = tt('confirm.reprice', {
+          id: id,
+          startbid: copperText(startbid),
+          buyout: buyout === 0 ? t('listing.no_buyout', 'none') : copperText(buyout)
+        }, 'Reprice auction :id to :startbid / :buyout?');
+        if (!window.confirm(message)) return;
+      } else {
+        // 下架走核心的到期流程：物品按邮件退回所有者，机器人自己的邮件会被回收（等于销毁）
+        const message = tt('confirm.delist', { id: id },
+          'Take auction :id down? Its item is mailed back to the owner on the next auction house tick.');
+        if (!window.confirm(message)) return;
+      }
+
+      runListing(payload);
+    });
+  });
+
   // ---- GM actions ----
   function actionExtraFields() {
     const extra = {};

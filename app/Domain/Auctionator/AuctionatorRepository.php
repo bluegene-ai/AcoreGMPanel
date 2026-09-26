@@ -83,6 +83,98 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
+     * The bot's own listings - one row per auction. This is what the page's listing table
+     * renders and what its 下架 / 改价 buttons act on: the row's `id` IS the auction id the
+     * module's `.auctionator delist` / `.auctionator reprice` commands take.
+     *
+     * `itemowner` is the configured Auctionator character - the same filter listingStats()
+     * counts as "bot". Listings whose owner was overridden with a real character guid
+     * (".auctionator add ... owner=<guid>") are deliberately not in here, because the
+     * per-listing commands refuse them without the explicit "all" override.
+     *
+     * Prices are TOTAL copper for the whole stack, exactly as the `auctionhouse` row stores
+     * them - not unit prices like the add/gm_list forms take.
+     *
+     * Rows are paged by auction id, that table's primary key: a keyset page ("id >= from")
+     * stays stable while rows are deleted underneath it, which matters because deleting them
+     * is the point of this table. One row past the limit is fetched so the page can tell
+     * "these are all of them" from "there is another page".
+     *
+     * @return array{rows: array<int, array<string, mixed>>, from: int, limit: int, next_from: int, truncated: bool, error: string}
+     */
+    public function botListings(int $botGuid, int $from, int $limit): array
+    {
+        $limit = max(1, $limit);
+        $from = max(0, $from);
+
+        $result = [
+            'rows' => [],
+            'from' => $from,
+            'limit' => $limit,
+            'next_from' => 0,
+            'truncated' => false,
+            'error' => '',
+        ];
+
+        // Without a configured Auctionator.CharacterGuid there is no owner to filter on. Say
+        // so, instead of showing an empty table that reads as "the bot has no auctions".
+        if ($botGuid <= 0) {
+            $result['error'] = 'no_bot_guid';
+
+            return $result;
+        }
+
+        $rows = $this->tryAll(
+            'SELECT ah.id, ah.houseid, ah.itemowner, ah.buyoutprice, ah.startbid, ah.lastbid,
+                    ah.buyguid, ah.time, ii.itemEntry, ii.count AS stack
+               FROM auctionhouse ah
+               JOIN item_instance ii ON ii.guid = ah.itemguid
+              WHERE ah.itemowner = :owner AND ah.id >= :from
+              ORDER BY ah.id ASC
+              LIMIT ' . ($limit + 1),
+            [':owner' => $botGuid, ':from' => $from],
+            $this->characters()
+        );
+
+        $truncated = count($rows) > $limit;
+        if ($truncated) {
+            array_pop($rows);
+        }
+
+        $names = $this->itemNames(array_map(static fn (array $row): int => (int) $row['itemEntry'], $rows));
+
+        $listings = [];
+        foreach ($rows as $row) {
+            $entry = (int) $row['itemEntry'];
+            // A bid freezes the listing: the module refuses to cancel or reprice one, because
+            // the core settles a bid-carrying auction with the bidder instead of undoing it.
+            $hasBid = (int) $row['buyguid'] > 0 || (int) $row['lastbid'] > 0;
+
+            $listings[] = [
+                'id' => (int) $row['id'],
+                'house' => (int) $row['houseid'],
+                'item' => $entry,
+                'name' => $names[$entry] ?? '',
+                'stack' => (int) $row['stack'],
+                'startbid' => (int) $row['startbid'],
+                'buyout' => (int) $row['buyoutprice'],
+                'bid' => (int) $row['lastbid'],
+                'bidder' => (int) $row['buyguid'],
+                'has_bid' => $hasBid,
+                'expires' => (int) $row['time'],
+            ];
+        }
+
+        $result['rows'] = $listings;
+        $result['truncated'] = $truncated;
+        $result['next_from'] = $truncated && $listings !== []
+            ? (int) $listings[count($listings) - 1]['id'] + 1
+            : 0;
+
+        return $result;
+    }
+
+    /**
      * @return array{ok: bool, error: string, rows: int, distinct_items: int, fresh_items: int, newest: string, oldest: string, sources: array<string, int>}
      */
     public function marketStats(int $maxAgeDays): array

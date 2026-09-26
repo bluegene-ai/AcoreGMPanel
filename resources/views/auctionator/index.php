@@ -12,6 +12,8 @@ $groups = is_array($snapshot['groups'] ?? null) ? $snapshot['groups'] : [];
 $listings = is_array($snapshot['listings'] ?? null) ? $snapshot['listings'] : [];
 $market = is_array($snapshot['market'] ?? null) ? $snapshot['market'] : [];
 $policy = is_array($snapshot['policy'] ?? null) ? $snapshot['policy'] : [];
+$listingRows = is_array($snapshot['listing_rows'] ?? null) ? $snapshot['listing_rows'] : [];
+$listingItems = is_array($listingRows['rows'] ?? null) ? $listingRows['rows'] : [];
 $logEntries = is_array($snapshot['log'] ?? null) ? $snapshot['log'] : [];
 $warnings = is_array($snapshot['warnings'] ?? null) ? $snapshot['warnings'] : [];
 $notes = is_array($snapshot['notes'] ?? null) ? $snapshot['notes'] : [];
@@ -133,6 +135,7 @@ $qualityLabel = static function (int $quality): string {
      data-au-support-reason="<?= htmlspecialchars((string) ($notes['support_reason'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
   <div class="au-tabs" role="tablist" aria-label="<?= htmlspecialchars(__('app.auctionator.tabs.label')) ?>">
     <button type="button" role="tab" class="au-tab au-tab--active" data-au-tab="status" aria-selected="true"><?= htmlspecialchars(__('app.auctionator.tabs.status')) ?></button>
+    <button type="button" role="tab" class="au-tab" data-au-tab="listings" aria-selected="false"><?= htmlspecialchars(__('app.auctionator.tabs.listings')) ?></button>
     <button type="button" role="tab" class="au-tab" data-au-tab="settings" aria-selected="false"><?= htmlspecialchars(__('app.auctionator.tabs.settings')) ?></button>
     <button type="button" role="tab" class="au-tab" data-au-tab="policy" aria-selected="false"><?= htmlspecialchars(__('app.auctionator.tabs.policy')) ?></button>
     <button type="button" role="tab" class="au-tab" data-au-tab="actions" aria-selected="false"><?= htmlspecialchars(__('app.auctionator.tabs.actions')) ?></button>
@@ -279,6 +282,118 @@ $qualityLabel = static function (int $quality): string {
     </div>
   </section>
 
+  <!-- ==== listings（机器人当前挂单明细：逐条下架 / 改价） -->
+  <section class="au-panel" data-au-panel="listings" hidden>
+    <div class="au-card au-card--wide">
+      <h3><?= htmlspecialchars(__('app.auctionator.listing_detail.title')) ?></h3>
+      <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.listing_detail.hint')) ?>">i</span></p>
+
+      <?php if (!($listings['ok'] ?? false)): ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listings.' . ((string) ($listings['error'] ?? '') === 'not_deployed' ? 'not_deployed' : 'unavailable'))) ?></p>
+      <?php elseif (($listingRows['error'] ?? '') === 'no_bot_guid'): ?>
+        <?php // 没有 Auctionator.CharacterGuid 就没有"机器人拥有者"可筛，明细无从谈起 ?>
+        <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.listing_detail.no_bot_guid')) ?></p>
+      <?php else: ?>
+        <div class="au-actions">
+          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.showing', [
+              'shown' => count($listingItems),
+              'total' => (int) ($listings['bot'] ?? 0),
+          ])) ?></span>
+          <form class="au-inline-form" method="get">
+            <?php if ((int) ($current_server ?? 0) > 0): ?>
+              <input type="hidden" name="server" value="<?= (int) $current_server ?>">
+            <?php endif; ?>
+            <?php // 两个列表共用一次 GET：把另一个分页参数带上，翻这一页不会把那一页重置回第一页 ?>
+            <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input class="au-input" type="number" min="0" name="listing_from" value="<?= (int) ($listingRows['from'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.auctionator.listing_detail.filter_from')) ?>">
+            <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.policy.filter_apply')) ?></button>
+          </form>
+        </div>
+
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.price_note')) ?></p>
+
+        <div class="au-table-wrap">
+          <table class="au-table">
+            <thead>
+              <tr>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.auction_id')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.startbid')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.buyout')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.expires')) ?></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($listingItems as $row): ?>
+              <?php
+                // 有出价的挂单既不能下架也不能改价：核心会把带出价的拍卖和出价人结算掉，
+                // 那等于卖掉，而不是撤回。模块侧也会拒绝，这里先禁掉按钮以免误点。
+                $hasBid = (bool) ($row['has_bid'] ?? false);
+                $rowEditable = $canControl && $supported && !$hasBid;
+              ?>
+              <tr data-au-listing-row="<?= (int) ($row['id'] ?? 0) ?>">
+                <td><?= (int) ($row['id'] ?? 0) ?></td>
+                <td><?= (int) ($row['item'] ?? 0) ?></td>
+                <td><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                <td><?= (int) ($row['stack'] ?? 0) ?></td>
+                <td>
+                  <?php if ($rowEditable): ?>
+                    <input class="au-input au-input--tiny" type="number" min="1" data-au-field-name="startbid"
+                           value="<?= (int) ($row['startbid'] ?? 0) ?>"
+                           title="<?= htmlspecialchars($formatCopper((int) ($row['startbid'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>">
+                  <?php else: ?>
+                    <?= $gmPriceCell((int) ($row['startbid'] ?? 0)) ?>
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <?php if ($rowEditable): ?>
+                    <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="buyout"
+                           value="<?= (int) ($row['buyout'] ?? 0) ?>"
+                           title="<?= htmlspecialchars($formatCopper((int) ($row['buyout'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>">
+                  <?php else: ?>
+                    <?= $gmPriceCell((int) ($row['buyout'] ?? 0)) ?>
+                  <?php endif; ?>
+                </td>
+                <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
+                <td><?= htmlspecialchars($formatTime((int) ($row['expires'] ?? 0))) ?></td>
+                <td class="au-table__actions">
+                  <?php if ($hasBid): ?>
+                    <span class="au-badge au-badge--warn" title="<?= htmlspecialchars(__('app.auctionator.listing_detail.bid_note')) ?>"><?= htmlspecialchars(__('app.auctionator.listing_detail.has_bid')) ?></span>
+                  <?php elseif (!$canControl || !$supported): ?>
+                    <?php // 只读：列不出来就算了，别给个按不动的按钮 ?>
+                  <?php else: ?>
+                    <button type="button" class="btn btn-xs outline" data-au-listing="reprice" data-au-id="<?= (int) ($row['id'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.listing_detail.reprice')) ?></button>
+                    <button type="button" class="btn btn-xs outline danger" data-au-listing="delist" data-au-id="<?= (int) ($row['id'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.listing_detail.delist')) ?></button>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($listingItems === []): ?>
+              <tr><td colspan="9" class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.empty')) ?></td></tr>
+            <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+
+        <?php if (($listingRows['truncated'] ?? false) && (int) ($listingRows['next_from'] ?? 0) > 0): ?>
+          <?php // 用 GET 表单而不是链接：要保持 server / disabled_from 这些同页参数 ?>
+          <form class="au-inline-form" method="get">
+            <?php if ((int) ($current_server ?? 0) > 0): ?>
+              <input type="hidden" name="server" value="<?= (int) $current_server ?>">
+            <?php endif; ?>
+            <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input type="hidden" name="listing_from" value="<?= (int) ($listingRows['next_from'] ?? 0) ?>">
+            <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.listing_detail.next_page')) ?></button>
+          </form>
+        <?php endif; ?>
+      <?php endif; ?>
+    </div>
+  </section>
+
   <!-- ==== settings -->
   <section class="au-panel" data-au-panel="settings" hidden>
     <div class="au-card au-card--wide">
@@ -356,6 +471,8 @@ $qualityLabel = static function (int $quality): string {
               <?php if ((int) ($current_server ?? 0) > 0): ?>
                 <input type="hidden" name="server" value="<?= (int) $current_server ?>">
               <?php endif; ?>
+              <?php // 与挂单明细共用一次 GET：带上它的分页参数，翻这一页不会重置那一页 ?>
+              <input type="hidden" name="listing_from" value="<?= (int) ($listingRows['from'] ?? 0) ?>">
               <input class="au-input" type="number" min="0" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.auctionator.policy.filter_from')) ?>">
               <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.policy.filter_apply')) ?></button>
             </form>

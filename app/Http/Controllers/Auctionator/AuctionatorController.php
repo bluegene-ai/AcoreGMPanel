@@ -95,7 +95,10 @@ class AuctionatorController extends Controller
         $this->requireViewCapability();
         $this->maybeSwitchServer($request);
 
-        $snapshot = $this->snapshot($this->boundedInt($request, 'disabled_from', 0, 0, 16777215));
+        $snapshot = $this->snapshot(
+            $this->boundedInt($request, 'disabled_from', 0, 0, 16777215),
+            $this->boundedInt($request, 'listing_from', 0, 0, 4294967295)
+        );
         $server = ServerContext::server();
 
         return $this->pageView('auctionator.index', $this->serverViewData([
@@ -128,7 +131,10 @@ class AuctionatorController extends Controller
 
         return $this->json([
             'success' => true,
-            'payload' => $this->snapshot($this->boundedInt($request, 'disabled_from', 0, 0, 16777215)),
+            'payload' => $this->snapshot(
+                $this->boundedInt($request, 'disabled_from', 0, 0, 16777215),
+                $this->boundedInt($request, 'listing_from', 0, 0, 4294967295)
+            ),
         ]);
     }
 
@@ -422,6 +428,97 @@ class AuctionatorController extends Controller
             'payload' => [
                 'action' => $action,
                 'command' => $built['command'],
+                'output' => (string) ($result['output'] ?? ''),
+                'execution' => $result['execution'] ?? null,
+            ],
+        ], ($result['success'] ?? false) ? 200 : 422);
+    }
+
+    /**
+     * 单个挂单的下架 / 改价（按区，立即生效）。
+     *
+     * 关键前提：auctionhouse 表只是 worldserver 启动时的一份缓存，真正的状态在内存里
+     * （AuctionHouseMgr 的 _auctionsMap + _mAitems）。所以这里**不直接改库**，而是把请求转成模块的
+     * ".auctionator delist|reprice"，由模块在内存里的那个 AuctionEntry 上执行：
+     *   - 直接 DELETE 库里的行：内存里的挂单还在，玩家照样能买，而且行会在下次保存/重启时回来；
+     *   - 直接 UPDATE 价格：内存与搜索索引都还是旧价，玩家按旧价看到并买到。
+     * 两个价格都是**整组总价**（copper），即页面上那一行显示的两个数字，不是 ".auctionator add" 那种单价。
+     */
+    public function apiListing(Request $request): Response
+    {
+        $this->requireControlCapability();
+        $this->maybeSwitchServer($request);
+
+        if (($refusal = $this->unsupportedServerResponse()) !== null) {
+            return $refusal;
+        }
+
+        $action = $this->normalizedEnum($request, 'action', ['delist', 'reprice'], '');
+        if ($action === '') {
+            return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_action')], 422);
+        }
+
+        $id = $this->requiredInt($request, 'id', 1, 4294967295);
+        if (!$id['ok']) {
+            return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.listing_id_required')], 422);
+        }
+
+        // 不提供模块的 "all" 覆盖开关：这个表只列 itemowner = Auctionator.CharacterGuid 的挂单，
+        // 所以页面上每一行本来就在模块的默认许可范围内。要动别的挂单，用游戏内的
+        // ".auctionator delist <id> all"（那里有明确的操作人）。
+        if ($action === 'delist') {
+            $command = '.auctionator delist ' . $id['value'];
+        } else {
+            $max = (int) Config::get('auctionator.price_max_copper', 4294967295);
+            $startbid = $this->requiredInt($request, 'startbid', 1, $max);
+            if (!$startbid['ok']) {
+                return $this->json([
+                    'success' => false,
+                    'message' => Lang::get('app.auctionator.errors.startbid_invalid', ['max' => $max]),
+                ], 422);
+            }
+
+            // 0 = 不带一口价（纯竞拍）；给了就必须不低于起拍价，否则这条挂单等于自相矛盾。
+            $buyout = $this->boundedInt($request, 'buyout', 0, 0, $max);
+            if ($buyout !== 0 && $buyout < $startbid['value']) {
+                return $this->json([
+                    'success' => false,
+                    'message' => Lang::get('app.auctionator.errors.buyout_below_bid', [
+                        'bid' => $startbid['value'],
+                        'price' => $buyout,
+                    ]),
+                ], 422);
+            }
+
+            $command = '.auctionator reprice ' . $id['value'] . ' ' . $startbid['value'] . ' ' . $buyout;
+        }
+
+        // strict_marker：delist/reprice 是较新的子命令，老版本模块只会回一句
+        // "[Auctionator] unknown command ..."（没有 AGMP 标记）。没有这个开关，SoapCommandRunner
+        // 会把"命令根本没被识别"当成成功，页面于是谎报成功而实际什么都没发生。
+        $result = SoapCommandRunner::execute($command, [
+            'server_id' => ServerContext::currentId(),
+            'strict_marker' => true,
+        ]);
+
+        Audit::log('auctionator', 'listing', $action, [
+            'server_id' => ServerContext::currentId(),
+            'command' => $command,
+            'success' => (bool) ($result['success'] ?? false),
+            'output' => (string) ($result['output'] ?? ''),
+        ]);
+
+        return $this->json([
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => (string) ($result['message'] ?? '') !== ''
+                ? (string) $result['message']
+                : ($result['success'] ?? false
+                    ? Lang::get('app.auctionator.feedback.listing_success')
+                    : Lang::get('app.auctionator.errors.command_failed')),
+            'payload' => [
+                'action' => $action,
+                'id' => $id['value'],
+                'command' => $command,
                 'output' => (string) ($result['output'] ?? ''),
                 'execution' => $result['execution'] ?? null,
             ],
@@ -882,7 +979,7 @@ class AuctionatorController extends Controller
      * Everything the page and the status endpoint need.
      * @return array<string, mixed>
      */
-    private function snapshot(int $disabledFrom = 0): array
+    private function snapshot(int $disabledFrom = 0, int $listingFrom = 0): array
     {
         $fields = (array) Config::get('auctionator.fields', []);
         $paths = $this->realmPaths();
@@ -911,6 +1008,15 @@ class AuctionatorController extends Controller
                 'fields' => $fields,
                 'groups' => $this->fieldGroups($fields),
                 'listings' => ['ok' => false, 'error' => $unreachable ? 'unavailable' : 'not_deployed'],
+                // 挂单明细同样只回答"读不到"，不去碰该区的 characters 库
+                'listing_rows' => [
+                    'rows' => [],
+                    'from' => $listingFrom,
+                    'limit' => 0,
+                    'next_from' => 0,
+                    'truncated' => false,
+                    'error' => $unreachable ? 'unavailable' : 'not_deployed',
+                ],
                 'market' => ['ok' => false, 'error' => $unreachable ? 'unreadable' : 'not_deployed'],
                 'policy' => [
                     'disabled_from' => $disabledFrom,
@@ -937,6 +1043,11 @@ class AuctionatorController extends Controller
 
         $repository = $this->repo();
         $listings = $repository->listingStats($botGuid);
+        $listingRows = $repository->botListings(
+            $botGuid,
+            $listingFrom,
+            (int) Config::get('auctionator.listing_limit', 100)
+        );
         $market = $repository->marketStats($maxAgeDays);
         $policy = $repository->policyRows(
             0,
@@ -981,6 +1092,7 @@ class AuctionatorController extends Controller
             'fields' => $fields,
             'groups' => $this->fieldGroups($fields),
             'listings' => $listings,
+            'listing_rows' => $listingRows,
             'market' => $market,
             'policy' => $policy,
             'log' => $this->logTail((int) Config::get('auctionator.log_tail_lines', 40)),
