@@ -150,6 +150,22 @@ class RewardPoolSimulator
                 $this->note(sprintf('奖池%d 已启用但没有奖品，跳过（不参与触发判定）', $index));
             }
 
+            // 名额 ≥ 参战人数 = 该池退化成"全员发放"（与 all 模式等价，抽签结果必然和保底池同一批人）。
+            // 脚本侧每条击杀日志也会打同样的 ⚠ 告警，两边口径保持一致。
+            if (
+                $spec['enabled']
+                && $spec['winner_mode'] !== 'all'
+                && $participantCount > 0
+                && $spec['winner_count'] >= $participantCount
+            ) {
+                $this->note(sprintf(
+                    '奖池%d 的获奖人数（%d）≥ 参战人数（%d）：该池会发给全体参赛者，与"全部有效参战"等价，名单会和保底池重复',
+                    $index,
+                    $spec['winner_count'],
+                    $participantCount
+                ));
+            }
+
             $poolStats[$index] = [
                 'enabled' => $spec['enabled'],
                 'chance' => $spec['chance'],
