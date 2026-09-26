@@ -3,6 +3,7 @@
 return [
     'page_title' => '招募管理',
     'intro' => '查看当前服务器 RAF 绑定、奖励等级与异常计数，并通过 SOAP 执行人工绑定或解绑。',
+    'intro_short' => '查看招募绑定与奖励等级，并手工绑定或解绑。',
     'scope_note' => '当前服务器：:server / realm_id=:realm',
     'summary' => '共 :total 条，当前第 :page / :pages 页',
     'stats' => [
@@ -97,6 +98,7 @@ return [
     'reward_log' => [
         'title' => '奖励发放记录',
         'subtitle' => '记录每次招募达标后实际寄出的奖励，可追溯到是哪次招募、何时、发给了谁。',
+        'subtitle_short' => '每次达标后实际寄出的奖励记录。',
         'table_title' => '发放明细',
         'summary' => '共 :total 条，当前第 :page / :pages 页',
         'stats' => [
@@ -111,6 +113,7 @@ return [
             'hints' => [
                 'total' => '已成功寄出奖励的发放记录总数',
                 'recruiters' => '产生过奖励发放的招募角色数（与下方明细条数口径不同）',
+                'recruiters_short' => '已发放奖励的招募者数',
                 'recruits' => '达成奖励条件并被记录的被招募账号数',
                 'default_rewards' => '使用了默认奖励组合而非独立配置的记录数',
                 'latest' => '最近一次成功寄出奖励的时间',

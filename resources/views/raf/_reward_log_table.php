@@ -1,9 +1,7 @@
 <?php
 /**
  * 奖励发放明细表格（记录区块与统计卡下钻弹窗共用）。
- *
- * 列表区块：$raf_reward_log 由 RafController 注入。
- * 下钻弹窗：$pager / $raf_log_source_labels / $raf_detail_mode = true。
+ * 下钻弹窗：仅 $pager / $raf_log_source_labels / $raf_detail_mode = true。
  */
 
 $rewardTableDetailMode = !empty($raf_detail_mode);

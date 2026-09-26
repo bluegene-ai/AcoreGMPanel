@@ -2,27 +2,6 @@
 /**
  * File: app/Http/Controllers/AccountController.php
  * Purpose: Defines class AccountController for the app/Http/Controllers module.
- * Classes:
- *   - AccountController
- * Functions:
- *   - __construct()
- *   - maybeSwitchServer()
- *   - index()
- *   - login()
- *   - logout()
- *   - apiList()
- *   - apiCreate()
- *   - apiAccountsByIp()
- *   - apiIpLocation()
- *   - apiCharacters()
- *   - apiCharactersStatus()
- *   - apiSetGm()
- *   - apiBan()
- *   - apiUnban()
- *   - apiChangePassword()
- *   - apiKick()
- *   - logAccountAction()
- *   - logAccountCreate()
  */
 
 namespace Acme\Panel\Http\Controllers;
@@ -311,7 +290,7 @@ class AccountController extends Controller
                     $ok = true;
                     $this->logAccountAction('bulk_unban',$cnt>0?'success':'noop',$context+['updated'=>$cnt]);
                     if($cnt>0){ Audit::log('account','unban',"id=$id updated=$cnt"); }
-                } else { // delete
+                } else {
                     $res = $this->repo()->deleteAccountCascade($id);
                     $ok = (bool)($res['success'] ?? false);
                     $this->logAccountAction('bulk_delete',$ok?'success':'failed',$context+$res);

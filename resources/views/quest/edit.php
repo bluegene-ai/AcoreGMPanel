@@ -48,14 +48,13 @@
 
 <div class="quest-layout-wide" id="quest-layout" data-qe-layout="tabs">
   <div id="quest-editor-main">
-    <!-- 顶部动作条已移除：必要操作集成到 SQL diff 卡片 -->
 
-    <!-- SQL Diff / Exec 面板（已从原 Tab 中独立出来，随时可见） -->
+    <!-- SQL Diff / Exec 面板（随时可见） -->
     <div class="card mb-3" id="sql-inline-panel">
       <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
           <h6 class="mb-0"><?= htmlspecialchars(__('app.quest.edit.diff.title')) ?></h6>
-          <div class="small text-muted"><?= htmlspecialchars(__('app.quest.edit.diff.hint')) ?></div>
+          <div class="small text-muted"><?= htmlspecialchars(__('app.quest.edit.diff.diff_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.quest.edit.diff.hint')) ?>">i</span></div>
         </div>
         <pre class="mb-0 small mono quest-diff-preview" id="diff-sql"><?= htmlspecialchars(__('app.quest.edit.diff.empty')) ?></pre>
       </div>

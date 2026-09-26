@@ -42,7 +42,7 @@ return static function (Router $router): void {
 
     $router->get('/', [HomeController::class, 'index']);
 
-    // Public character boost redeem (no login)
+    
     $router->get('/public/character-boost', [PublicCharacterBoostController::class, 'index']);
     $router->get('/public/character-boost/options', [PublicCharacterBoostController::class, 'options']);
     $router->group([CsrfMiddleware::class], static function (Router $router): void {
@@ -87,6 +87,9 @@ return static function (Router $router): void {
             $router->post('/boss/api/action', [BossController::class, 'apiAction']);
             $router->post('/boss/api/config', [BossController::class, 'apiConfigSave']);
             $router->post('/boss/api/ext-config', [BossController::class, 'apiExtConfigSave']);
+            $router->post('/boss/api/ext-config/copy', [BossController::class, 'apiExtConfigCopy']);
+            $router->post('/boss/api/reward-simulate', [BossController::class, 'apiRewardSimulate']);
+            $router->post('/boss/api/class-map/autofill', [BossController::class, 'apiClassMapAutofill']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
             $router->post('/soap/api/execute', [SoapWizardController::class, 'apiExecute']);
             $router->post('/smart-ai/api/preview', [SmartAiWizardController::class, 'apiPreview']);
@@ -123,7 +126,7 @@ return static function (Router $router): void {
             $router->post('/character-boost/api/templates/save', [CharacterBoostTemplateAdminController::class, 'apiSave']);
             $router->post('/character-boost/api/templates/delete', [CharacterBoostTemplateAdminController::class, 'apiDelete']);
 
-            // 直升管理：执行直升 / 预览 / 历史（原群发页的直升入口已迁移到这里）
+            
             $router->post('/character-boost/api/apply', [CharacterBoostAdminController::class, 'apiApply']);
             $router->post('/character-boost/api/history', [CharacterBoostAdminController::class, 'apiHistory']);
 
@@ -137,8 +140,8 @@ return static function (Router $router): void {
         $router->get('/character-boost/templates/edit', [CharacterBoostTemplateAdminController::class, 'edit']);
         $router->get('/character-boost/redeem-codes', [CharacterBoostRedeemCodeAdminController::class, 'index']);
 
-        // Unified item / inventory module (merged 背包查询 + 物品归属).
-        // Character axis: ?mode=character   Item axis: ?mode=item
+        
+        
         $router->get('/item-inventory', [ItemInventoryController::class, 'index']);
         $router->get('/item-inventory/api/characters', [ItemInventoryController::class, 'apiCharacters']);
         $router->get('/item-inventory/api/character-items', [ItemInventoryController::class, 'apiCharacterItems']);
@@ -149,7 +152,7 @@ return static function (Router $router): void {
             $router->post('/item-inventory/api/bulk', [ItemInventoryController::class, 'apiBulk']);
         });
 
-        // Legacy URLs kept alive so existing bookmarks and external links keep working.
+        
         $router->get('/bag-query', [ItemInventoryController::class, 'legacyRedirect']);
         $router->get('/bag', [ItemInventoryController::class, 'legacyBagRedirect']);
         $router->get('/item-ownership', [ItemInventoryController::class, 'legacyOwnershipRedirect']);
@@ -220,7 +223,7 @@ return static function (Router $router): void {
         $router->get('/soap', [SoapWizardController::class, 'index']);
         $router->get('/smart-ai', [SmartAiWizardController::class, 'index']);
 
-        // 守护管理：查看/控制 acore_supervisor.exe（worldserver + authserver）
+        
         $router->get('/supervisor', [SupervisorController::class, 'index']);
         $router->get('/supervisor/api/status', [SupervisorController::class, 'apiStatus']);
         $router->get('/supervisor/api/log', [SupervisorController::class, 'apiLog']);
@@ -228,13 +231,13 @@ return static function (Router $router): void {
             $router->post('/supervisor/api/command', [SupervisorController::class, 'apiCommand']);
         });
 
-        // 聊天答题（TriviaReward.lua）：实时状态走 SOAP，配置/题库/预设/排行走 ac_eluna 数据表
+        
         $router->get('/trivia', [TriviaController::class, 'index']);
         $router->get('/trivia/api/status', [TriviaController::class, 'apiStatus']);
         $router->get('/trivia/api/questions', [TriviaController::class, 'apiQuestions']);
         $router->get('/trivia/api/presets', [TriviaController::class, 'apiPresets']);
         $router->get('/trivia/api/winners', [TriviaController::class, 'apiWinners']);
-        // 题库模板导入/导出（导出与模板下载是 GET，导入走 POST + CSRF）
+        
         $router->get('/trivia/api/questions/export', [TriviaController::class, 'apiQuestionExport']);
         $router->get('/trivia/api/questions/template', [TriviaController::class, 'apiQuestionTemplate']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
@@ -249,16 +252,16 @@ return static function (Router $router): void {
             $router->post('/trivia/api/winners/clear', [TriviaController::class, 'apiWinnersClear']);
         });
 
-        // 拍卖机器人（mod-auctionator）：挂单/市场概览、conf 读写、物品策略表、.auctionator GM 命令（SOAP）
+        
         $router->get('/auctionator', [AuctionatorController::class, 'index']);
         $router->get('/auctionator/api/status', [AuctionatorController::class, 'apiStatus']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/auctionator/api/config', [AuctionatorController::class, 'apiConfigSave']);
             $router->post('/auctionator/api/item', [AuctionatorController::class, 'apiItem']);
             $router->post('/auctionator/api/action', [AuctionatorController::class, 'apiAction']);
-            // 按区一键启停：写本区 conf 的 Auctionator.Enabled + 发本区 .auctionator start|stop
+            
             $router->post('/auctionator/api/power', [AuctionatorController::class, 'apiPower']);
-            // 按区买断模式开关：写本区 conf 的 Auctionator.Seller.BidOnly + 发本区 .auctionator buyout 0|1
+            
             $router->post('/auctionator/api/buyout', [AuctionatorController::class, 'apiBuyout']);
         });
     });

@@ -2,10 +2,6 @@
 /**
  * File: resources/views/creature/index.php
  * Purpose: Provides functionality for the resources/views/creature module.
- * Functions:
- *   - creature_localize_config_value()
- *   - mapFactionLabel()
- *   - mapNpcFlagLabel()
  */
 
 ?>
@@ -75,7 +71,7 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
     <div class="creature-npcflag-filter__actions">
       <button type="button" class="btn btn-sm outline" id="npcflagApplyBtn"><?= __('app.creature.index.npcflag.apply') ?></button>
       <button type="button" class="btn btn-sm outline" id="npcflagClearBtn"><?= __('app.creature.index.npcflag.clear') ?></button>
-      <span class="muted creature-npcflag-filter__hint"><?= __('app.creature.index.npcflag.mode_hint') ?></span>
+      <span class="muted creature-npcflag-filter__hint"><?= __('app.creature.index.npcflag.mode_hint_short') ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.creature.index.npcflag.mode_hint')) ?>">i</span></span>
     </div>
   </details>
 </form>

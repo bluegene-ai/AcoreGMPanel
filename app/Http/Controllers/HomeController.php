@@ -2,10 +2,6 @@
 /**
  * File: app/Http/Controllers/HomeController.php
  * Purpose: Defines class HomeController for the app/Http/Controllers module.
- * Classes:
- *   - HomeController
- * Functions:
- *   - index()
  */
 
 namespace Acme\Panel\Http\Controllers;

@@ -3,8 +3,7 @@
  * File: resources/views/character_boost/codes.php
  * Purpose: Admin tool UI to generate redeem codes for boost templates.
  *
- * 布局：上半部分"生成"（左表单 / 右结果），下半部分"管理"（统计卡 + 筛选条 + 明细表）。
- * 结果区默认收起，生成后自动展开，避免空文本框长期占位。
+ * 布局：上半"生成"（左表单 / 右结果），下半"管理"（统计卡 + 筛选条 + 明细表）；结果区默认收起。
  */
 
 use Acme\Panel\Support\Csrf;

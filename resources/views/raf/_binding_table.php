@@ -2,9 +2,7 @@
 /**
  * 绑定列表表格（列表区块与统计卡下钻弹窗共用）。
  *
- * 列表区块：$pager / $rafCapabilities / $current_server / $search / $status /
- * $sort / $dir / $limit / $recruiter_guid 均已由 RafController 注入。
- * 下钻弹窗：仅提供 $pager / $rafCapabilities / $raf_detail_mode = true。
+ * 列表区块：变量由 RafController 注入；下钻弹窗：仅 $pager / $rafCapabilities / $raf_detail_mode = true。
  */
 
 $bindingTableDetailMode = !empty($raf_detail_mode);

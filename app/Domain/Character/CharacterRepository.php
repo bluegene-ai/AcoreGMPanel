@@ -76,7 +76,7 @@ class CharacterRepository extends MultiServerRepository
             : '';
 
         try {
-            // Clamp here: runCharacterSearch no longer receives pre-sanitised input.
+            // clamp here: runCharacterSearch is not guaranteed pre-sanitised input
             return $this->runCharacterSearch($pdo, $accountJoinSql, $whereSql, $params, max(1, $page), max(1, $perPage), $sort);
         } finally {
             $this->dropAccountFilterTempTable($accountTempTable);
@@ -84,8 +84,7 @@ class CharacterRepository extends MultiServerRepository
     }
 
     /**
-     * The actual character query, split out so search() can guarantee the
-     * account-filter temp table is dropped even when the query throws.
+     * The actual character query, split out so search() can drop the account-filter temp table even when the query throws.
      */
     private function runCharacterSearch(
         PDO $pdo,
@@ -545,7 +544,6 @@ class CharacterRepository extends MultiServerRepository
             try {
                 $pdo->prepare("DELETE FROM `{$tableSafe}` WHERE `{$colSafe}`=:v")->execute([':v'=>$value]);
             } catch(\Throwable $e){
-                // ignore
             }
         }
     }
@@ -691,7 +689,6 @@ class CharacterRepository extends MultiServerRepository
                 }
             }
 
-            // Finally delete the character row.
             $step = 'characters_delete';
             $st = $pdo->prepare('DELETE FROM characters WHERE guid=:g');
             $st->execute([':g'=>$guid]);
@@ -810,12 +807,9 @@ class CharacterRepository extends MultiServerRepository
     }
 
     /**
-     * Materialise the account id set into a session-local MEMORY table so the
-     * character query can filter on it without a huge IN (...) list.
-     *
-     * The characters connection is pooled per server, so the temporary table is
-     * visible to the follow-up queries issued by search(). It is dropped again
-     * via dropAccountFilterTempTable() once the search is done.
+     * Materialise the account id set into a session-local MEMORY table so the character query can filter
+     * on it without a huge IN (...) list. The characters connection is pooled per server, so the table is
+     * visible to the follow-up queries issued by search(); it is dropped again by dropAccountFilterTempTable().
      */
     private function prepareAccountFilterTempTable(array $accountIds): string
     {

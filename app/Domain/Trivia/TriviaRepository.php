@@ -12,22 +12,16 @@ use PDO;
 use Throwable;
 
 /**
- * 聊天答题（TriviaReward.lua）在 ac_eluna 下的数据访问层。
- *
- * 四张表全部由 Lua 脚本建表并初始化：
- *   trivia_reward_settings   单行配置（id = 1）
- *   trivia_reward_questions  题库
- *   trivia_reward_presets    奖励预设
- *   trivia_reward_winners    答对排行
+ * File: app/Domain/Trivia/TriviaRepository.php
+ * Purpose: 聊天答题（TriviaReward.lua）在 ac_eluna 下的数据访问层。
+ * 四张表全部由 Lua 脚本建表并初始化：settings（单行 id=1）/ questions / presets / winners。
  */
 class TriviaRepository extends MultiServerRepository
 {
-    /**
-     * 设置列 => 类型（与 TriviaReward.lua 的 SETTING_FIELDS 一一对应，改一边必须改另一边）。
-     */
+    /** 设置列 => 类型（与 TriviaReward.lua 的 SETTING_FIELDS 一一对应，改一边必须改另一边）。 */
     public const SETTINGS_COLUMNS = [
         'enabled' => 'bool',
-        // 暂停状态持久化：默认 1 = 暂停，服务器重启后不会自动出题（与 Lua 的 SETTING_FIELDS 对应）
+        // 暂停状态持久化：默认 1 = 暂停，服务器重启后不会自动出题
         'paused' => 'bool',
         'interval_seconds' => 'int',
         'answer_seconds' => 'int',
@@ -60,10 +54,9 @@ class TriviaRepository extends MultiServerRepository
         'item_link_locale' => 'int',
         'mail_subject' => 'string',
         'mail_body' => 'string',
-        // 定时启停（每天的时间段）：Lua 侧 tick 强制执行；列不存在时 saveSettings 会自动跳过
+        // 定时启停（每天的时间段）：Lua 侧 tick 强制执行；列不存在时 saveSettings 自动跳过
         'schedule_enabled' => 'bool',
         'schedule_windows' => 'string',
-        // TriviaReward_conf.lua 退休后搬进数据库的 9 项
         'debug_log' => 'bool',
         'idle_retry_seconds' => 'int',
         'resume_delay_seconds' => 'int',
@@ -77,13 +70,10 @@ class TriviaRepository extends MultiServerRepository
 
     private string $customDbName;
 
-    /** @var array<string,string> */
     private array $tables;
 
-    /** @var array<string,bool>|null */
     private ?array $tableAvailability = null;
 
-    /** @var array<string,bool>|null */
     private ?array $settingsColumnAvailability = null;
 
     public function __construct(?int $serverId = null)
@@ -104,9 +94,7 @@ class TriviaRepository extends MultiServerRepository
         return $this->customDbName;
     }
 
-    /**
-     * 全限定表名（跨库访问：面板用 characters 连接，但表在 ac_eluna 里）。
-     */
+    /** 全限定表名（跨库访问：面板用 characters 连接，但表在 ac_eluna 里）。 */
     public function table(string $key): string
     {
         $name = $this->tables[$key] ?? $key;
@@ -128,7 +116,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 四张表是否都已建好；Lua 脚本没跑过（或没建库）时页面只读展示提示。
-     *
      * @return array{ready:bool,partial:bool,tables:array<string,bool>,missing:array<int,string>}
      */
     public function schemaStatus(): array
@@ -149,9 +136,6 @@ class TriviaRepository extends MultiServerRepository
         ];
     }
 
-    /**
-     * @return array<string,bool>
-     */
     private function availability(): array
     {
         if ($this->tableAvailability !== null) {
@@ -182,11 +166,7 @@ class TriviaRepository extends MultiServerRepository
         return $this->tableAvailability = $availability;
     }
 
-    // ------------------------------------------------------------------ 设置
 
-    /**
-     * @return array<string,mixed>
-     */
     public function settings(): array
     {
         if (!$this->tableExists('settings')) {
@@ -200,13 +180,9 @@ class TriviaRepository extends MultiServerRepository
     }
 
     /**
-     * 逐列更新设置；$values 里没出现的列保持不动。
-     *
-     * 行被手工删过时用 INSERT IGNORE 补一行（不会覆盖已有行）。
-     *
-     * 注意：只写"数据库里真的存在"的列。新增列（如 schedule_enabled）要求 Lua 脚本先跑过一次
-     * ensureSchema() 建列；面板在列还没补上时跳过它，而不是整条保存失败。
-     *
+     * 逐列更新设置；$values 里没出现的列保持不动。行被手工删过时用 INSERT IGNORE 补一行（不覆盖已有行）。
+     * 只写"数据库里真的存在"的列：新增列要求 Lua 脚本先跑过一次 ensureSchema() 建列，面板在列还没补上时
+     * 跳过它，而不是整条保存失败。
      * @param array<string,mixed> $values
      */
     public function saveSettings(array $values): bool
@@ -274,7 +250,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * trivia_reward_settings 现有列（缓存）。
-     *
      * @return array<string,bool>
      */
     private function settingsColumns(): array
@@ -299,11 +274,7 @@ class TriviaRepository extends MultiServerRepository
         return $this->settingsColumnAvailability = $columns;
     }
 
-    // ------------------------------------------------------------------ 题库
 
-    /**
-     * @param array<string,mixed> $filters
-     */
     public function listQuestions(array $filters, int $page, int $perPage): Paginator
     {
         if (!$this->tableExists('questions')) {
@@ -347,9 +318,6 @@ class TriviaRepository extends MultiServerRepository
         return new Paginator(array_map([$this, 'normalizeQuestionRow'], $rows), $total, $page, $perPage);
     }
 
-    /**
-     * @return array<string,mixed>|null
-     */
     public function findQuestion(int $id): ?array
     {
         if ($id <= 0 || !$this->tableExists('questions')) {
@@ -429,7 +397,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 批量插入题目（模板导入用），单事务，出错整体回滚。
-     *
      * @param array<int,array<string,mixed>> $rows
      * @return int 实际写入条数
      */
@@ -485,7 +452,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 导出全部题目（不分页）。
-     *
      * @return array<int,array<string,mixed>>
      */
     public function allQuestions(): array
@@ -503,7 +469,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 按来源统计（面板显示"哪些是模板导入 / 种子题库"）。
-     *
      * @return array<string,int>
      */
     public function questionSourceStats(): array
@@ -535,8 +500,7 @@ class TriviaRepository extends MultiServerRepository
         );
         $stmt->execute([$enabled ? 1 : 0, time(), $id]);
 
-        // 不能用 rowCount() 判断题目是否存在：MySQL 在写入值与现值相同时返回 0 行受影响，
-        // 重复点"启用/停用"（或已经是目标状态）就会被误报成"找不到这道题"。
+        // 不能用 rowCount() 判断题目是否存在：写入值与现值相同时 MySQL 返回 0 行，重复点"启用/停用"会被误报成"找不到这道题"
         $check = $this->characters()->prepare(
             'SELECT COUNT(*) FROM ' . $this->table('questions') . ' WHERE `id` = ?'
         );
@@ -566,10 +530,6 @@ class TriviaRepository extends MultiServerRepository
         ];
     }
 
-    /**
-     * @param array<string,mixed> $row
-     * @return array<string,mixed>
-     */
     private function normalizeQuestionRow(array $row): array
     {
         $options = [];
@@ -602,9 +562,7 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * "33470:5,33447:2" / "33470:5;33447 x2" → [['entry'=>33470,'count'=>5], ...]
-     *
      * 只按逗号/分号切分：条目内部的空格（"33447 x2"）要保留给模式匹配。
-     *
      * @return array<int,array{entry:int,count:int}>
      */
     public function parseItemsText(string $text): array
@@ -630,9 +588,7 @@ class TriviaRepository extends MultiServerRepository
         return $items;
     }
 
-    /**
-     * 把界面上的 "33470:5" 文本规范化（去掉不合法片段，去重）。
-     */
+    /** 把界面上的 "33470:5" 文本规范化（去掉不合法片段，去重）。 */
     public function normalizeItemsText(string $text): string
     {
         $items = $this->parseItemsText($text);
@@ -650,10 +606,7 @@ class TriviaRepository extends MultiServerRepository
         return implode(',', $parts);
     }
 
-    /**
-     * @param array<int,int> $ids
-     * @return array<int,string>
-     */
+    /** @param array<int,int> $ids @return array<int,string> id => 名称 */
     public function itemNames(array $ids): array
     {
         $names = GameNameResolver::resolveMany('item', $ids);
@@ -678,11 +631,7 @@ class TriviaRepository extends MultiServerRepository
         return $names;
     }
 
-    // ------------------------------------------------------------------ 奖励预设
 
-    /**
-     * @return array<int,array<string,mixed>>
-     */
     public function listPresets(bool $onlyEnabled = false): array
     {
         if (!$this->tableExists('presets')) {
@@ -708,9 +657,6 @@ class TriviaRepository extends MultiServerRepository
         }, $rows);
     }
 
-    /**
-     * @return array<string,mixed>|null
-     */
     public function findPreset(string $name): ?array
     {
         $name = trim($name);
@@ -725,9 +671,6 @@ class TriviaRepository extends MultiServerRepository
         return is_array($row) ? $row : null;
     }
 
-    /**
-     * @param array<string,mixed> $data
-     */
     public function savePreset(array $data, ?string $originalName = null): bool
     {
         if (!$this->tableExists('presets')) {
@@ -784,7 +727,6 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 预设被哪些题目引用（删除前提示用）。
-     *
      * @return array<int,array{id:int,question:string}>
      */
     public function presetUsage(string $name): array
@@ -803,11 +745,7 @@ class TriviaRepository extends MultiServerRepository
         }, $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
     }
 
-    // ------------------------------------------------------------------ 答对排行
 
-    /**
-     * @param array<string,mixed> $filters
-     */
     public function listWinners(array $filters, int $page, int $perPage): Paginator
     {
         if (!$this->tableExists('winners')) {

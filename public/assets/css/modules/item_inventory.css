@@ -43,7 +43,7 @@
 .ii-table-wrap tbody tr:hover{background:rgba(63,168,255,.1);}
 .ii-name{display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 
-/* class colours, kept from the former bag-query module */
+/* class colours */
 .ii-row.ii-row--class{box-shadow:inset 4px 0 0 var(--ii-class-color,#3fa8ff);}
 .ii-row.ii-row--class td:nth-child(2){color:var(--ii-class-color,#3fa8ff);font-weight:600;}
 .ii-row.ii-row--class td:nth-child(1){font-weight:600;color:#cbd6e2;}

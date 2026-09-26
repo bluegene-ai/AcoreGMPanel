@@ -3,7 +3,6 @@
  * File: resources/views/trivia/index.php
  * Purpose: 聊天答题（TriviaReward.lua）管理页：Tab 分页（运行状态 / 题库 / 奖励预设 / 答对排行 / 设置）。
  *
- * 单页原来的 5 块内容竖着堆在一起（屏幕要滚很久），这里改成 Tab；
  * 运行控制里的「暂停/恢复」「开启/关闭」各自合并成一个按钮，按实时状态切换文案。
  */
 
@@ -75,8 +74,7 @@ if (!$liveAvailable) {
     $initialNext = __('app.trivia.status.next_in', ['seconds' => (string) (int) ($live['next_in'] ?? 0)]);
 }
 
-// 为什么没出题：脚本把原因写在 wait_reason_text 里（在线人数不足 / 题库为空 / 已暂停 / 不在计划时段…）。
-// 在此之前面板只有"下一题约 N 秒后"，四种情况长得一模一样，出问题只能人工逐项排查。
+// 为什么没出题：脚本把原因写在 wait_reason_text 里（在线人数不足 / 题库为空 / 已暂停 / 不在计划时段…），否则几种情况长得一模一样
 $initialWaitReason = trim((string) ($live['wait_reason_text'] ?? ''));
 if ($initialWaitReason === '') {
     $initialWaitReason = '—';
@@ -160,7 +158,7 @@ if ($canManage) {
   </nav>
 </div>
 
-<?php // ------------------------------------------------------------ Tab 1：运行状态 ?>
+<?php // ---- Tab 1：运行状态 ?>
 
 <section class="tv-tabpanel is-active" role="tabpanel" data-tv-tabpanel="status">
   <section class="tv-panel tv-panel--status" id="tvStatusPanel"
@@ -302,7 +300,7 @@ if ($canManage) {
   </section>
 </section>
 
-<?php // ------------------------------------------------------------ Tab 2：题库 ?>
+<?php // ---- Tab 2：题库 ?>
 
 <section class="tv-tabpanel" role="tabpanel" data-tv-tabpanel="questions">
   <section class="tv-panel" id="tvQuestionsPanel">
@@ -338,7 +336,7 @@ if ($canManage) {
               <input type="text" name="option<?= $index ?>" maxlength="120" <?= $index <= 2 ? 'required' : '' ?>></label>
           <?php endforeach; ?>
         </div>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.questions.answer_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.questions.answer_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.questions.answer_hint')) ?>">i</span></p>
         <div class="tv-grid">
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.answer_index')) ?></span>
             <select name="answer_index">
@@ -355,7 +353,7 @@ if ($canManage) {
             <input type="checkbox" name="enabled" value="1" checked>
             <span><?= htmlspecialchars(__('app.trivia.fields.question_enabled')) ?></span></label>
         </div>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.questions.reward_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.questions.reward_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.questions.reward_hint')) ?>">i</span></p>
         <div class="tv-grid">
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.reward_preset')) ?></span>
             <select name="reward_preset">
@@ -405,7 +403,7 @@ if ($canManage) {
             </a>
           </div>
         </header>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.import.hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.import.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.import.hint')) ?>">i</span></p>
         <div class="tv-import__row">
           <input type="file" id="tvImportFile" accept=".csv,.tsv,.txt,.json">
           <button type="button" class="btn outline" id="tvImportPreview"><?= htmlspecialchars(__('app.trivia.import.preview')) ?></button>
@@ -420,7 +418,7 @@ if ($canManage) {
   </section>
 </section>
 
-<?php // ------------------------------------------------------------ Tab 3：奖励预设 ?>
+<?php // ---- Tab 3：奖励预设 ?>
 
 <section class="tv-tabpanel" role="tabpanel" data-tv-tabpanel="presets">
   <section class="tv-panel" id="tvPresetsPanel">
@@ -443,7 +441,7 @@ if ($canManage) {
         <div class="tv-grid">
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.preset_name')) ?></span>
             <input type="text" name="name" maxlength="32" pattern="[a-z0-9_\-]{1,32}" required>
-            <span class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.presets.name_hint')) ?></span></label>
+            <span class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.presets.name_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.presets.name_hint')) ?>">i</span></span></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.preset_items')) ?></span>
             <input type="text" name="items" placeholder="33470:5,33447:2"></label>
           <label class="tv-field"><span><?= htmlspecialchars(__('app.trivia.fields.preset_money')) ?></span>
@@ -466,7 +464,7 @@ if ($canManage) {
   </section>
 </section>
 
-<?php // ------------------------------------------------------------ Tab 4：答对排行 ?>
+<?php // ---- Tab 4：答对排行 ?>
 
 <section class="tv-tabpanel" role="tabpanel" data-tv-tabpanel="winners">
   <section class="tv-panel" id="tvWinnersPanel">
@@ -494,7 +492,7 @@ if ($canManage) {
   </section>
 </section>
 
-<?php // ------------------------------------------------------------ Tab 5：设置 ?>
+<?php // ---- Tab 5：设置 ?>
 
 <?php if ($canManage): ?>
 <section class="tv-tabpanel" role="tabpanel" data-tv-tabpanel="settings">
@@ -550,8 +548,8 @@ if ($canManage) {
             <span><?= htmlspecialchars(__('app.trivia.fields.debug_log')) ?></span>
           </label>
         </div>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.enabled_hint')) ?></p>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.min_players_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.enabled_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.fields.enabled_hint')) ?>">i</span></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.min_players_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.fields.min_players_hint')) ?>">i</span></p>
       </fieldset>
 
       <fieldset class="tv-fieldset">
@@ -573,7 +571,7 @@ if ($canManage) {
             <option value="6,7@10:00-12:00"><?= htmlspecialchars(__('app.trivia.schedule.sample_weekend')) ?></option>
           </datalist>
         </div>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.schedule_windows_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.schedule_windows_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.fields.schedule_windows_hint')) ?>">i</span></p>
         <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.schedule.preview', [
             'windows' => implode('，', (array) ($settings['schedule_windows_list'] ?? [])) ?: __('app.trivia.fields.none'),
         ])) ?></p>
@@ -688,7 +686,7 @@ if ($canManage) {
             <input type="text" name="win_prefix" maxlength="32" value="<?= htmlspecialchars((string) ($settings['win_prefix'] ?? '')) ?>"></label>
         </div>
         <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.prefix_hint')) ?></p>
-        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.gm_rank_exempt_hint')) ?></p>
+        <p class="tv-muted tv-small"><?= htmlspecialchars(__('app.trivia.fields.gm_rank_exempt_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.trivia.fields.gm_rank_exempt_hint')) ?>">i</span></p>
       </fieldset>
 
       <fieldset class="tv-fieldset">

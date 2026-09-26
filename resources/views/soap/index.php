@@ -12,6 +12,7 @@
   ];
   $__pageCapabilities = $soapCapabilities;
   $capabilityNotice = $soapCapabilities['execute'] ? null : __('app.common.capabilities.page_limited');
+  $__pageHeader['intro_hint'] = __('app.soap.intro');
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
@@ -29,7 +30,7 @@
     <div id="soapActionFlash" class="panel-flash soap-flash-hidden"></div>
     <div id="soapCommandSummary" class="soap-wizard__summary">
   <h2><?= htmlspecialchars(__('app.soap.summary.title')) ?></h2>
-  <p class="muted"><?= htmlspecialchars(__('app.soap.summary.hint')) ?></p>
+  <p class="muted"><?= htmlspecialchars(__('app.soap.summary.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.soap.summary.hint')) ?>">i</span></p>
       <div class="soap-wizard__meta small muted" id="soapWizardMeta"></div>
     </div>
     <div id="soapCommandDetail" class="soap-wizard__detail" hidden>

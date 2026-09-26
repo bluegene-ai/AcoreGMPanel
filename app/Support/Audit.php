@@ -2,11 +2,6 @@
 /**
  * File: app/Support/Audit.php
  * Purpose: Defines class Audit for the app/Support module.
- * Classes:
- *   - Audit
- * Functions:
- *   - log()
- *   - ensureTable()
  */
 
 namespace Acme\Panel\Support;

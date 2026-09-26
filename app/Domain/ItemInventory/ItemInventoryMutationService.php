@@ -1,24 +1,12 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/ItemInventoryMutationService.php
- * Purpose: The single write path for item_instance / character_inventory data.
- *          Both the character axis and the item axis call into this service, so
- *          there is exactly one transactional strategy instead of the two
- *          divergent ones that used to exist.
+ * Purpose: The single write path for item_instance / character_inventory data (both axes).
  *
- * Guarantees:
- *   - every mutation runs inside one outer transaction with SELECT ... FOR UPDATE
- *     row locks, so a partially applied batch is rolled back instead of leaving
- *     half-modified inventory behind;
- *   - removing a container explicitly decides what happens to the items inside
- *     it (refuse / destroy) instead of silently orphaning them;
- *   - replacing an instance cannot write a stack larger than the new item's
- *     stackable limit: overflowing stacks are split into new instances in free
- *     slots of the same container;
- *   - replacing an instance clears the previous item's instance-level residue
- *     (charges, random property, enchantments) on the columns that exist.
- *
- * Class: ItemInventoryMutationService
+ * Guarantees: every mutation runs inside one outer transaction with SELECT ... FOR UPDATE row locks,
+ * so a partially applied batch is rolled back; removing a container must decide refuse/destroy
+ * instead of orphaning its items; replacing an instance splits an overflow beyond the stackable
+ * limit into free slots of the same container and clears the old item's instance-level residue.
  */
 
 declare(strict_types=1);
@@ -40,9 +28,7 @@ class ItemInventoryMutationService extends MultiServerRepository
     private ItemInstanceSchema $schema;
     private LocationResolver $locations;
 
-    /** @var array<int,array<int,array{bag:int,slot:int,item:int}>> */
     private array $inventoryMaps = [];
-    /** @var array<int,array<string,mixed>> */
     private array $metaCache = [];
     /** Cached "current max guid" allocator for item_instance. */
     private ?int $nextInstanceGuid = null;
@@ -56,16 +42,10 @@ class ItemInventoryMutationService extends MultiServerRepository
         $this->locations = new LocationResolver();
     }
 
-    /* ------------------------------------------------------------------ *
-     * Reduce / delete one instance
-     * ------------------------------------------------------------------ */
 
     /**
-     * Reduce one stack by $qty. A reduction that reaches zero removes the whole
-     * instance. When the instance is a container that still holds items, the
-     * operation is refused unless $destroyContents is true, in which case the
-     * contained items are destroyed in the same transaction.
-     *
+     * Reduce one stack by $qty; reaching zero removes the whole instance. A container that still holds
+     * items is refused unless $destroyContents is true (then they are destroyed in the same transaction).
      * @return array{success:bool,message:string,new_count:int,destroyed?:int,contained?:int}
      */
     public function reduceInstance(
@@ -158,15 +138,10 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $result;
     }
 
-    /* ------------------------------------------------------------------ *
-     * Bulk delete (item axis)
-     * ------------------------------------------------------------------ */
 
     /**
-     * Delete every requested instance in ONE transaction. Validation runs over
-     * the whole selection first, so a failure is reported without having applied
-     * any part of the batch. Empty containers require $destroyContents.
-     *
+     * Delete every requested instance in ONE transaction; validation covers the whole selection first,
+     * so a failure leaves nothing applied. Empty containers require $destroyContents.
      * @param array<int,int> $instanceIds
      * @return array{success:bool,message:string,deleted:array<int,int>,failed:array<int,array{instance:int,message:string}>,destroyed:int}
      */
@@ -181,9 +156,7 @@ class ItemInventoryMutationService extends MultiServerRepository
         $deleted = [];
         $destroyedTotal = 0;
 
-        // $deleted / $failed / $destroyedTotal are filled inside the closure; the
-        // wrapper rolls the transaction back when the callback reports failure, so
-        // outside the closure they are only read once $result['success'] is known.
+        // by-reference accumulators are only read once $result['success'] is known (a failed transaction is rolled back)
         $result = $this->transaction(function () use ($instanceIds, $destroyContents, &$failed, &$deleted, &$destroyedTotal): array {
             $instances = [];
             foreach ($instanceIds as $instanceId) {
@@ -245,10 +218,7 @@ class ItemInventoryMutationService extends MultiServerRepository
             return ['success' => true, 'message' => '', 'new_count' => 0];
         });
 
-        // All-or-nothing, matching bulkReplace: a selection that cannot be fully
-        // deleted (for example because someone already removed one of the
-        // instances in game) is reported as a failure, never as a silent partial
-        // success.
+        // All-or-nothing like bulkReplace: a selection that cannot be fully deleted is a failure, never a silent partial success.
         $ok = (bool) ($result['success'] ?? false) && $deleted !== [] && $failed === [];
         if ($ok) {
             $message = Lang::get('app.item_inventory.api.success.delete_done', ['count' => count($deleted)]);
@@ -279,17 +249,11 @@ class ItemInventoryMutationService extends MultiServerRepository
         ];
     }
 
-    /* ------------------------------------------------------------------ *
-     * Bulk replace (item axis)
-     * ------------------------------------------------------------------ */
 
     /**
-     * Replace every selected instance with $newEntry in ONE transaction.
-     *
-     * When the existing stack is larger than the new item's stackable limit, the
-     * overflow is written as additional instances in free slots of the same
-     * container. If there is not enough room, the whole batch is refused.
-     *
+     * Replace every selected instance with $newEntry in ONE transaction. If the stack is larger than the
+     * new item's stackable limit, the overflow becomes extra instances in free slots of the same
+     * container; without enough room the whole batch is refused.
      * @param array<int,int> $instanceIds
      * @return array{success:bool,message:string,updated:array<int,int>,created:array<int,int>,failed:array<int,array{instance:int,message:string}>}
      */
@@ -328,9 +292,7 @@ class ItemInventoryMutationService extends MultiServerRepository
             &$created,
             &$plans
         ): array {
-            // Phase 1 — lock and validate everything. Strict mode: if any selected
-            // instance cannot be resolved (already gone, or owned by nobody) the
-            // whole batch is refused, so a caller never observes a partial replace.
+            // Phase 1 - lock and validate everything: one unresolvable instance refuses the whole batch (no partial replace)
             $instances = [];
             foreach ($instanceIds as $instanceId) {
                 $row = $this->lockInstanceAnyOwner($instanceId);
@@ -352,9 +314,7 @@ class ItemInventoryMutationService extends MultiServerRepository
                 return $this->fail('app.item_inventory.api.errors.batch_contains_missing', -1);
             }
 
-            // Phase 2 — plan stack splits per (character, container) destination.
-            // Snapshot the pristine counts here: Phase 3 mutates the rows, so the
-            // plan must never re-read `count` from an already-updated row.
+            // Phase 2 - plan stack splits per (character, container); counts are snapshotted here because Phase 3 mutates the rows
             $slotsNeeded = [];
             foreach ($instances as $row) {
                 $count = max(0, (int) $row['count']);
@@ -399,9 +359,7 @@ class ItemInventoryMutationService extends MultiServerRepository
 
                 $durability = $this->resolveDurability((int) $row['durability'], $maxDurability);
 
-                // Create the overflow instances first so the original row can be
-                // written once with its final quantity. The original always keeps
-                // the first chunk; the rest is split into free slots.
+                // Create the overflow instances first: the original keeps the first chunk and is written once with its final quantity
                 $originalCount = $plan['count'];
                 $chunks = [];
                 $remaining = $originalCount;
@@ -437,7 +395,6 @@ class ItemInventoryMutationService extends MultiServerRepository
                     }
                 }
 
-                // The original instance keeps the first chunk.
                 $assignments = [
                     ':entry' => $newEntry,
                     ':durability' => $durability,
@@ -495,16 +452,11 @@ class ItemInventoryMutationService extends MultiServerRepository
         ];
     }
 
-    /* ------------------------------------------------------------------ *
-     * Internals
-     * ------------------------------------------------------------------ */
 
     /**
-     * Runs $callback inside a transaction and always returns an array. Any
-     * exception rolls the whole thing back and is reported as a failure.
-     *
+     * Runs $callback inside a transaction and always returns an array; an exception rolls everything
+     * back and is reported as a failure.
      * @param callable():array<string,mixed> $callback
-     * @return array<string,mixed>
      */
     private function transaction(callable $callback): array
     {
@@ -540,7 +492,6 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Lock one instance that must belong to $characterGuid.
-     *
      * @return array{instance_guid:int,character_guid:int,entry:int,count:int,durability:int,bag:int,slot:int}|null
      */
     private function lockInstance(int $characterGuid, int $itemInstanceGuid): ?array
@@ -559,7 +510,6 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Lock one instance regardless of owner (the item axis searches globally).
-     *
      * @return array{instance_guid:int,character_guid:int,entry:int,count:int,durability:int,bag:int,slot:int}|null
      */
     private function lockInstanceAnyOwner(int $itemInstanceGuid): ?array
@@ -599,7 +549,6 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Instances contained by $containerInstanceGuid.
-     *
      * @return array<int,array{item:int,slot:int}>
      */
     private function containedInstances(int $characterGuid, int $containerInstanceGuid): array
@@ -617,10 +566,7 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $rows;
     }
 
-    /**
-     * Destroy everything inside a container. Called only when the caller either
-     * explicitly asked for it or already validated the selection.
-     */
+    /** Destroy everything inside a container (the caller asked for it or already validated the selection). */
     private function destroyContainedInstances(int $characterGuid, int $containerInstanceGuid): int
     {
         $contained = $this->containedInstances($characterGuid, $containerInstanceGuid);
@@ -654,7 +600,6 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Free ordered slots in a destination: backpack (bag = 0) or inside a container.
-     *
      * @return array<int,int>
      */
     private function availableSlots(int $characterGuid, int $bag): array
@@ -670,9 +615,6 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $this->availableContainerSlots($characterGuid, $bag);
     }
 
-    /**
-     * @return array<int,int>
-     */
     private function availableBackpackSlots(int $characterGuid): array
     {
         [$from, $to] = $this->locations->backpackSlotRange();
@@ -691,9 +633,6 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $free;
     }
 
-    /**
-     * @return array<int,int>
-     */
     private function availableContainerSlots(int $characterGuid, int $containerInstanceGuid): array
     {
         $capacity = $this->containerCapacity($containerInstanceGuid);
@@ -715,9 +654,7 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $free;
     }
 
-    /**
-     * Container capacity = the container item's ContainerSlots.
-     */
+    /** Container capacity = the container item's ContainerSlots. */
     private function containerCapacity(int $containerInstanceGuid): int
     {
         $stmt = $this->chars->prepare('SELECT itemEntry FROM item_instance WHERE guid = :g LIMIT 1');
@@ -736,9 +673,7 @@ class ItemInventoryMutationService extends MultiServerRepository
         return max(0, min((int) $capacity, 64));
     }
 
-    /**
-     * Read one numeric column from item_template, tolerating schema differences.
-     */
+    /** Read one numeric column from item_template, tolerating schema differences. */
     private function templateColumn(int $entry, string $column): ?int
     {
         if (!preg_match('/^[A-Za-z0-9_]+$/', $column)) {
@@ -756,9 +691,6 @@ class ItemInventoryMutationService extends MultiServerRepository
         }
     }
 
-    /**
-     * @return array<string,mixed>|null
-     */
     private function loadItemMeta(int $entry, bool $withStack = false): ?array
     {
         if ($entry <= 0) {
@@ -822,12 +754,9 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Create a new instance in a free slot, then attach it to the container.
-     *
-     * The INSERT column list comes from the probed schema (see ItemInstanceSchema)
-     * because `guid` is a manual primary key on AzerothCore — not AUTO_INCREMENT —
-     * and columns such as `enchantments` are NOT NULL without a default, so a
-     * hand-written minimal INSERT cannot work on a live realm.
-     *
+     * The INSERT column list comes from the probed schema (see ItemInstanceSchema): `guid` is a manual
+     * primary key on AzerothCore (not AUTO_INCREMENT) and columns such as `enchantments` are NOT NULL
+     * without a default, so a hand-written minimal INSERT cannot work on a live realm.
      * @return int new item_instance guid
      */
     private function createInstance(
@@ -851,17 +780,14 @@ class ItemInventoryMutationService extends MultiServerRepository
 
     /**
      * Insert the item_instance row and return its guid.
-     *
-     * Id allocation is collision-aware: MAX(guid)+1 is only a hint (out-of-band
-     * tooling can hold ids far above the table max), so a duplicate-primary-key
-     * failure simply advances to the next candidate instead of aborting a split.
+     * Id allocation is collision-aware: MAX(guid)+1 is only a hint (out-of-band tooling can hold ids far
+     * above the table max), so a duplicate key simply advances to the next candidate instead of aborting.
      */
     private function createInstanceRow(int $sourceInstanceGuid, int $entry, int $count, int $durability): int
     {
         $plan = $this->schema->insertPlan();
         $useAutoGuid = $this->schema->useDefaultGuid();
 
-        // Copy the source instance's live values first, then override entry/count.
         $source = $this->chars->prepare('SELECT * FROM item_instance WHERE guid = :g LIMIT 1');
         $source->execute([':g' => $sourceInstanceGuid]);
         $sourceRow = $source->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -951,13 +877,10 @@ class ItemInventoryMutationService extends MultiServerRepository
     }
 
     /**
-     * Item instance guids are a manual primary key on AzerothCore, so allocate
-     * one above every id this process knows about. `nextInstanceGuid` starts at
-     * MAX(guid)+1 and is handed out monotonically.
-     *
-     * Ids at or above self::GUID_CEILING are never handed out: keeping the top of
-     * the range free leaves room for out-of-band maintenance tooling (and for the
-     * test harness) without colliding with the allocator.
+     * Item instance guids are a manual primary key on AzerothCore: allocate one above every id this
+     * process knows about (`nextInstanceGuid` starts at MAX(guid)+1 and is handed out monotonically).
+     * Ids at or above self::GUID_CEILING are never handed out, keeping the top of the range free for
+     * out-of-band maintenance tooling (and the test harness).
      */
     private function nextInstanceGuid(): int
     {
@@ -971,8 +894,7 @@ class ItemInventoryMutationService extends MultiServerRepository
         }
 
         if ($this->nextInstanceGuid < 1 || $this->nextInstanceGuid >= self::GUID_CEILING) {
-            // The table is full up to the ceiling (or has absurd ids); restart
-            // from the bottom rather than emitting an out-of-range guid.
+            // the table is full up to the ceiling (or has absurd ids): restart from the bottom rather than emit an out-of-range guid
             $this->nextInstanceGuid = 1;
         }
 
@@ -982,10 +904,6 @@ class ItemInventoryMutationService extends MultiServerRepository
         return $guid;
     }
 
-    /**
-     * @param array<int,mixed> $ids
-     * @return array<int,int>
-     */
     private function normalizeIds(array $ids): array
     {
         $collected = [];
@@ -1073,9 +991,6 @@ class ItemInventoryMutationService extends MultiServerRepository
         ];
     }
 
-    /**
-     * @param array<string,mixed> $context
-     */
     private function record(string $event, array $context): void
     {
         ItemInventoryLog::action($event, $context);

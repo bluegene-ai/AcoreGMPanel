@@ -71,11 +71,8 @@ $modeLabel = static function (string $mode): string {
         default => __('app.auctionator.modes.legacy'),
     };
 };
-// A GM listing card has to state what will actually end up on the auction house, so each
-// row's stored parameters are resolved into the effective start bid / buyout of the whole
-// stack. Rows still on the module's `legacy` mode are resolved with this realm's own
-// Auctionator.Seller.BidOnly / BidStartModifier, which is exactly what ".auctionator
-// addlist" applies to them.
+// GM 上架卡片要说明整组最终会挂上拍卖行的价格：每行存的参数会被解析成整组的有效起拍价/买断价。
+// 仍处于模块 legacy 模式的行用本区的 Auctionator.Seller.BidOnly / BidStartModifier 解析（与 ".auctionator addlist" 一致）。
 $gmListing = static function (array $row) use ($typed): array {
     $cap = 2147483647;
     $mode = (string) ($row['mode'] ?? 'legacy');
@@ -120,8 +117,7 @@ $gmPriceCell = static function (int $copper) use ($formatCopper): string {
 $gmOwnerLabel = static function (int $owner): string {
     return $owner > 0 ? (string) $owner : __('app.auctionator.policy.owner_bot');
 };
-// The filter cards are meant to be understood at a glance, so the item class and the quality get
-// a localised name here; the module's own label table is English and only a fallback.
+// 筛选卡要一眼看懂，所以物品类别与品质在这里取本地化名；模块自带的标签表是英文，仅作兜底。
 $typeLabel = static function (int $class, string $fallback): string {
     return (string) __('app.auctionator.types.' . $class, [], $fallback !== '' ? $fallback : ('#' . $class));
 };
@@ -152,9 +148,9 @@ $qualityLabel = static function (int $quality): string {
     </div>
   <?php endif; ?>
 
-  <?php // 「本区未部署」的提示由 snapshot 的 warnings 统一给出（带区服名），这里不再重复一遍 ?>
+  <?php // 「本区未部署」的提示由 snapshot 的 warnings 统一给出（带区服名），这里不重复 ?>
 
-  <!-- ============================================================ status -->
+  <!-- ==== status -->
   <section class="au-panel" data-au-panel="status">
     <div class="au-grid au-grid--cards">
       <div class="au-card">
@@ -188,7 +184,7 @@ $qualityLabel = static function (int $quality): string {
               <button type="button" class="btn primary" data-au-power="start"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.power_start')) ?></button>
               <button type="button" class="btn outline danger" data-au-power="stop"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.power_stop')) ?></button>
             </div>
-            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.power_hint')) ?></p>
+            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.power_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.master.power_hint')) ?>">i</span></p>
           </div>
 
           <?php // 买断模式快速开关：同样两步（写 conf + 运行时命令），下一轮卖家即生效 ?>
@@ -199,7 +195,7 @@ $qualityLabel = static function (int $quality): string {
               <button type="button" class="btn <?= $buyoutOn ? 'primary' : 'outline' ?>" data-au-buyout="1"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.buyout_on')) ?></button>
               <button type="button" class="btn <?= $buyoutOn ? 'outline' : 'primary' ?>" data-au-buyout="0"<?= $canControl ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.master.buyout_off')) ?></button>
             </div>
-            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.buyout_hint')) ?></p>
+            <p class="muted small au-power__hint"><?= htmlspecialchars(__('app.auctionator.master.buyout_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.master.buyout_hint')) ?>">i</span></p>
           </div>
         <?php endif; ?>
       </div>
@@ -267,7 +263,7 @@ $qualityLabel = static function (int $quality): string {
             </div>
           <?php endif; ?>
         <?php endif; ?>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.market.hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.market.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.market.hint')) ?>">i</span></p>
       </div>
     </div>
 
@@ -283,7 +279,7 @@ $qualityLabel = static function (int $quality): string {
     </div>
   </section>
 
-  <!-- ============================================================ settings -->
+  <!-- ==== settings -->
   <section class="au-panel" data-au-panel="settings" hidden>
     <div class="au-card au-card--wide">
       <h3><?= htmlspecialchars(__('app.auctionator.settings.title')) ?></h3>
@@ -295,7 +291,7 @@ $qualityLabel = static function (int $quality): string {
           <span class="au-badge au-badge--error"><?= htmlspecialchars(__('app.auctionator.settings.read_only_file')) ?></span>
         <?php endif; ?>
       </p>
-      <p class="alert au-note"><?= htmlspecialchars(__('app.auctionator.settings.restart_note')) ?></p>
+      <p class="alert au-note"><?= htmlspecialchars(__('app.auctionator.settings.restart_note_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.settings.restart_note')) ?>">i</span></p>
 
       <form id="auConfigForm" class="au-form" autocomplete="off">
         <?php foreach ($groups as $group): ?>
@@ -307,9 +303,8 @@ $qualityLabel = static function (int $quality): string {
                   $spec = is_array($fields[$key] ?? null) ? $fields[$key] : [];
                   $type = (string) ($spec['type'] ?? 'string');
                   $label = __('app.auctionator.fields.' . (string) ($spec['label'] ?? 'value'));
-                  // A key that is absent from the conf falls back to the module's own default
-                  // (when the spec declares one) instead of an empty field: showing "off" for a
-                  // key the server treats as on is worse than showing nothing.
+                  // conf 里缺失的键回退到模块自带默认值（spec 声明了默认时），而不是显示空字段：
+                  // 把服务端视为开启的键显示成"关闭"，比什么都不显示更糟。
                   $value = $typed[$key] ?? ($spec['default'] ?? '');
                   $disabled = $canManage && $supported ? '' : ' disabled';
                 ?>
@@ -340,19 +335,19 @@ $qualityLabel = static function (int $quality): string {
         <?php if ($canManage && $supported): ?>
           <div class="au-form__actions">
             <button type="submit" class="btn primary" id="auConfigSaveBtn"><?= htmlspecialchars(__('app.auctionator.settings.save')) ?></button>
-            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.settings.backup_note')) ?></span>
+            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.settings.backup_note_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.settings.backup_note')) ?>">i</span></span>
           </div>
         <?php endif; ?>
       </form>
     </div>
   </section>
 
-  <!-- ============================================================ policy -->
+  <!-- ==== policy -->
   <section class="au-panel" data-au-panel="policy" hidden>
     <div class="au-grid au-grid--cards">
       <div class="au-card">
         <h3><?= htmlspecialchars(__('app.auctionator.policy.disabled_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.disabled_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.disabled_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.disabled_hint')) ?>">i</span></p>
         <?php $totals = is_array($policy['totals'] ?? null) ? $policy['totals'] : []; ?>
         <?php if ($tables['disabled_items']): ?>
           <div class="au-actions">
@@ -401,7 +396,7 @@ $qualityLabel = static function (int $quality): string {
 
       <div class="au-card au-card--wide">
         <h3><?= htmlspecialchars(__('app.auctionator.policy.itemclass_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint')) ?>">i</span></p>
         <?php if ($tables['itemclass_config']): ?>
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_totals', [
               'shown' => count($policy['itemclass'] ?? []),
@@ -465,9 +460,9 @@ $qualityLabel = static function (int $quality): string {
                 </tr>
                 <?php if ($classRows === 0): ?>
                   <tr>
-                    <td colspan="6" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.class_no_rows', [
+                    <td colspan="6" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.class_no_rows_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.class_no_rows', [
                         'class' => $typeLabel($classId, (string) ($group['label'] ?? '')),
-                    ])) ?></td>
+                    ])) ?>">i</span></td>
                   </tr>
                 <?php endif; ?>
                 <?php foreach (($group['subclasses'] ?? []) as $row): ?>
@@ -509,7 +504,7 @@ $qualityLabel = static function (int $quality): string {
       <?php // 品质白名单：模块的候选查询直接读这张表，所以热生效、不必重启 ?>
       <div class="au-card au-card--wide">
         <h3><?= htmlspecialchars(__('app.auctionator.policy.quality_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.quality_hint')) ?>">i</span></p>
         <?php if (!($tables['quality_config'] ?? false)): ?>
           <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.quality_table_missing')) ?></p>
         <?php else: ?>
@@ -550,7 +545,7 @@ $qualityLabel = static function (int $quality): string {
 
       <div class="au-card au-card--wide">
         <h3><?= htmlspecialchars(__('app.auctionator.policy.gm_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.gm_hint')) ?>">i</span></p>
         <?php if ($tables['gm_list']): ?>
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_totals', [
               'shown' => count($policy['gm_list'] ?? []),
@@ -567,7 +562,7 @@ $qualityLabel = static function (int $quality): string {
             <form class="au-form au-form--gm" data-au-policy="gm_save" data-au-listing-form>
               <div class="au-form__grid">
                 <label class="au-form__row">
-                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></span>
+                  <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.gm_form_hint')) ?>">i</span></span>
                   <input class="au-input" type="number" min="1" name="item" placeholder="5500" required>
                 </label>
                 <label class="au-form__row">
@@ -617,7 +612,6 @@ $qualityLabel = static function (int $quality): string {
               <p class="muted small" data-au-listing-preview></p>
               <div class="au-form__actions">
                 <button type="submit" class="btn btn-sm primary"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
-                <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_form_hint')) ?></span>
               </div>
             </form>
           <?php endif; ?>
@@ -648,7 +642,7 @@ $qualityLabel = static function (int $quality): string {
                   <td>
                     <span class="au-badge au-badge--<?= $listing['mode'] === 'legacy' ? 'muted' : 'ok' ?>"><?= htmlspecialchars($modeLabel($listing['mode'])) ?></span>
                     <?php if ($listing['mode'] === 'legacy'): ?>
-                      <span class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.legacy_note')) ?></span>
+                      <span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.policy.legacy_note')) ?>">i</span>
                     <?php endif; ?>
                   </td>
                   <td><?= $gmPriceCell((int) ($row['bid'] ?? 0)) ?></td>
@@ -684,7 +678,7 @@ $qualityLabel = static function (int $quality): string {
     </div>
   </section>
 
-  <!-- ============================================================ actions -->
+  <!-- ==== actions -->
   <section class="au-panel" data-au-panel="actions" hidden>
     <div class="au-grid au-grid--cards">
       <div class="au-card">
@@ -694,7 +688,7 @@ $qualityLabel = static function (int $quality): string {
           <button type="button" class="btn outline" data-au-action="market"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.market')) ?></button>
         </div>
         <h3><?= htmlspecialchars(__('app.auctionator.actions.runtime_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.runtime_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.runtime_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.runtime_hint')) ?>">i</span></p>
         <div class="au-actions">
           <select class="au-input" data-au-action-field="target">
             <?php foreach (['neutralseller', 'allianceseller', 'hordeseller', 'neutralbidder', 'alliancebidder', 'hordebidder', 'all'] as $target): ?>
@@ -712,7 +706,7 @@ $qualityLabel = static function (int $quality): string {
 
       <div class="au-card au-card--wide">
         <h3><?= htmlspecialchars(__('app.auctionator.actions.gm_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.gm_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.gm_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.gm_hint')) ?>">i</span></p>
 
         <div class="au-actions">
           <select class="au-input" data-au-action-field="house" title="<?= htmlspecialchars(__('app.auctionator.policy.house')) ?>">
@@ -731,7 +725,7 @@ $qualityLabel = static function (int $quality): string {
           </label>
           <button type="button" class="btn outline danger" data-au-action="expireall"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.expireall')) ?></button>
         </div>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.addlist_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.addlist_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.addlist_hint')) ?>">i</span></p>
 
         <form class="au-form au-form--add" id="auAddForm" data-au-listing-form>
           <div class="au-form__grid">
@@ -762,9 +756,9 @@ $qualityLabel = static function (int $quality): string {
           <p class="muted small" data-au-listing-preview></p>
           <div class="au-form__actions">
             <button type="submit" class="btn primary"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.add')) ?></button>
-            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_hint', ['hours' => (int) ($notes['listing_hours'] ?? 12)])) ?></span>
+            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.add_hint', ['hours' => (int) ($notes['listing_hours'] ?? 12)])) ?>">i</span></span>
           </div>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint')) ?></p>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint')) ?>">i</span></p>
         </form>
       </div>
 
@@ -773,7 +767,7 @@ $qualityLabel = static function (int $quality): string {
         <?php // 采样本区拍卖行：聚合完全在模块里的一条 SQL 里做，面板只负责触发（SOAP） ?>
         <div class="au-actions">
           <button type="button" class="btn primary" data-au-action="marketscan"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketscan')) ?></button>
-          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint')) ?></span>
+          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint')) ?>">i</span></span>
         </div>
         <div class="au-actions">
           <button type="button" class="btn outline" data-au-action="marketimport"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketimport')) ?></button>
@@ -786,7 +780,7 @@ $qualityLabel = static function (int $quality): string {
           <input class="au-input" type="number" min="1" max="3650" value="30" data-au-action-field="days" title="<?= htmlspecialchars(__('app.auctionator.market.retention_days')) ?>">
           <button type="button" class="btn outline warn" data-au-action="marketprune"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketprune')) ?></button>
         </div>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.market_hint')) ?></p>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.market_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.actions.market_hint')) ?>">i</span></p>
       </div>
 
       <div class="au-card au-card--wide">

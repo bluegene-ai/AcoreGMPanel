@@ -2,11 +2,6 @@
 /**
  * File: app/Support/ConfigLocalization.php
  * Purpose: Defines class ConfigLocalization for the app/Support module.
- * Classes:
- *   - ConfigLocalization
- * Functions:
- *   - localize()
- *   - localizeArray()
  */
 
 namespace Acme\Panel\Support;

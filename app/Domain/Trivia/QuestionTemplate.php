@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace Acme\Panel\Domain\Trivia;
 
 /**
- * 题库模板解析/序列化：CSV(或 TSV) 与 JSON 双向。
- *
- * 模板列（表头可选，有表头就按名字认列，没有就按顺序）：
- *   题干, 选项A, 选项B, 选项C, 选项D, 答案, 标号, 奖励预设, 奖励物品, 金钱, 启用
- *
- * 答案支持：1-4 / A-D / 甲-丁 / 选项原文。
- * 以 # 开头的行与空行会被忽略，方便从 Excel 直接粘贴。
+ * File: app/Domain/Trivia/QuestionTemplate.php
+ * Purpose: 题库模板解析/序列化：CSV(或 TSV) 与 JSON 双向。
+ * 模板列（表头可选，有表头按名字认列，没有按顺序）：题干, 选项A..D, 答案, 标号, 奖励预设, 奖励物品, 金钱, 启用。
+ * 答案支持 1-4 / A-D / 甲-丁 / 选项原文；以 # 开头的行与空行会被忽略，方便从 Excel 直接粘贴。
  */
 final class QuestionTemplate
 {
@@ -37,7 +34,6 @@ final class QuestionTemplate
 
     /**
      * 解析模板文本。
-     *
      * @return array{format:string,rows:array<int,array{line:int,data:array<string,string>}>,errors:array<int,array{line:int,message:string}>}
      */
     public static function parse(string $text): array
@@ -48,8 +44,7 @@ final class QuestionTemplate
         }
 
         // 非 UTF-8（中文 Windows 上 Excel 的 ANSI/GBK 另存、UTF-16「Unicode 文本」）先转成 UTF-8，
-        // 否则中文会整片变成问号/替换字符 —— 面板侧 JS 已经按字节判编码，这里再兜一层，
-        // 让直接 POST 原文的调用方（curl / 脚本 / 其他客户端）也能正常导入。
+        // 否则中文会整片变成问号/替换字符；面板侧 JS 已按字节判编码，这里再兜一层，直接 POST 原文的客户端也能导入。
         $text = self::normalizeEncoding($text);
 
         $text = str_replace(["\r\n", "\r"], "\n", $text);
@@ -63,10 +58,8 @@ final class QuestionTemplate
     }
 
     /**
-     * 把常见的非 UTF-8 编码统一成 UTF-8。
-     *
-     * BOM 判断必须在 mb_check_encoding 之前：UTF-16 文本里 ASCII 字符带 NUL 字节，
-     * 字节序列本身仍然"是合法 UTF-8"，只看合法性会把它当成 UTF-8 而解码成一堆 NUL。
+     * 把常见的非 UTF-8 编码统一成 UTF-8。BOM 判断必须在 mb_check_encoding 之前：UTF-16 文本里 ASCII
+     * 字符带 NUL 字节，字节序列本身仍"是合法 UTF-8"，只看合法性会把它当成 UTF-8 而解码成一堆 NUL。
      */
     private static function normalizeEncoding(string $text): string
     {
@@ -93,9 +86,7 @@ final class QuestionTemplate
         return is_string($converted) && $converted !== '' ? $converted : $text;
     }
 
-    /**
-     * @return array{format:string,rows:array<int,array{line:int,data:array<string,string>}>,errors:array<int,array{line:int,message:string}>}
-     */
+    /** @return array{format:string,rows:array<int,array{line:int,data:array<string,string>}>,errors:array<int,array{line:int,message:string}>} */
     private static function parseJson(string $text): array
     {
         $rows = [];
@@ -157,9 +148,7 @@ final class QuestionTemplate
         return ['format' => 'json', 'rows' => $rows, 'errors' => $errors];
     }
 
-    /**
-     * @return array{format:string,rows:array<int,array{line:int,data:array<string,string>}>,errors:array<int,array{line:int,message:string}>}
-     */
+    /** @return array{format:string,rows:array<int,array{line:int,data:array<string,string>}>,errors:array<int,array{line:int,message:string}>} */
     private static function parseDelimited(string $text): array
     {
         $lines = explode("\n", $text);
@@ -185,7 +174,7 @@ final class QuestionTemplate
                 $mapped = self::mapHeader($cells);
                 if ($mapped !== null) {
                     $columns = $mapped;
-                    continue; // 表头行不算数据
+                    continue;
                 }
                 $columns = self::COLUMNS; // 没有表头：按固定顺序
             }
@@ -220,7 +209,6 @@ final class QuestionTemplate
 
     /**
      * 表头行 → 列映射；认不出来返回 null（说明这是数据行）
-     *
      * @param array<int,string> $cells
      * @return array<int,string|null>|null
      */
@@ -273,7 +261,6 @@ final class QuestionTemplate
 
     /**
      * 导出为 CSV（带 UTF-8 BOM，Excel 直接双击不乱码）。
-     *
      * @param array<int,array<string,mixed>> $rows 题目行（repository 的 normalizeQuestionRow 输出）
      */
     public static function toCsv(array $rows): string
@@ -309,9 +296,7 @@ final class QuestionTemplate
         return $content;
     }
 
-    /**
-     * 空白模板（表头 + 2 行示例）。
-     */
+    /** 空白模板（表头 + 2 行示例）。 */
     public static function sample(): string
     {
         $handle = fopen('php://temp', 'r+');

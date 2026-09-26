@@ -19,7 +19,6 @@ class BoostTemplateRepository extends MultiServerRepository
 
         $pdo = $this->auth();
 
-        // Templates
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS character_boost_templates (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -35,7 +34,6 @@ class BoostTemplateRepository extends MultiServerRepository
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
-        // Template items
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS character_boost_template_items (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -49,7 +47,6 @@ class BoostTemplateRepository extends MultiServerRepository
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
-        // Class rewards
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS character_boost_template_class_rewards (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -62,7 +59,7 @@ class BoostTemplateRepository extends MultiServerRepository
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
-        // Redeem codes (可选：用于公开兑换码流程；此处仅保证表结构存在)
+        // redeem codes：表结构必须存在（公开兑换码流程用）
         $pdo->exec(
             "CREATE TABLE IF NOT EXISTS character_boost_redeem_codes (
                 id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -133,9 +130,7 @@ class BoostTemplateRepository extends MultiServerRepository
         return $st->rowCount() > 0;
     }
 
-    /**
-     * @return array<int,string> Generated codes
-     */
+    /** @return array<int,string> Generated codes */
     public function generateRedeemCodes(int $templateId, int $count): array
     {
         $this->ensureSchema();
@@ -249,7 +244,6 @@ class BoostTemplateRepository extends MultiServerRepository
                 $allEntries[] = $entry;
             }
         } catch (\Throwable $e) {
-            // ignore
         }
 
         $tiersByTemplate = [];
@@ -268,7 +262,6 @@ class BoostTemplateRepository extends MultiServerRepository
                 $tiersByTemplate[$tid][] = $tier;
             }
         } catch (\Throwable $e) {
-            // ignore
         }
 
         $entryToName = $this->resolveItemNames(array_values(array_unique(array_filter(array_map('intval', $allEntries), static fn ($v) => $v > 0))));
@@ -290,10 +283,7 @@ class BoostTemplateRepository extends MultiServerRepository
         return $templates;
     }
 
-    /**
-     * @param array<int,int> $entries
-     * @return array<int,string>
-     */
+    /** @param array<int,int> $entries @return array<int,string> entry => name */
     private function resolveItemNames(array $entries): array
     {
         $entries = array_values(array_unique(array_filter(array_map('intval', $entries), static fn ($v) => $v > 0)));
@@ -359,7 +349,6 @@ class BoostTemplateRepository extends MultiServerRepository
                     }
                 }
             } catch (\Throwable $e2) {
-                // ignore
             }
         }
 
@@ -400,9 +389,7 @@ class BoostTemplateRepository extends MultiServerRepository
         ];
     }
 
-    /**
-     * @param string|null $status 使用状态筛选：all | unused | used（其余值按 all 处理）
-     */
+    /** @param string|null $status 使用状态筛选：all | unused | used（其余值按 all 处理） */
     public function listRedeemCodesForRealm(int $realmId, ?int $templateId, ?string $status, int $page, int $perPage, string $sort = 'id', string $dir = 'desc'): array
     {
         $this->ensureSchema();

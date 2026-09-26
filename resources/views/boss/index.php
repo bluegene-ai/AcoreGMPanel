@@ -53,6 +53,32 @@ $bossHomeY = number_format((float) ($bossRuntime['home_y'] ?? 0), 3, '.', '');
 $bossHomeZ = number_format((float) ($bossRuntime['home_z'] ?? 0), 3, '.', '');
 $bossExt = is_array($boss_ext ?? null) ? $boss_ext : [];
 
+// 刷新点"解析预览"：面板只做展示（真正的坐标校验在脚本里），让 GM 一眼看出填了几条、都在哪张地图
+$bossSpawnLineCount = 0;
+$bossSpawnMapIds = [];
+foreach (preg_split('/\r\n|\r|\n/', (string) ($bossConfig['spawn_points_text'] ?? '')) ?: [] as $bossSpawnLine) {
+    $bossSpawnLine = trim((string) $bossSpawnLine);
+    if ($bossSpawnLine === '') {
+        continue;
+    }
+    $bossSpawnLineCount++;
+    $bossSpawnMapIdValue = (int) trim((string) explode(',', $bossSpawnLine)[0]);
+    if ($bossSpawnMapIdValue > 0) {
+        $bossSpawnMapIds[$bossSpawnMapIdValue] = true;
+    }
+}
+$bossSpawnMapLabels = [];
+foreach (array_keys($bossSpawnMapIds) as $bossSpawnMapIdItem) {
+    $bossSpawnMapLabels[] = \Acme\Panel\Support\GameMaps::mapLabel($bossSpawnMapIdItem);
+}
+// Aura 预览：逗号/空格/换行分隔的 ID 个数
+$bossAuraCount = 0;
+foreach (preg_split('/[\s,;]+/', (string) ($bossConfig['boss_auras_text'] ?? '')) ?: [] as $bossAuraToken) {
+    if (trim((string) $bossAuraToken) !== '') {
+        $bossAuraCount++;
+    }
+}
+
 // 定时启停（脚本 tick 上报到 boss_activity_runtime）：
 //   ''      = 本区脚本还没上报（旧版脚本 / 表里没有这三列）→ 显示"未上报"，不猜状态
 //   off     = 计划未启用；empty = 已启用但没写有效时间段；open/closed = 时段内 / 时段外
@@ -129,44 +155,52 @@ $bossTabs['log'] = __('app.boss.tabs.log');
     <!-- Tab 面板用 div 而不是 section：面板里可能再嵌一层 Tab（扩展配置），
          section 嵌套在非 HTML5 解析器里会被隐式闭合，div 更稳妥 -->
     <div class="boss-tabpanel is-active" role="tabpanel" data-boss-tabpanel="status">
-  <section class="boss-top-grid">
+  <section class="boss-status-stack">
     <article class="boss-panel boss-panel--runtime">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.runtime.title')) ?></h2>
-      </div>
-      <div class="boss-runtime-grid">
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.status')) ?></span>
-          <strong class="boss-runtime-card__value boss-status boss-status--<?= htmlspecialchars((string) ($bossRuntime['status'] ?? 'idle')) ?>">
+        <div class="boss-badge-list">
+          <span class="boss-status boss-status--<?= htmlspecialchars((string) ($bossRuntime['status'] ?? 'idle')) ?>">
             <?= htmlspecialchars(__('app.boss.status.' . ($bossRuntime['status'] ?? 'idle'))) ?>
-          </strong>
+          </span>
         </div>
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.current_boss')) ?></span>
-          <strong class="boss-runtime-card__value">
-            <?= htmlspecialchars($hasActiveBoss ? $bossName : __('app.boss.runtime.no_active_boss')) ?>
-          </strong>
+      </div>
+
+      <div class="boss-statusbar">
+        <div class="boss-statusbar__boss">
+          <span class="boss-statusbar__name"><?= htmlspecialchars($hasActiveBoss ? $bossName : __('app.boss.runtime.no_active_boss')) ?></span>
           <?php if ($hasActiveBoss): ?>
             <span class="small muted">GUID #<?= (int) ($bossRuntime['boss_guid'] ?? 0) ?> · Entry #<?= (int) ($bossRuntime['boss_entry'] ?? 0) ?></span>
+          <?php else: ?>
+            <span class="small muted"><?= htmlspecialchars(__('app.boss.runtime.no_active_boss_hint')) ?></span>
           <?php endif; ?>
         </div>
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.phase')) ?></span>
-          <strong class="boss-runtime-card__value"><?= (int) ($bossRuntime['phase'] ?? 0) > 0 ? (int) $bossRuntime['phase'] : '-' ?></strong>
+
+        <div class="boss-statusbar__facts">
+          <div class="boss-fact">
+            <span class="boss-fact__label"><?= htmlspecialchars(__('app.boss.runtime.phase')) ?></span>
+            <strong><?= (int) ($bossRuntime['phase'] ?? 0) > 0 ? (int) $bossRuntime['phase'] : '-' ?></strong>
+          </div>
+          <div class="boss-fact">
+            <span class="boss-fact__label"><?= htmlspecialchars(__('app.boss.runtime.skill_preset')) ?></span>
+            <strong><?= htmlspecialchars(__('app.boss.presets.labels.' . ($bossRuntime['skill_preset'] ?? ''), [], (string) ($bossRuntime['skill_preset'] ?? '-'))) ?></strong>
+          </div>
+          <div class="boss-fact">
+            <span class="boss-fact__label"><?= htmlspecialchars(__('app.boss.runtime.skill_difficulty')) ?></span>
+            <strong><?= htmlspecialchars(__('app.boss.difficulties.labels.' . ($bossRuntime['skill_difficulty'] ?? ''), [], (string) ($bossRuntime['skill_difficulty'] ?? '-'))) ?></strong>
+          </div>
+          <div class="boss-fact boss-fact--countdown"
+               data-boss-countdown
+               data-boss-countdown-at="<?= (int) ($bossRuntime['respawn_at'] ?? 0) ?>">
+            <span class="boss-fact__label"><?= htmlspecialchars(__('app.boss.runtime.respawn_at')) ?></span>
+            <strong data-boss-countdown-value><?= htmlspecialchars(format_datetime((int) ($bossRuntime['respawn_at'] ?? 0))) ?></strong>
+            <span class="small muted" data-boss-countdown-hint></span>
+          </div>
         </div>
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.skill_preset')) ?></span>
-          <strong class="boss-runtime-card__value"><?= htmlspecialchars(__('app.boss.presets.labels.' . ($bossRuntime['skill_preset'] ?? ''), [], (string) ($bossRuntime['skill_preset'] ?? '-'))) ?></strong>
-        </div>
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.skill_difficulty')) ?></span>
-          <strong class="boss-runtime-card__value"><?= htmlspecialchars(__('app.boss.difficulties.labels.' . ($bossRuntime['skill_difficulty'] ?? ''), [], (string) ($bossRuntime['skill_difficulty'] ?? '-'))) ?></strong>
-        </div>
-        <div class="boss-runtime-card">
-          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.respawn_at')) ?></span>
-          <strong class="boss-runtime-card__value"><?= htmlspecialchars(format_datetime((int) ($bossRuntime['respawn_at'] ?? 0))) ?></strong>
-        </div>
-        <div class="boss-runtime-card">
+      </div>
+
+      <div class="boss-runtime-grid boss-runtime-grid--4">
+        <div class="boss-runtime-card boss-runtime-card--wide">
           <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.schedule')) ?></span>
           <strong class="boss-runtime-card__value boss-schedule-state boss-schedule-state--<?= htmlspecialchars($bossScheduleStateKey) ?>">
             <?= htmlspecialchars(__('app.boss.runtime.schedule_states.' . $bossScheduleStateKey)) ?>
@@ -187,51 +221,64 @@ $bossTabs['log'] = __('app.boss.tabs.log');
             <?php endif; ?>
           </span>
         </div>
-        <div class="boss-runtime-card">
+
+        <div class="boss-runtime-card boss-runtime-card--wide">
           <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.current_position')) ?></span>
           <?php if ($hasActiveBoss): ?>
             <strong class="boss-runtime-card__value"><?= htmlspecialchars($bossMapLabel) ?></strong>
             <span class="small muted">
               <?= htmlspecialchars(__('app.boss.runtime.instance_id')) ?>: #<?= $bossInstanceId ?> ·
               <?= htmlspecialchars(__('app.boss.runtime.coordinates')) ?>:
-              X <?= htmlspecialchars($bossHomeX) ?> ·
-              Y <?= htmlspecialchars($bossHomeY) ?> ·
-              Z <?= htmlspecialchars($bossHomeZ) ?>
+              <?= htmlspecialchars($bossHomeX) ?>, <?= htmlspecialchars($bossHomeY) ?>, <?= htmlspecialchars($bossHomeZ) ?>
             </span>
           <?php else: ?>
             <strong class="boss-runtime-card__value">-</strong>
           <?php endif; ?>
         </div>
-      </div>
 
-      <div class="boss-runtime-meta">
-        <span><?= htmlspecialchars(__('app.boss.runtime.last_spawn_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_spawn_at'] ?? 0))) ?></span>
-        <span><?= htmlspecialchars(__('app.boss.runtime.last_engage_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_engage_at'] ?? 0))) ?></span>
-        <span><?= htmlspecialchars(__('app.boss.runtime.last_death_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_death_at'] ?? 0))) ?></span>
-        <span><?= htmlspecialchars(__('app.boss.runtime.last_reset_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_reset_at'] ?? 0))) ?></span>
+        <div class="boss-runtime-card boss-runtime-card--wide">
+          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.last_spawn_at')) ?> / <?= htmlspecialchars(__('app.boss.runtime.last_engage_at')) ?></span>
+          <strong class="boss-runtime-card__value" data-boss-ago="<?= (int) ($bossRuntime['last_spawn_at'] ?? 0) ?>">
+            <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_spawn_at'] ?? 0))) ?>
+          </strong>
+          <span class="small muted" data-boss-ago="<?= (int) ($bossRuntime['last_engage_at'] ?? 0) ?>">
+            <?= htmlspecialchars(__('app.boss.runtime.last_engage_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_engage_at'] ?? 0))) ?>
+          </span>
+        </div>
+
+        <div class="boss-runtime-card boss-runtime-card--wide">
+          <span class="boss-runtime-card__label"><?= htmlspecialchars(__('app.boss.runtime.last_death_at')) ?> / <?= htmlspecialchars(__('app.boss.runtime.last_reset_at')) ?></span>
+          <strong class="boss-runtime-card__value" data-boss-ago="<?= (int) ($bossRuntime['last_death_at'] ?? 0) ?>">
+            <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_death_at'] ?? 0))) ?>
+          </strong>
+          <span class="small muted" data-boss-ago="<?= (int) ($bossRuntime['last_reset_at'] ?? 0) ?>">
+            <?= htmlspecialchars(__('app.boss.runtime.last_reset_at')) ?>: <?= htmlspecialchars(format_datetime((int) ($bossRuntime['last_reset_at'] ?? 0))) ?>
+          </span>
+        </div>
       </div>
     </article>
 
     <article class="boss-panel boss-panel--stats">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.stats.title')) ?></h2>
+        <span class="boss-muted"><?= htmlspecialchars(__('app.boss.stats.window')) ?></span>
       </div>
-      <div class="boss-stats-grid">
-        <article class="boss-stat-card">
+      <div class="boss-kpi-row">
+        <article class="boss-kpi">
           <span class="boss-stat-card__label"><?= htmlspecialchars(__('app.boss.stats.events_24h')) ?></span>
-          <strong class="boss-stat-card__value"><?= (int) ($bossStats['events_24h'] ?? 0) ?></strong>
+          <strong class="boss-kpi__value"><?= (int) ($bossStats['events_24h'] ?? 0) ?></strong>
         </article>
-        <article class="boss-stat-card">
+        <article class="boss-kpi">
           <span class="boss-stat-card__label"><?= htmlspecialchars(__('app.boss.stats.kills_7d')) ?></span>
-          <strong class="boss-stat-card__value"><?= (int) ($bossStats['kills_7d'] ?? 0) ?></strong>
+          <strong class="boss-kpi__value"><?= (int) ($bossStats['kills_7d'] ?? 0) ?></strong>
         </article>
-        <article class="boss-stat-card">
+        <article class="boss-kpi">
           <span class="boss-stat-card__label"><?= htmlspecialchars(__('app.boss.stats.contributors_7d')) ?></span>
-          <strong class="boss-stat-card__value"><?= (int) ($bossStats['contributors_7d'] ?? 0) ?></strong>
+          <strong class="boss-kpi__value"><?= (int) ($bossStats['contributors_7d'] ?? 0) ?></strong>
         </article>
-        <article class="boss-stat-card">
+        <article class="boss-kpi">
           <span class="boss-stat-card__label"><?= htmlspecialchars(__('app.boss.stats.random_rewarded_7d')) ?></span>
-          <strong class="boss-stat-card__value"><?= (int) ($bossStats['random_rewarded_7d'] ?? 0) ?></strong>
+          <strong class="boss-kpi__value"><?= (int) ($bossStats['random_rewarded_7d'] ?? 0) ?></strong>
         </article>
       </div>
     </article>
@@ -243,93 +290,116 @@ $bossTabs['log'] = __('app.boss.tabs.log');
     <section class="boss-panel">
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.actions.title')) ?></h2>
+        <span class="boss-muted"><?= htmlspecialchars(__('app.boss.actions.note')) ?></span>
       </div>
 
-      <div class="boss-action-grid">
-        <div class="boss-action-card">
-          <div class="boss-action-card__body">
-            <strong><?= htmlspecialchars(__('app.boss.actions.spawn')) ?></strong>
-            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.spawn_help')) ?></p>
+      <div class="boss-action-group boss-action-group--danger">
+        <div class="boss-action-group__head">
+          <h3><?= htmlspecialchars(__('app.boss.actions.groups.combat')) ?></h3>
+          <p class="muted"><?= htmlspecialchars(__('app.boss.actions.groups.combat_help')) ?></p>
+        </div>
+        <div class="boss-action-grid">
+          <div class="boss-action-card">
+            <div class="boss-action-card__body">
+              <strong><?= htmlspecialchars(__('app.boss.actions.spawn')) ?></strong>
+              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.spawn_help')) ?></p>
+            </div>
+            <button type="button" class="btn warn" id="bossSpawnBtn" data-boss-action="spawn">
+              <?= htmlspecialchars(__('app.boss.actions.spawn')) ?>
+            </button>
           </div>
-          <button type="button" class="btn warn" id="bossSpawnBtn" data-boss-action="spawn">
-            <?= htmlspecialchars(__('app.boss.actions.spawn')) ?>
-          </button>
-        </div>
 
-        <div class="boss-action-card">
-          <div class="boss-action-card__body">
-            <strong><?= htmlspecialchars(__('app.boss.actions.kill')) ?></strong>
-            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.kill_help')) ?></p>
+          <div class="boss-action-card boss-action-card--danger">
+            <div class="boss-action-card__body">
+              <strong><?= htmlspecialchars(__('app.boss.actions.kill')) ?></strong>
+              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.kill_help')) ?></p>
+            </div>
+            <button type="button" class="btn danger" id="bossKillBtn" data-boss-action="kill">
+              <?= htmlspecialchars(__('app.boss.actions.kill')) ?>
+            </button>
           </div>
-          <button type="button" class="btn" id="bossKillBtn" data-boss-action="kill">
-            <?= htmlspecialchars(__('app.boss.actions.kill')) ?>
-          </button>
-        </div>
 
-        <div class="boss-action-card">
-          <div class="boss-action-card__body">
-            <strong><?= htmlspecialchars(__('app.boss.actions.clear')) ?></strong>
-            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.clear_help')) ?></p>
+          <div class="boss-action-card boss-action-card--danger">
+            <div class="boss-action-card__body">
+              <strong><?= htmlspecialchars(__('app.boss.actions.clear')) ?></strong>
+              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.clear_help')) ?></p>
+            </div>
+            <button type="button" class="btn outline danger" id="bossClearBtn" data-boss-action="clear">
+              <?= htmlspecialchars(__('app.boss.actions.clear')) ?>
+            </button>
           </div>
-          <button type="button" class="btn outline" id="bossClearBtn" data-boss-action="clear">
-            <?= htmlspecialchars(__('app.boss.actions.clear')) ?>
-          </button>
         </div>
+      </div>
 
-        <div class="boss-action-card">
-          <div class="boss-action-card__body">
-            <strong><?= htmlspecialchars(__('app.boss.actions.rebase')) ?></strong>
-            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.rebase_help')) ?></p>
+      <div class="boss-action-group">
+        <div class="boss-action-group__head">
+          <h3><?= htmlspecialchars(__('app.boss.actions.groups.runtime')) ?></h3>
+          <p class="muted"><?= htmlspecialchars(__('app.boss.actions.groups.runtime_help')) ?></p>
+        </div>
+        <div class="boss-action-grid">
+          <div class="boss-action-card boss-action-card--form">
+            <label class="boss-field">
+              <span><?= htmlspecialchars(__('app.boss.actions.preset_label')) ?></span>
+              <select id="bossPresetSelect">
+                <?php foreach (($bossOptions['presets'] ?? []) as $option): ?>
+                  <option
+                    value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
+                    title="<?= htmlspecialchars((string) ($option['summary'] ?? '')) ?>"
+                    <?= (string) ($bossRuntime['skill_preset'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
+                  ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <button type="button" class="btn" id="bossPresetBtn" data-boss-action="preset">
+              <?= htmlspecialchars(__('app.boss.actions.apply_preset')) ?>
+            </button>
           </div>
-          <button type="button" class="btn outline" id="bossRebaseBtn" data-boss-action="rebase">
-            <?= htmlspecialchars(__('app.boss.actions.rebase')) ?>
-          </button>
-        </div>
 
-        <div class="boss-action-card">
-          <div class="boss-action-card__body">
-            <strong><?= htmlspecialchars(__('app.boss.actions.reload_config')) ?></strong>
-            <p class="muted"><?= htmlspecialchars(__('app.boss.actions.reload_config_help')) ?></p>
+          <div class="boss-action-card boss-action-card--form">
+            <label class="boss-field">
+              <span><?= htmlspecialchars(__('app.boss.actions.difficulty_label')) ?></span>
+              <select id="bossDifficultySelect">
+                <?php foreach (($bossOptions['difficulties'] ?? []) as $option): ?>
+                  <option
+                    value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
+                    title="<?= htmlspecialchars((string) ($option['summary'] ?? '')) ?>"
+                    <?= (string) ($bossRuntime['skill_difficulty'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
+                  ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <button type="button" class="btn" id="bossDifficultyBtn" data-boss-action="difficulty">
+              <?= htmlspecialchars(__('app.boss.actions.apply_difficulty')) ?>
+            </button>
           </div>
-          <button type="button" class="btn outline" id="bossConfigReloadBtn" data-boss-action="config_reload">
-            <?= htmlspecialchars(__('app.boss.actions.reload_config')) ?>
-          </button>
         </div>
+      </div>
 
-        <div class="boss-action-card boss-action-card--form">
-          <label class="boss-field">
-            <span><?= htmlspecialchars(__('app.boss.actions.preset_label')) ?></span>
-            <select id="bossPresetSelect">
-              <?php foreach (($bossOptions['presets'] ?? []) as $option): ?>
-                <option
-                  value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
-                  title="<?= htmlspecialchars((string) ($option['summary'] ?? '')) ?>"
-                  <?= (string) ($bossRuntime['skill_preset'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
-                ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <button type="button" class="btn" id="bossPresetBtn" data-boss-action="preset">
-            <?= htmlspecialchars(__('app.boss.actions.apply_preset')) ?>
-          </button>
+      <div class="boss-action-group">
+        <div class="boss-action-group__head">
+          <h3><?= htmlspecialchars(__('app.boss.actions.groups.maintenance')) ?></h3>
+          <p class="muted"><?= htmlspecialchars(__('app.boss.actions.groups.maintenance_help')) ?></p>
         </div>
+        <div class="boss-action-grid">
+          <div class="boss-action-card">
+            <div class="boss-action-card__body">
+              <strong><?= htmlspecialchars(__('app.boss.actions.rebase')) ?></strong>
+              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.rebase_help')) ?></p>
+            </div>
+            <button type="button" class="btn outline" id="bossRebaseBtn" data-boss-action="rebase">
+              <?= htmlspecialchars(__('app.boss.actions.rebase')) ?>
+            </button>
+          </div>
 
-        <div class="boss-action-card boss-action-card--form">
-          <label class="boss-field">
-            <span><?= htmlspecialchars(__('app.boss.actions.difficulty_label')) ?></span>
-            <select id="bossDifficultySelect">
-              <?php foreach (($bossOptions['difficulties'] ?? []) as $option): ?>
-                <option
-                  value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
-                  title="<?= htmlspecialchars((string) ($option['summary'] ?? '')) ?>"
-                  <?= (string) ($bossRuntime['skill_difficulty'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
-                ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <button type="button" class="btn" id="bossDifficultyBtn" data-boss-action="difficulty">
-            <?= htmlspecialchars(__('app.boss.actions.apply_difficulty')) ?>
-          </button>
+          <div class="boss-action-card">
+            <div class="boss-action-card__body">
+              <strong><?= htmlspecialchars(__('app.boss.actions.reload_config')) ?></strong>
+              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.reload_config_help')) ?></p>
+            </div>
+            <button type="button" class="btn outline" id="bossConfigReloadBtn" data-boss-action="config_reload">
+              <?= htmlspecialchars(__('app.boss.actions.reload_config')) ?>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -340,17 +410,21 @@ $bossTabs['log'] = __('app.boss.tabs.log');
       <div class="boss-panel__head">
         <h2><?= htmlspecialchars(__('app.boss.config.title')) ?></h2>
       </div>
-      <p class="muted boss-config-note"><?= htmlspecialchars(__('app.boss.config.note')) ?></p>
+      <p class="muted boss-config-note">
+        <?= htmlspecialchars(__('app.boss.config.note_short')) ?>
+        <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.note')) ?>">i</span>
+      </p>
 
       <form id="bossConfigForm" class="boss-config-form">
         <div class="boss-config-grid">
           <section class="boss-config-section">
             <div class="boss-config-section__head">
               <h3><?= htmlspecialchars(__('app.boss.config.sections.identity')) ?></h3>
+              <span class="boss-config-section__count"><?= htmlspecialchars(__('app.boss.config.item_count', ['count' => '5'])) ?></span>
             </div>
             <div class="boss-config-columns">
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.boss_entry')) ?>">i</span></span>
                 <select
                   name="boss_entry"
                   id="bossTierSelect"
@@ -369,7 +443,6 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                     ><?= htmlspecialchars((string) ($bossTierItem['label'] ?? $bossTierEntry)) ?> · <?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?> <?= htmlspecialchars(number_format((int) ($bossTierItem['estimated_hp'] ?? 0), 0, '.', ',')) ?></option>
                   <?php endforeach; ?>
                 </select>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_entry')) ?></small>
               </label>
 
               <label class="boss-field">
@@ -383,17 +456,34 @@ $bossTabs['log'] = __('app.boss.tabs.log');
               </label>
 
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_scale')) ?></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_scale')) ?><span class="boss-field__unit">×</span></span>
                 <input type="number" name="boss_scale" min="0.10" max="50.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_scale'] ?? '5.00')) ?>">
               </label>
 
+              <label class="boss-field boss-field--full">
+                <span>
+                  <?= htmlspecialchars(__('app.boss.config.fields.boss_auras_text')) ?>
+                  <span class="boss-field__unit"><?= htmlspecialchars(__('app.boss.config.aura_count', ['count' => (string) $bossAuraCount])) ?></span>
+                </span>
+                <textarea name="boss_auras_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['boss_auras_text'] ?? '')) ?></textarea>
+                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_auras_text')) ?></small>
+              </label>
+            </div>
+          </section>
+
+          <section class="boss-config-section">
+            <div class="boss-config-section__head">
+              <h3><?= htmlspecialchars(__('app.boss.config.sections.combat')) ?></h3>
+              <span class="boss-config-section__count"><?= htmlspecialchars(__('app.boss.config.item_count', ['count' => '4'])) ?></span>
+            </div>
+            <div class="boss-config-columns">
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_health_multiplier')) ?></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_health_multiplier')) ?><span class="boss-field__unit">×</span></span>
                 <input type="number" name="boss_health_multiplier" id="bossHealthMultiplierInput" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['boss_health_multiplier'] ?? '20.00')) ?>">
               </label>
 
               <div class="boss-field boss-field--readonly">
-                <span><?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?></span>
+                <span><?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.estimated_hp')) ?>">i</span></span>
                 <strong
                   class="boss-estimated-hp"
                   id="bossEstimatedHp"
@@ -401,36 +491,10 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                   data-boss-base-hp="<?= $bossTierBaseHp ?>"
                   data-boss-hp-scale="<?= $bossTierDecimalScale ?>"
                 ><?= htmlspecialchars(number_format($bossCurrentEstimatedHp, 0, '.', ',')) ?></strong>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.estimated_hp')) ?></small>
               </div>
 
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.respawn_time_minutes')) ?></span>
-                <input type="number" name="respawn_time_minutes" min="1" max="1440" step="1" value="<?= htmlspecialchars((string) ($bossConfig['respawn_time_minutes'] ?? 10)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_level')) ?></span>
-                <input type="number" name="ally_level" min="1" max="255" step="1" value="<?= htmlspecialchars((string) ($bossConfig['ally_level'] ?? 20)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_health_multiplier')) ?></span>
-                <input type="number" name="ally_health_multiplier" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['ally_health_multiplier'] ?? '1.50')) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_min')) ?></span>
-                <input type="number" name="minion_count_min" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_min'] ?? 1)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_max')) ?></span>
-                <input type="number" name="minion_count_max" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_max'] ?? 2)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_preset')) ?></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_preset')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.skill_preset')) ?>">i</span></span>
                 <select name="skill_preset">
                   <?php foreach (($bossOptions['presets'] ?? []) as $option): ?>
                     <option
@@ -452,17 +516,38 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                   <?php endforeach; ?>
                 </select>
               </label>
+            </div>
+          </section>
 
-              <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_auras_text')) ?></span>
-                <textarea name="boss_auras_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['boss_auras_text'] ?? '')) ?></textarea>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.boss_auras_text')) ?></small>
+          <section class="boss-config-section">
+            <div class="boss-config-section__head">
+              <h3><?= htmlspecialchars(__('app.boss.config.sections.ally')) ?></h3>
+              <span class="boss-config-section__count"><?= htmlspecialchars(__('app.boss.config.item_count', ['count' => '5'])) ?></span>
+            </div>
+            <div class="boss-config-columns">
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.respawn_time_minutes')) ?></span>
+                <input type="number" name="respawn_time_minutes" min="1" max="1440" step="1" value="<?= htmlspecialchars((string) ($bossConfig['respawn_time_minutes'] ?? 10)) ?>">
               </label>
 
-              <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?></span>
-                <textarea name="spawn_points_text" rows="6" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.spawn_point_line')) ?>"><?= htmlspecialchars((string) ($bossConfig['spawn_points_text'] ?? '')) ?></textarea>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.spawn_points_text')) ?></small>
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_level')) ?></span>
+                <input type="number" name="ally_level" min="1" max="255" step="1" value="<?= htmlspecialchars((string) ($bossConfig['ally_level'] ?? 20)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.ally_health_multiplier')) ?><span class="boss-field__unit">×</span></span>
+                <input type="number" name="ally_health_multiplier" min="0.10" max="2000.00" step="0.01" value="<?= htmlspecialchars((string) ($bossConfig['ally_health_multiplier'] ?? '1.50')) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_min')) ?></span>
+                <input type="number" name="minion_count_min" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_min'] ?? 1)) ?>">
+              </label>
+
+              <label class="boss-field">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.minion_count_max')) ?></span>
+                <input type="number" name="minion_count_max" min="0" max="20" step="1" value="<?= htmlspecialchars((string) ($bossConfig['minion_count_max'] ?? 2)) ?>">
               </label>
             </div>
           </section>
@@ -470,125 +555,76 @@ $bossTabs['log'] = __('app.boss.tabs.log');
           <section class="boss-config-section">
             <div class="boss-config-section__head">
               <h3><?= htmlspecialchars(__('app.boss.config.sections.rewards')) ?></h3>
+              <button type="button" class="btn outline" data-boss-goto="ext:reward_pools">
+                <?= htmlspecialchars(__('app.boss.config.goto_rewards')) ?>
+              </button>
+            </div>
+            <p class="muted boss-config-note">
+              <?= htmlspecialchars(__('app.boss.config.hints.reward_pools_moved_short')) ?>
+              <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.reward_pools_moved')) ?>">i</span>
+            </p>
+            <div class="boss-config-columns">
+              <div class="boss-field boss-field--readonly">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.random_reward_mode')) ?></span>
+                <strong class="boss-estimated-hp">
+                  <?php
+                    $bossCurrentRewardMode = (string) ($bossConfig['random_reward_mode'] ?? 'weighted');
+                    $bossCurrentRewardModeLabel = $bossCurrentRewardMode;
+                    foreach (($bossOptions['random_modes'] ?? []) as $bossRandomModeOption) {
+                        if ((string) ($bossRandomModeOption['value'] ?? '') === $bossCurrentRewardMode) {
+                            $bossCurrentRewardModeLabel = (string) ($bossRandomModeOption['label'] ?? $bossCurrentRewardMode);
+                        }
+                    }
+                  ?>
+                  <?= htmlspecialchars($bossCurrentRewardModeLabel) ?>
+                </strong>
+              </div>
+              <div class="boss-field boss-field--readonly">
+                <span><?= htmlspecialchars(__('app.boss.config.fields.participation_range')) ?></span>
+                <strong class="boss-estimated-hp"><?= (int) ($bossConfig['participation_range'] ?? 80) ?></strong>
+              </div>
+              <div class="boss-field boss-field--readonly boss-field--full">
+                <span><?= htmlspecialchars(__('app.boss.config.weights_summary')) ?></span>
+                <strong class="boss-estimated-hp">
+                  <?= htmlspecialchars(__('app.boss.config.fields.damage_weight')) ?> <?= (int) ($bossConfig['damage_weight'] ?? 100) ?> ·
+                  <?= htmlspecialchars(__('app.boss.config.fields.healing_weight')) ?> <?= (int) ($bossConfig['healing_weight'] ?? 80) ?> ·
+                  <?= htmlspecialchars(__('app.boss.config.fields.threat_weight')) ?> <?= (int) ($bossConfig['threat_weight'] ?? 35) ?> ·
+                  <?= htmlspecialchars(__('app.boss.config.fields.presence_weight')) ?> <?= (int) ($bossConfig['presence_weight'] ?? 10) ?> ·
+                  <?= htmlspecialchars(__('app.boss.config.fields.kill_weight')) ?> <?= (int) ($bossConfig['kill_weight'] ?? 3) ?>
+                </strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="boss-config-section boss-config-section--full">
+            <div class="boss-config-section__head">
+              <h3><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?></h3>
+              <span class="boss-config-section__count">
+                <?= htmlspecialchars(__('app.boss.config.spawn_preview', [
+                    'count' => (string) $bossSpawnLineCount,
+                    'maps' => $bossSpawnMapLabels !== [] ? implode('、', $bossSpawnMapLabels) : __('app.boss.config.spawn_preview_none'),
+                ])) ?>
+              </span>
             </div>
             <div class="boss-config-columns">
-              <label class="boss-check">
-                <input type="checkbox" name="guaranteed_reward_enabled" value="1" <?= !empty($bossConfig['guaranteed_reward_enabled']) ? 'checked' : '' ?>>
-                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_reward_enabled')) ?></span>
-              </label>
-
-              <label class="boss-check">
-                <input type="checkbox" name="guaranteed_reward_notify" value="1" <?= !empty($bossConfig['guaranteed_reward_notify']) ? 'checked' : '' ?>>
-                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_reward_notify')) ?></span>
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.max_random_reward_players')) ?></span>
-                <input type="number" name="max_random_reward_players" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['max_random_reward_players'] ?? 3)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.random_reward_mode')) ?></span>
-                <select name="random_reward_mode">
-                  <?php foreach (($bossOptions['random_modes'] ?? []) as $option): ?>
-                    <option
-                      value="<?= htmlspecialchars((string) ($option['value'] ?? '')) ?>"
-                      <?= (string) ($bossConfig['random_reward_mode'] ?? '') === (string) ($option['value'] ?? '') ? 'selected' : '' ?>
-                    ><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.class_reward_chance')) ?></span>
-                <input type="number" name="class_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['class_reward_chance'] ?? 60)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.formula_reward_chance')) ?></span>
-                <input type="number" name="formula_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['formula_reward_chance'] ?? 10)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.mount_reward_chance')) ?></span>
-                <input type="number" name="mount_reward_chance" min="0" max="100" step="1" value="<?= htmlspecialchars((string) ($bossConfig['mount_reward_chance'] ?? 15)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.participation_range')) ?></span>
-                <input type="number" name="participation_range" min="20" max="500" step="1" value="<?= htmlspecialchars((string) ($bossConfig['participation_range'] ?? 80)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.damage_weight')) ?></span>
-                <input type="number" name="damage_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['damage_weight'] ?? 100)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.healing_weight')) ?></span>
-                <input type="number" name="healing_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['healing_weight'] ?? 80)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.threat_weight')) ?></span>
-                <input type="number" name="threat_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['threat_weight'] ?? 35)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.presence_weight')) ?></span>
-                <input type="number" name="presence_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['presence_weight'] ?? 10)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.kill_weight')) ?></span>
-                <input type="number" name="kill_weight" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['kill_weight'] ?? 3)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_item_id')) ?></span>
-                <input type="number" name="guaranteed_item_id" min="0" max="2000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['guaranteed_item_id'] ?? 40753)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.guaranteed_item_count')) ?></span>
-                <input type="number" name="guaranteed_item_count" min="0" max="10000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['guaranteed_item_count'] ?? 2)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.gold_min_copper')) ?></span>
-                <input type="number" name="gold_min_copper" min="0" max="2000000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['gold_min_copper'] ?? 30000)) ?>">
-              </label>
-
-              <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.gold_max_copper')) ?></span>
-                <input type="number" name="gold_max_copper" min="0" max="2000000000" step="1" value="<?= htmlspecialchars((string) ($bossConfig['gold_max_copper'] ?? 50000)) ?>">
-              </label>
-
               <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_items_text')) ?></span>
-                <textarea name="reward_items_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_items_text'] ?? '')) ?></textarea>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_items_text')) ?></small>
-              </label>
-
-              <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_formulas_text')) ?></span>
-                <textarea name="reward_formulas_text" rows="3" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_formulas_text'] ?? '')) ?></textarea>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_formulas_text')) ?></small>
-              </label>
-
-              <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.reward_mounts_text')) ?></span>
-                <textarea name="reward_mounts_text" rows="4" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.id_list')) ?>"><?= htmlspecialchars((string) ($bossConfig['reward_mounts_text'] ?? '')) ?></textarea>
-                <small class="muted"><?= htmlspecialchars(__('app.boss.config.hints.reward_mounts_text')) ?></small>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.spawn_points_text')) ?>">i</span></span>
+                <textarea name="spawn_points_text" rows="6" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.spawn_point_line')) ?>"><?= htmlspecialchars((string) ($bossConfig['spawn_points_text'] ?? '')) ?></textarea>
               </label>
             </div>
           </section>
         </div>
 
-        <div class="boss-config-actions">
-          <button type="submit" class="btn warn" id="bossConfigSaveBtn">
-            <?= htmlspecialchars(__('app.boss.config.save')) ?>
-          </button>
+        <div class="boss-save-bar" data-boss-save-bar="config">
+          <span class="boss-save-bar__meta" data-boss-dirty-label><?= htmlspecialchars(__('app.boss.config.no_changes')) ?></span>
+          <div class="boss-save-bar__actions">
+            <button type="button" class="btn outline" data-boss-discard disabled>
+              <?= htmlspecialchars(__('app.boss.config.discard')) ?>
+            </button>
+            <button type="submit" class="btn warn" id="bossConfigSaveBtn">
+              <?= htmlspecialchars(__('app.boss.config.save')) ?>
+            </button>
+          </div>
         </div>
       </form>
     </section>
@@ -605,9 +641,18 @@ $bossTabs['log'] = __('app.boss.tabs.log');
       <article class="boss-panel boss-panel--table">
         <div class="boss-panel__head">
           <h2><?= htmlspecialchars(__('app.boss.events.title')) ?></h2>
+          <span class="boss-muted"><?= htmlspecialchars(__('app.boss.events.limit_note', ['count' => (string) $event_limit])) ?></span>
+        </div>
+        <div class="boss-table-filters" data-boss-table-filter="events" role="group" aria-label="<?= htmlspecialchars(__('app.boss.log.filters_label')) ?>">
+          <button type="button" class="boss-chip is-active" data-boss-event-filter="all"><?= htmlspecialchars(__('app.boss.log.filters.all')) ?></button>
+          <button type="button" class="boss-chip" data-boss-event-filter="death"><?= htmlspecialchars(__('app.boss.log.filters.death')) ?></button>
+          <button type="button" class="boss-chip" data-boss-event-filter="spawn"><?= htmlspecialchars(__('app.boss.log.filters.spawn')) ?></button>
+          <button type="button" class="boss-chip" data-boss-event-filter="reward"><?= htmlspecialchars(__('app.boss.log.filters.reward')) ?></button>
+          <button type="button" class="boss-chip" data-boss-event-filter="schedule"><?= htmlspecialchars(__('app.boss.log.filters.schedule')) ?></button>
+          <button type="button" class="boss-chip" data-boss-event-filter="command"><?= htmlspecialchars(__('app.boss.log.filters.command')) ?></button>
         </div>
         <div class="boss-table-wrap">
-          <table class="table boss-table">
+          <table class="table boss-table boss-table--sticky" data-boss-events-table>
             <thead>
               <tr>
                 <th><?= htmlspecialchars(__('app.boss.events.columns.time')) ?></th>
@@ -624,11 +669,12 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                 </tr>
               <?php endif; ?>
               <?php foreach ($bossEvents as $event): ?>
-                <tr>
-                  <td><?= htmlspecialchars(format_datetime((int) ($event['created_at'] ?? 0))) ?></td>
+                <?php $bossEventType = (string) ($event['event_type'] ?? ''); ?>
+                <tr data-boss-event-type="<?= htmlspecialchars($bossEventType, ENT_QUOTES, 'UTF-8') ?>">
+                  <td><span data-boss-ago="<?= (int) ($event['created_at'] ?? 0) ?>"><?= htmlspecialchars(format_datetime((int) ($event['created_at'] ?? 0))) ?></span></td>
                   <td>
                     <span class="boss-event-type">
-                      <?= htmlspecialchars(__('app.boss.events.types.' . ($event['event_type'] ?? ''), [], (string) ($event['event_type'] ?? ''))) ?>
+                      <?= htmlspecialchars(__('app.boss.events.types.' . $bossEventType, [], $bossEventType)) ?>
                     </span>
                   </td>
                   <td>
@@ -658,17 +704,23 @@ $bossTabs['log'] = __('app.boss.tabs.log');
       <article class="boss-panel boss-panel--table">
         <div class="boss-panel__head">
           <h2><?= htmlspecialchars(__('app.boss.contributors.title')) ?></h2>
+          <span class="boss-muted"><?= htmlspecialchars(__('app.boss.contributors.limit_note', ['count' => (string) $contributor_limit])) ?></span>
+        </div>
+        <div class="boss-table-filters" data-boss-table-filter="contributors" role="group" aria-label="<?= htmlspecialchars(__('app.boss.log.filters_label')) ?>">
+          <button type="button" class="boss-chip is-active" data-boss-contributor-filter="all"><?= htmlspecialchars(__('app.boss.log.filters.all')) ?></button>
+          <button type="button" class="boss-chip" data-boss-contributor-filter="rewarded"><?= htmlspecialchars(__('app.boss.log.filters.rewarded_only')) ?></button>
+          <button type="button" class="boss-chip" data-boss-contributor-filter="killer"><?= htmlspecialchars(__('app.boss.log.filters.killer_only')) ?></button>
         </div>
         <div class="boss-table-wrap">
-          <table class="table boss-table">
+          <table class="table boss-table boss-table--sticky" data-boss-contributors-table>
             <thead>
               <tr>
                 <th><?= htmlspecialchars(__('app.boss.contributors.columns.time')) ?></th>
                 <th><?= htmlspecialchars(__('app.boss.contributors.columns.player')) ?></th>
                 <th><?= htmlspecialchars(__('app.boss.contributors.columns.boss')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.score')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.damage')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.healing')) ?></th>
+                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.score')) ?></th>
+                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.damage')) ?></th>
+                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.healing')) ?></th>
                 <th><?= htmlspecialchars(__('app.boss.contributors.columns.rewards')) ?></th>
               </tr>
             </thead>
@@ -679,8 +731,14 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                 </tr>
               <?php endif; ?>
               <?php foreach ($bossContributors as $row): ?>
-                <tr>
-                  <td><?= htmlspecialchars(format_datetime((int) ($row['created_at'] ?? 0))) ?></td>
+                <?php
+                  $bossRowRewardPools = is_array($row['reward_pools'] ?? null) ? $row['reward_pools'] : [];
+                  $bossRowRewarded = !empty($row['rewarded_random']) || $bossRowRewardPools !== [];
+                ?>
+                <tr class="<?= $bossRowRewarded ? 'boss-row--rewarded' : '' ?>"
+                    data-boss-rewarded="<?= $bossRowRewarded ? '1' : '0' ?>"
+                    data-boss-killer="<?= !empty($row['was_killer']) ? '1' : '0' ?>">
+                  <td><span data-boss-ago="<?= (int) ($row['created_at'] ?? 0) ?>"><?= htmlspecialchars(format_datetime((int) ($row['created_at'] ?? 0))) ?></span></td>
                   <td>
                     <div class="boss-cell-title"><?= character_link((int) ($row['player_guid'] ?? 0), (string) ($row['player_name'] ?? '')) ?></div>
                     <div class="small muted">GUID #<?= (int) ($row['player_guid'] ?? 0) ?> · <?= account_link((int) ($row['account_id'] ?? 0), 'Account #' . (int) ($row['account_id'] ?? 0)) ?></div>
@@ -689,16 +747,20 @@ $bossTabs['log'] = __('app.boss.tabs.log');
                     <div class="boss-cell-title"><?= htmlspecialchars((string) ($row['boss_name'] ?? '-')) ?></div>
                     <div class="small muted">GUID #<?= (int) ($row['boss_guid'] ?? 0) ?></div>
                   </td>
-                  <td><?= htmlspecialchars(number_format((float) ($row['contribution_score'] ?? 0), 2)) ?></td>
-                  <td><?= (int) ($row['damage_done'] ?? 0) ?></td>
-                  <td><?= (int) ($row['healing_done'] ?? 0) ?></td>
+                  <td class="boss-num"><?= htmlspecialchars(number_format((float) ($row['contribution_score'] ?? 0), 2)) ?></td>
+                  <td class="boss-num"><?= htmlspecialchars(number_format((int) ($row['damage_done'] ?? 0), 0, '.', ',')) ?></td>
+                  <td class="boss-num"><?= htmlspecialchars(number_format((int) ($row['healing_done'] ?? 0), 0, '.', ',')) ?></td>
                   <td>
                     <div class="boss-badge-list">
-                      <?php if (!empty($row['guaranteed_reward'])): ?>
-                        <span class="badge"><?= htmlspecialchars(__('app.boss.contributors.badges.guaranteed_reward')) ?></span>
-                      <?php endif; ?>
-                      <?php if (!empty($row['rewarded_random'])): ?>
+                      <?php if ($bossRowRewardPools !== []): ?>
+                        <span class="badge badge--warn" title="<?= htmlspecialchars(__('app.boss.contributors.badges.reward_pool_hint')) ?>">
+                          <?= htmlspecialchars(__('app.boss.contributors.badges.reward_pool_list', ['pools' => implode('·', array_map('strval', $bossRowRewardPools))])) ?>
+                        </span>
+                      <?php elseif (!empty($row['rewarded_random'])): ?>
                         <span class="badge badge--warn"><?= htmlspecialchars(__('app.boss.contributors.badges.random_reward')) ?></span>
+                      <?php endif; ?>
+                      <?php if (!empty($row['guaranteed_reward'])): ?>
+                        <span class="badge"><?= htmlspecialchars(__('app.boss.contributors.badges.guaranteed')) ?></span>
                       <?php endif; ?>
                       <?php if (!empty($row['was_killer'])): ?>
                         <span class="badge badge--danger"><?= htmlspecialchars(__('app.boss.contributors.badges.last_hit')) ?></span>

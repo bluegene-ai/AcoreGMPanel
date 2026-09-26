@@ -2,22 +2,6 @@
 /**
  * File: app/Http/Controllers/Quest/QuestController.php
  * Purpose: Defines class QuestController for the app/Http/Controllers/Quest module.
- * Classes:
- *   - QuestController
- * Functions:
- *   - __construct()
- *   - index()
- *   - editPage()
- *   - buildCancelQuery()
- *   - apiCreate()
- *   - apiDelete()
- *   - apiSave()
- *   - apiExecSql()
- *   - apiFetch()
- *   - apiLogs()
- *   - apiEditorLoad()
- *   - apiEditorSave()
- *   - apiEditorPreview()
  */
 
 namespace Acme\Panel\Http\Controllers\Quest;

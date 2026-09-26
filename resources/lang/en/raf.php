@@ -3,6 +3,7 @@
 return [
     'page_title' => 'Recruit Management',
     'intro' => 'Review RAF bindings, reward levels, and abuse counters for the current realm, then execute manual bind or unbind actions through SOAP.',
+    'intro_short' => 'Review recruit bindings and reward levels, then bind or unbind manually.',
     'scope_note' => 'Current realm: :server / realm_id=:realm',
     'summary' => ':total records, page :page / :pages',
     'stats' => [
@@ -97,6 +98,7 @@ return [
     'reward_log' => [
         'title' => 'Reward delivery log',
         'subtitle' => 'Every reward actually mailed after a recruit reached the target level, with the triggering recruit, time, recipient and contents.',
+        'subtitle_short' => 'Rewards actually mailed after each qualification.',
         'table_title' => 'Deliveries',
         'summary' => ':total records, page :page / :pages',
         'stats' => [
@@ -111,6 +113,7 @@ return [
             'hints' => [
                 'total' => 'Deliveries where the reward mail was actually sent',
                 'recruiters' => 'Distinct recruiter characters rewarded (not the row count below)',
+                'recruiters_short' => 'Recruiters rewarded',
                 'recruits' => 'Distinct recruit accounts that qualified and were recorded',
                 'default_rewards' => 'Deliveries using the default reward package',
                 'latest' => 'When the most recent reward was sent',

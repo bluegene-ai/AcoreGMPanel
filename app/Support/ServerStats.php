@@ -2,11 +2,6 @@
 /**
  * File: app/Support/ServerStats.php
  * Purpose: Defines class ServerStats for the app/Support module.
- * Classes:
- *   - ServerStats
- * Functions:
- *   - onlineCount()
- *   - totalCharacters()
  */
 
 namespace Acme\Panel\Support;

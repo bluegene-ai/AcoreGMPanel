@@ -1,28 +1,13 @@
 <?php
 /**
  * File: app/Http/Controllers/Auctionator/AuctionatorController.php
- * Purpose: Web management surface for the mod-auctionator seller (拍卖机器人).
+ * Purpose: Web management surface for the mod-auctionator seller (拍卖机器人): dashboard, settings,
+ * policy tables and the module's own GM commands through the worldserver SOAP channel.
  *
- * Four surfaces, one page:
- *   - dashboard : live listing counters, market table state, log tail, warnings
- *   - settings  : read/write the Auctionator.* keys of mod_auctionator.conf
- *   - policy    : mod_auctionator_disabled_items / itemclass_config / quality_config / gm_list CRUD
- *   - actions   : the module's own GM commands through the worldserver SOAP channel
- *
- * The module reads its configuration while the worldserver builds the Auctionator
- * singleton, so a saved setting is inert until the worldserver is restarted; the page
- * says so and links to /supervisor. Two exceptions apply the change at once by also sending a
- * runtime command: the master switch (Auctionator.Enabled → ".auctionator start|stop") and the
- * buyout-mode switch (Auctionator.Seller.BidOnly → ".auctionator buyout 0|1"). The item policy
- * tables  the disabled blacklist, the class/subclass whitelist and the per-quality gate  are
- * read by the seller on every run, so those edits never need a restart.
- *
- * Every path, table and command on this page belongs to the realm selected in the header
- * (config/auctionator.php server_overrides), which is what makes the module manageable
- * per realm when several realms share one auth database.
- *
- * Class:
- *   - AuctionatorController
+ * The module reads its configuration while the worldserver builds the Auctionator singleton, so a
+ * saved setting is inert until that realm's worldserver is restarted (the master switch and the
+ * buyout mode also send a runtime command); the item policy tables are read on every seller run.
+ * Every path, table and command on this page belongs to the realm selected in the header.
  */
 
 declare(strict_types=1);
@@ -49,11 +34,8 @@ class AuctionatorController extends Controller
 
     /**
      * Listing shapes the panel is allowed to write for a GM listing.
-     *
-     * The module also knows a third value, `legacy` (follow the realm-wide
-     * Auctionator.Seller.BidOnly switch). Rows carried over from before the mode column
-     * exist are still on it, but the panel never writes it: the GM picks a real mode so a
-     * listing's shape is never left to a global switch by accident.
+     * The module also knows `legacy` (follow the realm-wide BidOnly switch) and carried-over rows are
+     * still on it, but the panel never writes it: a listing's shape must not depend on a global switch.
      */
     private const LISTING_MODES = ['buyout', 'bid'];
 
@@ -92,13 +74,8 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * Read an integer that must be present and inside a range.
-     *
-     * Deliberately not boundedInt(): that clamps, so `boundedInt($request, 'class', -1, 0, 15)`
-     * turned a *missing* class into class 0 and made the "-1 means invalid" check below it dead
-     * code - a malformed request silently edited the wrong row. The old 0..15 range also cut off
-     * class 16 (glyphs), which is a real row of the item class table.
-     *
+     * Read an integer that must be present and inside a range; unlike boundedInt() a missing value is an
+     * error instead of being clamped to $min, which would silently edit the wrong row.
      * @return array{value: int, ok: bool}
      */
     private function requiredInt(Request $request, string $key, int $min, int $max): array
@@ -131,7 +108,8 @@ class AuctionatorController extends Controller
                 'control' => 'auctionator.control',
             ],
             'header' => [
-                'intro' => __('app.auctionator.intro'),
+                'intro' => __('app.auctionator.intro_short'),
+                'intro_hint' => __('app.auctionator.intro'),
                 'note' => __('app.auctionator.scope_note', [
                     'server' => (string) ($server['name'] ?? ''),
                     'path' => (string) ($snapshot['paths']['conf_file'] ?? ''),
@@ -308,10 +286,7 @@ class AuctionatorController extends Controller
                     $message = Lang::get('app.auctionator.feedback.itemclass_deleted', ['class' => $class['value'], 'subclass' => $subclass['value']]);
                     break;
 
-                // Whole-type switch: one quota for every subclass of an item class, so "stop
-                // listing armour" is one click instead of eleven saved rows. Quota 0 means never
-                // list the type; a quota above 0 also (re)creates the rows a type needs to be in
-                // the seller's whitelist at all.
+                // Whole-type switch: one quota for every subclass of an item class (0 = never list the type; >0 also creates the whitelist rows it needs)
                 case 'itemclass_class_save':
                     $class = $this->requiredInt($request, 'class', 0, 16);
                     if (!$class['ok']) {
@@ -327,8 +302,7 @@ class AuctionatorController extends Controller
                     ]);
                     break;
 
-                // Per-quality gate of the automatic seller. Read by the seller's own candidate
-                // query, so it applies on the next run without a worldserver restart.
+                // per-quality gate of the automatic seller: read by its own candidate query, so it applies on the next run
                 case 'quality_save':
                     $quality = $this->requiredInt($request, 'quality', 0, 7);
                     if (!$quality['ok']) {
@@ -455,14 +429,9 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * 按区一键启停拍卖机器人（多区部署下每个区各自一份 conf + 一个 worldserver）。
-     *
-     * 两步都要做，缺一不可：
-     *   1. 写本区 configs/modules/mod_auctionator.conf 的 Auctionator.Enabled —— 跨重启保持；
-     *   2. 向本区 worldserver 发 ".auctionator start|stop" —— 立刻生效，不必重启该区。
-     *
-     * 返回值区分"已落库"和"已生效"：命令没送到（比如该区 worldserver 没在跑）时 conf 仍然写好，
-     * 页面据此提示"下次启动生效"，而不是谎报成功。
+     * 按区一键启停拍卖机器人（每个区一份 conf + 一个 worldserver）。两步缺一不可：写本区
+     * mod_auctionator.conf 的 Auctionator.Enabled（跨重启保持）+ 发 ".auctionator start|stop"（立即生效）。
+     * 返回值区分"已落库"与"已生效"：命令没送到时 conf 仍然写好，页面据此提示"下次启动生效"，而不是谎报成功。
      */
     public function apiPower(Request $request): Response
     {
@@ -555,18 +524,10 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * 买断模式快速开关（按区，立即生效）。
-     *
-     * 和总开关一样是两步，缺一不可：
-     *   1. 写本区 configs/modules/mod_auctionator.conf 的 Auctionator.Seller.BidOnly —— 跨重启保持；
-     *   2. 向本区 worldserver 发 ".auctionator buyout 0|1" —— 卖家每条挂单都会重读该开关，
-     *      所以下一轮就按新值上架，不必重启该区。
-     *
-     * 注意配置键与界面上的开关是**反向**的：买断模式关闭 = Auctionator.Seller.BidOnly = 1，
-     * 也就是条目完全不设一口价、只能靠竞拍成交。
-     *
-     * 返回值同样区分"已落库"与"已生效"：命令没送到（该区 worldserver 没在跑）时 conf 仍然写好，
-     * 页面据此提示"下次启动生效"，而不是谎报成功。
+     * 买断模式快速开关（按区，立即生效）。同样两步缺一不可：写本区 Auctionator.Seller.BidOnly（跨重启保持）
+     * + 发 ".auctionator buyout 0|1"（卖家每轮挂单都重读该开关，下一轮生效）。
+     * 注意配置键与界面开关是**反向**的：买断模式关闭 = BidOnly = 1，即条目不设一口价、只靠竞拍成交。
+     * 返回值同样区分"已落库"与"已生效"，命令没送到时不谎报成功。
      */
     public function apiBuyout(Request $request): Response
     {
@@ -672,7 +633,6 @@ class AuctionatorController extends Controller
 
     /**
      * 第一个非空字符串；全为空时返回空串。
-     *
      * @param string[] $candidates
      */
     private function firstNonEmptyString(array $candidates): string
@@ -686,19 +646,12 @@ class AuctionatorController extends Controller
         return '';
     }
 
-    // ------------------------------------------------------------------ listing parameters
 
     /**
      * Normalise the mode + 起拍单价 + 买断单价 triple the two GM listing surfaces take.
-     *
-     * 一口价 (buyout) is one price the buyer pays and nobody can underbid: the module pins
-     * the start bid to the buyout, so a start bid sent alongside it would only be a second,
-     * disagreeing source of truth. 竞拍 (bid) needs a start bid and takes an optional
-     * buyout that may not sit below it.
-     *
-     * All three values are UNIT copper: the listing price is the value times the stack,
-     * which is what the card's preview spells out.
-     *
+     * A 一口价 listing pins the start bid to the buyout (a separate start bid would only be a second,
+     * disagreeing source of truth); 竞拍 needs a start bid and takes an optional buyout that may not sit
+     * below it. All three values are UNIT copper: the listing price is the value times the stack.
      * @return array{mode: string, price: int, bid: int, error: string}
      */
     private function listingPricing(Request $request): array
@@ -737,14 +690,9 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * The owner argument of ".auctionator add": "bot" recycles the sale money (gold sink),
-     * a character guid pays that character.
-     *
-     * "me" is deliberately not offered: the panel reaches the worldserver over SOAP, whose
-     * console handler has no session, so the module always answers "me is only available for
-     * an in-game GM". Any other unrecognised value used to fall back to "bot" silently, which
-     * would pay the wrong character; it is refused instead.
-     *
+     * The owner argument of ".auctionator add": "bot" recycles the sale money (gold sink), a character guid
+     * pays that character. "me" is deliberately not offered (over SOAP the console handler has no session)
+     * and an unrecognised value is refused instead of falling back to "bot", which would pay the wrong character.
      * @return array{value: string, error: string}
      */
     private function normalizedOwner(Request $request): array
@@ -762,9 +710,8 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * addlist's optional owner override: "row" keeps each row's own owner column, "bot"
-     * forces the gold sink, a guid pays that character.
-     *
+     * addlist's optional owner override: "row" keeps each row's own owner column, "bot" forces the gold
+     * sink, a guid pays that character.
      * @return array{value: string, error: string}
      */
     private function addlistOwnerOverride(Request $request): array
@@ -785,7 +732,6 @@ class AuctionatorController extends Controller
         return ['value' => '', 'error' => Lang::get('app.auctionator.errors.invalid_owner')];
     }
 
-    // ------------------------------------------------------------------ command builder
     /**
      * @return array{command: string, error: string}
      */
@@ -806,8 +752,7 @@ class AuctionatorController extends Controller
                     return ['command' => '', 'error' => $override['error']];
                 }
 
-                // Omitting the owner argument is what keeps each row's own owner column; the
-                // panel used to always send one, which overrode every row with "bot".
+                // omitting the owner argument is what keeps each row's own owner column; sending one overrides every row
                 return [
                     'command' => '.auctionator addlist ' . $house . ($override['value'] === 'row' ? '' : ' ' . $override['value']),
                     'error' => '',
@@ -844,8 +789,7 @@ class AuctionatorController extends Controller
             case 'marketimport':
                 return ['command' => '.auctionator marketimport' . ($this->normalizedBoolFlag($request, 'force') ? ' force' : ''), 'error' => ''];
 
-            // Samples this realm's auction house into mod_auctionator_market_price: the
-            // aggregation is pure SQL inside the module, so the panel just triggers it.
+            // samples this realm's auction house: the aggregation is pure SQL inside the module, the panel only triggers it
             case 'marketscan':
                 return ['command' => '.auctionator marketscan', 'error' => ''];
 
@@ -869,14 +813,10 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * ".auctionator add <house> <item[,item...]> mode=<buyout|bid> [bid=<n>] [buyout=<n>]
-     *  stack=<n> hours=<n> owner=<bot|guid>"
-     *
-     * The option form is used on purpose. The positional form takes a bare <price> and lets
-     * the realm-wide Auctionator.Seller.BidOnly switch decide whether that price is a buyout
-     * or a start bid, which is exactly the ambiguity this card had; the option form states
-     * the mode and both prices for this one listing.
-     *
+     * ".auctionator add <house> <item[,item...]> mode=<buyout|bid> [bid=<n>] [buyout=<n>] stack=<n> hours=<n> owner=<bot|guid>"
+     * The option form is used on purpose: the positional form takes a bare <price> and lets the realm-wide
+     * BidOnly switch decide whether it is a buyout or a start bid, which is exactly the ambiguity this card
+     * had; the option form states the mode and both prices for this one listing.
      * @return array{command: string, error: string}
      */
     private function buildAddCommand(Request $request, string $house): array
@@ -937,11 +877,9 @@ class AuctionatorController extends Controller
         return ['command' => $command, 'error' => ''];
     }
 
-    // ------------------------------------------------------------------ snapshot
 
     /**
      * Everything the page and the status endpoint need.
-     *
      * @return array<string, mixed>
      */
     private function snapshot(int $disabledFrom = 0): array
@@ -953,9 +891,8 @@ class AuctionatorController extends Controller
         $read = $file->read();
         $typed = $file->typedValues($fields);
 
-        // 本区管不了（没装模块 / 库连不上 / 被 denied）：只回答"当前是哪个区、它的 conf 在哪、
-        // 为什么是只读"，**不去碰该区的库表**。否则页面会在说明上面先刷一屏 Unknown table 的
-        // SQL 报错，看起来像面板坏了，而不是"这个区还没装 mod-auctionator"。
+        // 本区管不了（没装模块 / 库连不上 / 被 denied）：只回答"当前是哪个区、conf 在哪、为什么只读"，
+        // 不去碰该区的库表，否则页面会先刷一屏 Unknown table 的 SQL 报错，看起来像面板坏了。
         if (!$this->serverSupported()) {
             $reason = $this->serverSupport()['reason'];
             // 连不上库 ≠ 没装模块：前者要按"读取失败/连接问题"说，后者才是"没部署"。
@@ -1057,7 +994,6 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * @param array<string, array<string, mixed>> $fields
      * @return array<int, array{key: string, fields: string[]}>
      */
     private function fieldGroups(array $fields): array
@@ -1074,9 +1010,7 @@ class AuctionatorController extends Controller
         return array_values($groups);
     }
 
-    /**
-     * @return array{conf_file: string, log_file: string, server_root: string}
-     */
+    /** @return array{conf_file: string, log_file: string, server_root: string} */
     private function realmPaths(): array
     {
         $serverId = ServerContext::currentId();
@@ -1113,14 +1047,9 @@ class AuctionatorController extends Controller
     }
 
     /**
-     * 本区能不能管拍卖机器人，以及"不能"的具体原因。
-     *
-     * 多区面板里 mod-auctionator 是按区部署的，判定顺序（先否决、再显式允许、最后看实据）：
-     *   1. `unsupported_server_ids` 里 → 明确不管（denied，给不想在面板里暴露的区留出口）；
-     *   2. `supported_server_ids` 里 → 直接算已部署（显式白名单，省掉一次探测）；
-     *   3. 否则**探测本区 world 库有没有模块自己的表**——装了就能管，不必再手改白名单；
-     *      库连不上（db_unreachable）或表不存在（not_deployed）才落到"只读 + 说明"。
-     *
+     * 本区能不能管拍卖机器人，以及"不能"的具体原因。判定顺序：`unsupported_server_ids` 里 → denied；
+     * `supported_server_ids` 里 → 直接算已部署；否则探测本区 world 库有没有模块自己的表（装了就能管，
+     * 不必再手改白名单）；库连不上或表不存在才落到"只读 + 说明"。
      * @return array{supported: bool, reason: string} reason ∈ explicit|denied|deployed|not_deployed|db_unreachable
      */
     private function serverSupport(): array
@@ -1150,9 +1079,7 @@ class AuctionatorController extends Controller
         return $this->serverSupport()['supported'];
     }
 
-    /**
-     * 只读原因对应的文案 key（denied / 连不上库 / 没装模块 三种说法不一样）。
-     */
+    /** 只读原因对应的文案 key（denied / 连不上库 / 没装模块 三种说法不一样）。 */
     private function serverSupportMessage(): string
     {
         $key = match ($this->serverSupport()['reason']) {
@@ -1176,9 +1103,7 @@ class AuctionatorController extends Controller
         ], 422);
     }
 
-    /**
-     * @return array<int, array{line: string, tone: string}>
-     */
+    /** @return array<int, array{line: string, tone: string}> */
     private function logTail(int $lines): array
     {
         $path = $this->realmPaths()['log_file'];
@@ -1209,10 +1134,7 @@ class AuctionatorController extends Controller
         return $entries;
     }
 
-    /**
-     * @param array<string, mixed> $spec
-     * @return array{value: mixed, error: string}
-     */
+    /** @param array<string, mixed> $spec field spec @return array{value: mixed, error: string} */
     private function validateField(string $key, array $spec, mixed $raw): array
     {
         $type = (string) ($spec['type'] ?? 'string');

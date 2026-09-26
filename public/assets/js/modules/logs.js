@@ -1,19 +1,6 @@
 /**
  * File: public/assets/js/modules/logs.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - boot()
- *   - populateTypeOptions()
- *   - formatServer()
- *   - updateSummary()
- *   - renderTable()
- *   - loadLogs()
- *   - triggerLoad()
- *   - qs()
- *   - getPanelApi()
- *   - summary()
- *   - status()
- *   - action()
  */
 
 const qs = (sel, ctx = document) => ctx.querySelector(sel);

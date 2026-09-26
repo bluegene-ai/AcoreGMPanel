@@ -2,34 +2,6 @@
 /**
  * File: app/Domain/Supervisor/SupervisorManager.php
  * Purpose: Read/write bridge between the panel and acore_supervisor.exe.
- * Classes:
- *   - SupervisorManager
- * Functions:
- *   - __construct()
- *   - enabled()
- *   - isValidInstance()
- *   - instanceId()
- *   - instanceLabel()
- *   - instances()
- *   - summaries()
- *   - paths()
- *   - status()
- *   - logTail()
- *   - dispatch()
- *   - startSupervisor()
- *   - isControlAllowed()
- *   - instanceDefinitions()
- *   - effectiveConfig()
- *   - labelFor()
- *   - summaryTone()
- *   - resolveDirectory()
- *   - decodeStatus()
- *   - normalizeService()
- *   - healthFor()
- *   - readStatusFile()
- *   - statusAge()
- *   - tailFile()
- *   - atomicWrite()
  */
 
 declare(strict_types=1);
@@ -49,7 +21,7 @@ final class SupervisorManager
     public const ACTION_PING = 'ping';
     public const ACTION_SHUTDOWN = 'shutdown';
 
-    /** Id of the single instance described by the flat config keys (today's behaviour). */
+    /** Id of the single instance described by the flat config keys. */
     public const DEFAULT_INSTANCE = 'default';
 
     private const SERVICE_ACTIONS = [
@@ -63,7 +35,7 @@ final class SupervisorManager
     private const TARGETS = ['all', 'worldserver', 'authserver'];
 
     /**
-     * Keys that may be overridden per instance (everything else in the config file is global).
+     * Keys that may be overridden per instance; every other key in the file is global.
      */
     private const INSTANCE_KEYS = [
         'enabled',
@@ -101,9 +73,7 @@ final class SupervisorManager
     /**
      * One manager instance represents ONE supervisor instance (one acore_supervisor.exe).
      *
-     * @param string|null $instance instance id from the config ("instances" key); null/'' = the first
-     *                              configured instance; unknown ids are kept and reported by
-     *                              isValidInstance() so a command is never sent to the wrong realm.
+     * @param string|null $instance instance id; null/'' = first configured instance, unknown ids stay invalid (isValidInstance()) so no command reaches the wrong realm
      * @param array<string,mixed>|null $config inject a config array instead of Config::get('supervisor')
      */
     public function __construct(?string $instance = null, ?array $config = null)
@@ -124,9 +94,7 @@ final class SupervisorManager
         return (bool) ($this->config['enabled'] ?? true);
     }
 
-    /**
-     * False when the requested instance id is not configured (the caller must refuse the request).
-     */
+    /** False when the requested instance id is not configured: the caller must refuse the request. */
     public function isValidInstance(): bool
     {
         return array_key_exists($this->instanceId, $this->instanceDefinitions());
@@ -144,7 +112,6 @@ final class SupervisorManager
 
     /**
      * Configured instances, in config order - enough for the page switcher.
-     *
      * @return array<int,array{id:string,label:string,enabled:bool}>
      */
     public function instances(): array
@@ -164,9 +131,7 @@ final class SupervisorManager
     }
 
     /**
-     * Compact state of every configured instance (switcher badges). Each entry reads its own status
-     * file, so the page can show "which realm's supervisor is alive" at a glance.
-     *
+     * Compact state of every configured instance (switcher badges); each entry reads its own status file.
      * @return array<int,array{id:string,label:string,enabled:bool,running:bool,available:bool,reason:string,tone:string,services:array<string,string>}>
      */
     public function summaries(): array
@@ -193,8 +158,7 @@ final class SupervisorManager
                 'reason' => (string) ($state['reason'] ?? ''),
                 'tone' => $this->summaryTone($state, $services),
                 'services' => $services,
-                // where this instance reads/writes: two instances on one directory would show and
-                // control the SAME supervisor, so the page warns about it (see dirCollisions())
+                // two instances on one directory would show and control the SAME supervisor (see dirCollisions())
                 'dir' => (string) ($other->paths()['dir'] ?? ''),
             ];
         }
@@ -204,11 +168,7 @@ final class SupervisorManager
 
     /**
      * Instances that resolve to the same supervisor directory, keyed by directory.
-     *
-     * One acore_supervisor.exe supervises one worldserver + one authserver, so two panel instances
-     * sharing a directory means the same realm is listed twice - and a restart sent to the wrong
-     * entry would hit the other realm's servers. Empty in a correct configuration.
-     *
+     * One exe supervises one world+auth pair, so a shared directory means the same realm is listed twice and a restart hits the other realm. Empty in a correct configuration.
      * @return array<string,array<int,string>> directory => instance labels
      */
     public function dirCollisions(): array
@@ -236,13 +196,9 @@ final class SupervisorManager
     }
 
     /**
-     * Instance table from the config file.
-     *
-     * Without an "instances" key the whole file describes ONE instance (id "default") - exactly the
-     * behaviour before multi-instance support. With "instances", every entry is an instance and the
-     * flat keys act as defaults for all of them; an entry may be a plain string (the supervisor
-     * directory) as a shorthand.
-     *
+     * Instance table from the config file. Without "instances" the whole file describes ONE instance
+     * (id "default"); with it, every entry is an instance, the flat keys are defaults for all of them,
+     * and a plain string entry is the supervisor directory shorthand.
      * @return array<string,array<string,mixed>>
      */
     private function instanceDefinitions(): array
@@ -267,9 +223,6 @@ final class SupervisorManager
         return $definitions === [] ? [self::DEFAULT_INSTANCE => []] : $definitions;
     }
 
-    /**
-     * @return array<string,mixed>
-     */
     private function effectiveConfig(string $id): array
     {
         $defaults = [];
@@ -281,16 +234,8 @@ final class SupervisorManager
 
         $overrides = $this->instanceOverrides($id) ?? [];
 
-        // A NAMED instance must say where ITS supervisor lives. The flat keys describe the default
-        // instance, so inheriting them would silently bind this instance to the default realm's
-        // supervisor - and the panel would show, and send commands to, the wrong realm. Measured
-        // before this guard: with a flat dir and two instances, both resolved to the same folder.
-        //   * own dir            -> the derived exe/status/control/log come from that directory, the
-        //                           flat file paths are dropped (they described another folder)
-        //   * no dir, no paths   -> look up the instance's own conventions (release/supervisor-<id>,
-        //                           release/<id>/supervisor) and, if that fails, report "directory
-        //                           not found" plus the diagnostics block
-        // A path written inside the instance entry itself always wins.
+        // A NAMED instance must not inherit the flat dir/file keys: it would silently bind to the
+        // default realm's supervisor. A path written inside the instance entry itself always wins.
         if ($id !== self::DEFAULT_INSTANCE) {
             $ownDir = trim((string) ($overrides['dir'] ?? ''));
             $inherited = ['exe', 'config_file', 'status_file', 'control_file', 'log_file'];
@@ -311,9 +256,6 @@ final class SupervisorManager
         return $config;
     }
 
-    /**
-     * @param array<string,mixed> $config
-     */
     private function labelFor(string $id, array $config): string
     {
         $label = trim((string) ($config['label'] ?? ''));
@@ -321,10 +263,6 @@ final class SupervisorManager
         return $label !== '' ? $label : $id;
     }
 
-    /**
-     * @param array<string,mixed> $state
-     * @param array<string,string> $services
-     */
     private function summaryTone(array $state, array $services): string
     {
         if (!($state['enabled'] ?? true)) {
@@ -365,11 +303,9 @@ final class SupervisorManager
         $dir = $this->resolveDirectory();
         $ini = $this->iniFilePaths();
 
-        // Priority: what the panel config says, then the names the supervisor's own ini declares,
-        // then what is actually lying in the directory, then the defaults. A deployment is free to
-        // rename all three files (e.g. supervisor_test_status.json); without the ini step the panel
-        // would look for supervisor_status.json, report "not running" and - worse - write commands
-        // into a control file the supervisor never reads.
+        // Path priority: panel config, then the names supervisor.ini declares, then what is actually in
+        // the directory, then the defaults. A wrong control-file guess would send commands into a file
+        // the supervisor never reads.
         $pick = function (string $configured, string $fromIni, string $discovered, string $relative, string $sourceKey) use ($dir): string {
             $sources = [
                 ['configured', $configured],
@@ -392,8 +328,7 @@ final class SupervisorManager
         $exe = trim((string) ($this->config['exe'] ?? ''));
         $configFile = trim((string) ($this->config['config_file'] ?? ''));
         if ($exe === '' && $dir !== '') {
-            // the ini does not name the executable (it IS the executable's config), so look in the
-            // directory: the default name first, then anything that looks like a supervisor
+            // the ini never names the executable, so probe the directory: default name first, then *supervisor*.exe
             $exe = $this->newestInDirectory($dir, ['acore_supervisor.exe', '*supervisor*.exe', '*.exe']);
             if ($exe === '') {
                 $exe = $dir . DIRECTORY_SEPARATOR . 'acore_supervisor.exe';
@@ -408,23 +343,18 @@ final class SupervisorManager
             'exe' => $exe,
             'config_file' => $configFile,
             'status_file' => $pick((string) ($this->config['status_file'] ?? ''), $ini['status_file'], $this->newestInDirectory($dir, ['logs' . DIRECTORY_SEPARATOR . '*status*.json', '*status*.json']), 'logs' . DIRECTORY_SEPARATOR . 'supervisor_status.json', 'status_file'),
-            // the control file is usually ABSENT (the supervisor consumes it), so it is never
-            // guessed from the filesystem - a wrong guess would send commands into the void
+            // the control file is usually ABSENT (the supervisor consumes it): never guess it from disk,
+            // a wrong path sends commands into the void
             'control_file' => $pick((string) ($this->config['control_file'] ?? ''), $ini['control_file'], '', 'logs' . DIRECTORY_SEPARATOR . 'supervisor_control.txt', 'control_file'),
             'log_file' => $pick((string) ($this->config['log_file'] ?? ''), $ini['log_file'], $this->newestInDirectory($dir, ['logs' . DIRECTORY_SEPARATOR . '*supervisor*.log', '*supervisor*.log']), 'logs' . DIRECTORY_SEPARATOR . 'supervisor.log', 'log_file'),
         ];
     }
 
     /**
-     * The supervisor's own supervisor.ini, parsed section by section.
-     *
-     * That file is the authoritative description of the deployment: which services run, where their
-     * executables and logs are, how the status/command/log files are named, the instance name, the
-     * tick. The panel therefore reads it instead of assuming names, and keeps its own config only
-     * for overrides. Relative values are resolved the way the supervisor resolves them: file paths
-     * in [general] against the ini's folder, WorkDir against the ini's folder, Exe/ServerConf
-     * against WorkDir.
-     *
+     * The supervisor's own supervisor.ini, parsed section by section: it is the authoritative
+     * description of the deployment (services, exe/log paths, file names, instance name, tick) and the
+     * panel config only overrides it. Relative paths resolve like the supervisor resolves them: file
+     * paths and WorkDir against the ini folder, Exe/ServerConf against WorkDir.
      * @return array{file:string,found:bool,sections:array<string,array<string,string>>}
      */
     private function iniConfig(): array
@@ -446,8 +376,8 @@ final class SupervisorManager
             return $this->iniCache;
         }
 
-        // the supervisor tolerates comments and empty values; scan instead of parse_ini_file() so a
-        // value containing ':' / '%' / '|' can never make the whole file unreadable
+        // scan by hand instead of parse_ini_file(): a value containing ':' / '%' / '|' would make the
+        // whole file unreadable
         $sections = [];
         $current = '';
         foreach (preg_split('/\R/', $raw) ?: [] as $line) {
@@ -504,11 +434,7 @@ final class SupervisorManager
         ];
     }
 
-    /**
-     * What supervisor.ini says about itself and the services it runs, with relative paths resolved.
-     *
-     * @return array<string,mixed>
-     */
+    /** What supervisor.ini says about itself and the services it runs, with relative paths resolved. */
     private function iniSummary(): array
     {
         $ini = $this->iniConfig();
@@ -562,10 +488,7 @@ final class SupervisorManager
         ];
     }
 
-    /**
-     * A path from supervisor.ini: absolute stays as it is, relative is resolved against the ini's
-     * folder (exactly like the supervisor itself does).
-     */
+    /** Absolute path stays; a relative one is resolved against the ini folder, exactly like the supervisor does. */
     private function resolveIniPath(string $value, string $iniDir): string
     {
         $value = trim($value);
@@ -583,7 +506,6 @@ final class SupervisorManager
 
     /**
      * Newest file matching one of the globs, relative to the supervisor directory ('' when none).
-     *
      * @param array<int,string> $globs
      */
     private function newestInDirectory(string $dir, array $globs): string
@@ -606,7 +528,7 @@ final class SupervisorManager
                 }
             }
             if ($newest !== '') {
-                break;                                  // the first glob that matches wins
+                break;
             }
         }
 
@@ -632,9 +554,8 @@ final class SupervisorManager
         $available = $decoded !== null;
         $running = $available && $age !== null && $age <= $staleAfter;
 
-        // Distinguish "the panel cannot find the supervisor at all" from "the supervisor is not
-        // running": a production deployment often keeps the supervisor outside the web root, and
-        // the old single "no_status_file" wording sent people looking in the wrong place.
+        // "the panel cannot find the supervisor at all" must stay distinct from "not running": a
+        // production deployment often keeps the supervisor outside the web root.
         $configuredDir = trim((string) ($this->config['dir'] ?? ''));
         $iniSummary = $this->iniSummary();
         $reason = 'ok';
@@ -655,9 +576,8 @@ final class SupervisorManager
             $reason = 'stale';
         }
 
-        // The status file belongs to the supervisor whose InstanceName the ini declares. A
-        // different name means this directory's status file was written by ANOTHER realm's
-        // supervisor (copied folder, wrong dir) - which would show the wrong realm as running.
+        // A status file whose InstanceName differs from the ini's was written by ANOTHER realm's
+        // supervisor (copied folder, wrong dir) and would show the wrong realm as running.
         $iniInstance = (string) ($iniSummary['instance_name'] ?? '');
         $statusInstance = (string) ($decoded['instance'] ?? '');
         $instanceCheck = [
@@ -685,8 +605,7 @@ final class SupervisorManager
             'running' => $running,
             'reason' => $reason,
             'reason_label' => Lang::get('app.supervisor.reason.' . $reason),
-            // what the supervisor's own ini says (authoritative for names, services, tick); the
-            // panel config only overrides
+            // what the supervisor's own ini says (authoritative for names, services, tick); panel config only overrides
             'ini' => $iniSummary,
             'instance_check' => $instanceCheck,
             // only when something is wrong: tells the operator which directories were tried
@@ -711,9 +630,6 @@ final class SupervisorManager
         ];
     }
 
-    /**
-     * @return array<int,string>
-     */
     public function logTail(?int $lines = null): array
     {
         $paths = $this->paths();
@@ -759,10 +675,9 @@ final class SupervisorManager
             return $this->failure(Lang::get('app.supervisor.errors.not_running'));
         }
 
-        // A service this supervisor does not run (Enabled = false in its ini) must not be commanded
-        // through it: on a shared-authserver machine that would start a SECOND authserver (the
-        // supervisor's own command handler starts whatever it is told to name). The owning realm's
-        // entry is the only one that may touch it.
+        // Never command a service this supervisor does not run (Enabled = false in its ini): on a
+        // shared-authserver machine that would start a SECOND authserver, so only the owning realm's
+        // entry may touch it.
         if ($target !== 'all') {
             foreach ((array) ($state['services'] ?? []) as $service) {
                 if (!is_array($service) || (string) ($service['name'] ?? '') !== $target) {
@@ -801,9 +716,8 @@ final class SupervisorManager
     }
 
     /**
-     * Launch the supervisor through its Task Scheduler task (the only way to reach the
-     * interactive session from a web request).
-     *
+     * Launch the supervisor through its Task Scheduler task (the only way to reach the interactive
+     * session from a web request).
      * @return array{success:bool,message:string}
      */
     public function startSupervisor(): array
@@ -882,8 +796,8 @@ final class SupervisorManager
     }
 
     /**
-     * Write through a temporary file + rename so the supervisor never reads a half-written
-     * command (it polls the file several times per second).
+     * Write through a temporary file + rename so the supervisor never reads a half-written command
+     * (it polls the file several times per second).
      */
     private function atomicWrite(string $path, string $contents): void
     {
@@ -924,9 +838,6 @@ final class SupervisorManager
         return $this->resolvedDir = '';
     }
 
-    /**
-     * @return array<int,string>
-     */
     private function candidateDirectories(): array
     {
         $resolved = [];
@@ -1021,7 +932,7 @@ final class SupervisorManager
     }
 
     /**
-     * The ACORE_SUPERVISOR_DIR override, from the process environment or the request environment
+     * ACORE_SUPERVISOR_DIR override from the process environment or the request environment
      * (Apache SetEnv shows up in $_SERVER, not always in getenv()).
      */
     private function envDirectory(): string
@@ -1038,8 +949,6 @@ final class SupervisorManager
     /**
      * Why the supervisor was (not) found, for the page and for support: the directories that were
      * tried, what is in them, which path won and what the panel process may not be able to see.
-     *
-     * @return array<string,mixed>
      */
     public function diagnostics(): array
     {
@@ -1063,8 +972,8 @@ final class SupervisorManager
         $ini = $this->iniFilePaths();
         $iniSummary = $this->iniSummary();
 
-        // where the panel config and the ini disagree about a file name: the config wins, so a
-        // wrong entry there sends commands into a file the supervisor never reads
+        // where the panel config and the ini disagree about a file name: the config wins, so a wrong
+        // entry sends commands into a file the supervisor never reads
         $conflicts = [];
         foreach (['status_file', 'control_file', 'log_file'] as $key) {
             $configured = trim((string) ($this->config[$key] ?? ''));
@@ -1086,8 +995,8 @@ final class SupervisorManager
             'status_file_age_seconds' => $statusExists ? $this->statusAge($paths['status_file']) : null,
             'control_file' => $paths['control_file'],
             'log_file' => $paths['log_file'],
-            // which supervisor.ini was read, what it says, and where every path came from: the usual
-            // reason a running supervisor looks "not running" is a renamed status/control file
+            // which supervisor.ini was read and where every path came from: the usual reason a running
+            // supervisor looks "not running" is a renamed status/control file
             'ini_file' => $ini['ini_file'],
             'ini_found' => $ini['ini_found'],
             'ini' => $iniSummary,
@@ -1104,9 +1013,6 @@ final class SupervisorManager
         ];
     }
 
-    /**
-     * @return array<string,mixed>|null
-     */
     private function decodeStatus(string $path): ?array
     {
         $raw = @file_get_contents($path);
@@ -1129,24 +1035,19 @@ final class SupervisorManager
         return max(0, time() - $mtime);
     }
 
-    /**
-     * @param array<string,mixed> $service
-     * @return array<string,mixed>
-     */
     private function normalizeService(array $service): array
     {
         $state = (string) ($service['state'] ?? 'unknown');
         $heartbeatSeen = (bool) ($service['heartbeatSeen'] ?? false);
         $heartbeatAge = isset($service['heartbeatAgeSec']) ? (int) $service['heartbeatAgeSec'] : -1;
-        // heartbeatTimeoutSec is the EFFECTIVE limit: since supervisor 1.1.2 it is raised to
-        // max(configured, RecordUpdateTimeDiffInterval + 120s) so a healthy server with a slow
-        // heartbeat cadence is not killed (see heartbeatTimeoutConfiguredSec). The panel must judge
-        // and display the effective one, and explain the difference.
+        // heartbeatTimeoutSec is the EFFECTIVE limit: the supervisor raises it to
+        // max(configured, RecordUpdateTimeDiffInterval + 120s) so a slow record interval does not look
+        // like a stall. The panel must judge and display the effective one.
         $heartbeatTimeout = (int) ($service['heartbeatTimeoutSec'] ?? 0);
         $heartbeatTimeoutConfigured = (int) ($service['heartbeatTimeoutConfiguredSec'] ?? $heartbeatTimeout);
         $probeOk = (bool) ($service['probeOk'] ?? true);
-        // A service this supervisor does not run (Enabled = false in its ini, e.g. a shared
-        // authserver owned by another realm's supervisor) is not "down": it is out of scope here.
+        // A service this supervisor does not run (Enabled = false, e.g. a shared authserver owned by
+        // another realm) is not "down": it is out of scope here.
         $enabled = (bool) ($service['enabled'] ?? true);
 
         [$health, $tone] = $this->healthFor($state, $heartbeatSeen, $heartbeatAge, $heartbeatTimeout, $probeOk, (bool) ($service['stoppedByUser'] ?? false), $enabled);
@@ -1171,8 +1072,8 @@ final class SupervisorManager
             'heartbeat_timeout_seconds' => $heartbeatTimeout,
             'heartbeat_timeout_configured_seconds' => $heartbeatTimeoutConfigured,
             'heartbeat_timeout_raised' => $heartbeatTimeoutConfigured > 0 && $heartbeatTimeout > $heartbeatTimeoutConfigured,
-            // how often the server config says the world loop writes the line, and how often it was
-            // really observed - the two numbers the 2026-09-23 false-stall incident turned on
+            // declared vs observed heartbeat cadence: the two numbers that separate a real stall from a
+            // normal slow record interval
             'heartbeat_interval_seconds' => (int) ($service['heartbeatIntervalSec'] ?? 0),
             'heartbeat_min_record_ms' => (int) ($service['heartbeatMinRecordMs'] ?? 0),
             'heartbeat_cadence_seconds' => (int) ($service['heartbeatCadenceSec'] ?? 0),
@@ -1201,8 +1102,8 @@ final class SupervisorManager
         bool $stoppedByUser,
         bool $enabled = true
     ): array {
-        // not supervised by this instance at all (Enabled = false in its ini): never report it as
-        // down/hung, and never offer a control that could start a second copy of a shared service
+        // not supervised by this instance at all (Enabled = false): never report it as down/hung and
+        // never offer a control that could start a second copy of a shared service
         if (!$enabled) {
             return ['disabled', 'muted'];
         }
@@ -1236,9 +1137,7 @@ final class SupervisorManager
     }
 
     /**
-     * @param mixed $command
      * @param int $statusTickMs the supervisor's own updatedAtTickMs for this snapshot
-     * @return array<string,mixed>|null
      */
     private function normalizeLastCommand(mixed $command, int $statusTickMs = 0): ?array
     {
@@ -1249,8 +1148,7 @@ final class SupervisorManager
         $doneTick = (int) ($command['doneAtTickMs'] ?? 0);
         $ageSeconds = null;
         if ($doneTick > 0 && $statusTickMs >= $doneTick) {
-            // Tick() is milliseconds since boot, so the difference between the snapshot's own tick
-            // and the command's completion tick is how long ago the command finished.
+            // Tick() is ms since boot: snapshot tick - completion tick = how long ago the command ran
             $ageSeconds = intdiv($statusTickMs - $doneTick, 1000);
         }
 
@@ -1264,9 +1162,6 @@ final class SupervisorManager
         ];
     }
 
-    /**
-     * @return array<int,string>
-     */
     private function tailFile(string $path, int $lines): array
     {
         $handle = @fopen($path, 'rb');

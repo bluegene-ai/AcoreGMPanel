@@ -2,26 +2,6 @@
 /**
  * File: app/Domain/Item/ItemRepository.php
  * Purpose: Defines class ItemRepository for the app/Domain/Item module.
- * Classes:
- *   - ItemRepository
- * Functions:
- *   - __construct()
- *   - repoMessage()
- *   - repoError()
- *   - validColumns()
- *   - search()
- *   - find()
- *   - create()
- *   - delete()
- *   - updatePartial()
- *   - execLimitedSql()
- *   - shortVal()
- *   - logsDir()
- *   - writeLogLine()
- *   - appendActionLog()
- *   - appendDeletedLog()
- *   - appendSqlLog()
- *   - currentUser()
  */
 
 namespace Acme\Panel\Domain\Item;

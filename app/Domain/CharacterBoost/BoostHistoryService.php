@@ -2,10 +2,7 @@
 /**
  * File: app/Domain/CharacterBoost/BoostHistoryService.php
  * Purpose: 直升历史记录的唯一写入入口。
- *
- * 历史曾经由群发模块（MassMailService::boostCharacter）顺带写入，属于跨模块耦合。
- * 现在记录归属直升模块：任何执行直升的入口（直升管理页、前台兑换码、角色详情页）
- * 都通过这里落地历史。
+ * 任何执行直升的入口（直升管理页、前台兑换码、角色详情页）都通过这里落地历史。
  */
 
 declare(strict_types=1);
@@ -23,9 +20,7 @@ class BoostHistoryService
         $this->logs = new BoostLogRepository($this->serverId);
     }
 
-    /**
-     * @param array<int, string> $errors
-     */
+    /** @param array<int, string> $errors */
     public function record(
         string $characterName,
         int $targetLevel,

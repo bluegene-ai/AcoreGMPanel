@@ -42,6 +42,7 @@ return [
                 'remove_item' => '移除',
                 'items_placeholder' => '',
                 'items_hint' => '可添加多行物品，每行分别填写物品ID与数量；名称由数据库自动解析，未命中时请核对 ID。',
+                'items_hint_short' => '每行填物品 ID 与数量；未解析出名称时请核对 ID。',
                 'items_preview_label' => '本次将发放：',
                 'gold_label' => '金币(铜为单位)',
                 'gold_preview_placeholder' => '—',

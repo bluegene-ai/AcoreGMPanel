@@ -1,9 +1,7 @@
 <?php
 /**
  * File: resources/views/item_inventory/_item_mode.php
- * Purpose: Item axis of the unified module — "who owns this item?". Search an
- *          item template, then list every stack across all characters, with
- *          pagination, bulk delete and bulk replace.
+ * Purpose: 统一模块的物品轴向 —— "谁拥有这个物品"：搜物品模板，列出所有角色上的堆叠，支持分页与批量删除/替换。
  */
 
 $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
@@ -94,7 +92,7 @@ $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
         <label for="iiReplaceEntry"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_label')) ?></label>
         <input type="number" id="iiReplaceEntry" min="1" placeholder="<?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_placeholder')) ?>">
       </div>
-      <div class="muted small"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint')) ?></div>
+      <div class="muted small"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint')) ?>">i</span></div>
       <div id="iiReplaceFeedback" class="panel-flash panel-flash--inline"></div>
     </div>
     <footer class="modal-footer">

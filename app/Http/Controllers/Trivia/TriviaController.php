@@ -2,9 +2,7 @@
 
 /**
  * File: app/Http/Controllers/Trivia/TriviaController.php
- * Purpose: "Trivia reward" (聊天答题) page: live state, run controls, settings, question bank,
- *          reward presets and the winner leaderboard.
- *
+ * Purpose: "Trivia reward" (聊天答题) page: live state, run controls, settings, question bank, reward presets, winners.
  * 运行状态与控制走 SOAP（.trivia api / start / stop / …），配置与题库走 ac_eluna 数据表，
  * 两者都改完后由 .trivia reload 让脚本重新读库。
  */
@@ -98,7 +96,8 @@ class TriviaController extends Controller
             'module' => 'trivia',
             'capabilities' => $this->pageCapabilitiesForView(),
             'header' => [
-                'intro' => __('app.trivia.intro'),
+                'intro' => __('app.trivia.intro_short'),
+                'intro_hint' => __('app.trivia.intro'),
                 'note' => __('app.trivia.scope_note', [
                     'server' => (string) (ServerContext::server()['name'] ?? ''),
                     'database' => $this->repo()->customDbName(),
@@ -110,9 +109,7 @@ class TriviaController extends Controller
         ]);
     }
 
-    /**
-     * 页面级能力位（视图与前端都按这个决定按钮是否可点）。
-     */
+    /** 页面级能力位（视图与前端都按这个决定按钮是否可点）。 */
     private function pageCapabilitiesForView(): array
     {
         return [
@@ -122,7 +119,6 @@ class TriviaController extends Controller
         ];
     }
 
-    // ------------------------------------------------------------------ 只读接口
 
     public function apiStatus(Request $request): Response
     {
@@ -228,7 +224,6 @@ class TriviaController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------ 运行控制
 
     public function apiAction(Request $request): Response
     {
@@ -287,7 +282,6 @@ class TriviaController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------ 设置
 
     public function apiSettings(Request $request): Response
     {
@@ -348,11 +342,8 @@ class TriviaController extends Controller
 
     /**
      * 表单 → 数据库列。
-     *
-     * 约定：**请求里没带的字段保持数据库现值**（只有显式传了才会改）。
-     * 这样部分提交（外部 API、以后 UI 少传一个字段）不会静默把设置清成 0/空，
-     * 也让"取消勾选"必须由前端显式发 0 —— 视图里每个复选框都配了 hidden 0。
-     *
+     * 约定：**请求里没带的字段保持数据库现值**（只有显式传了才会改），这样部分提交（外部 API、以后 UI
+     * 少传一个字段）不会静默把设置清成 0/空，也让"取消勾选"必须由前端显式发 0 —— 每个复选框都配了 hidden 0。
      * @return array<string,mixed>
      */
     private function collectSettings(Request $request): array
@@ -469,7 +460,7 @@ class TriviaController extends Controller
             ? (string) $current['mail_body']
             : mb_substr((string) $request->input('mail_body', ''), 0, 2000);
 
-        // 作答提示 / 播报前缀（原来是 TriviaReward_conf.lua 里的项，现在写库）
+        // 作答提示 / 播报前缀
         $values['answer_hint'] = $request->input('answer_hint') === null && array_key_exists('answer_hint', $current)
             ? (string) $current['answer_hint']
             : mb_substr(trim((string) $request->input('answer_hint', '')), 0, 255);
@@ -485,9 +476,6 @@ class TriviaController extends Controller
         return $values;
     }
 
-    /**
-     * @return array<int,int>
-     */
     private function parseIntList(string $raw): array
     {
         $out = [];
@@ -507,9 +495,7 @@ class TriviaController extends Controller
 
     /**
      * "甲,乙,丙,丁" / "甲乙丙丁" / "A B C D" → ['甲','乙','丙','丁']
-     *
      * 没有逗号时按 UTF-8 字符切，并丢掉空白字符，避免 "A B C D" 被当成 7 个标号。
-     *
      * @return array<int,string>
      */
     private function parseLabelList(string $raw): array
@@ -533,9 +519,6 @@ class TriviaController extends Controller
         return $chars;
     }
 
-    /**
-     * @return array<int,string>
-     */
     private function parseNameList(string $raw): array
     {
         $out = [];
@@ -549,7 +532,6 @@ class TriviaController extends Controller
         return $out;
     }
 
-    // ------------------------------------------------------------------ 题库
 
     public function apiQuestionSave(Request $request): Response
     {
@@ -763,7 +745,6 @@ class TriviaController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------ 奖励预设
 
     public function apiPresetSave(Request $request): Response
     {
@@ -884,13 +865,11 @@ class TriviaController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------ 题库模板导入 / 导出
 
     /**
      * 模板导入：mode=preview 只解析并返回逐行诊断；mode=commit 真正写库。
-     *
-     * 模板文本从 template 参数来（前端"选择文件"会把文件内容读进同一个文本框），
-     * 支持 CSV / TSV / JSON，表头可选，答案可写 1-4 / A-D / 甲-丁 / 选项原文。
+     * 模板文本从 template 参数来（前端"选择文件"会把文件内容读进同一个文本框），支持 CSV / TSV / JSON，
+     * 表头可选，答案可写 1-4 / A-D / 甲-丁 / 选项原文。
      */
     public function apiQuestionImport(Request $request): Response
     {
@@ -1022,9 +1001,7 @@ class TriviaController extends Controller
         ]);
     }
 
-    /**
-     * 导出当前题库为 CSV（UTF-8 BOM，Excel 可直接打开）。
-     */
+    /** 导出当前题库为 CSV（UTF-8 BOM，Excel 可直接打开）。 */
     public function apiQuestionExport(Request $request): Response
     {
         $this->requireCapability('trivia.view');
@@ -1045,9 +1022,7 @@ class TriviaController extends Controller
         ]);
     }
 
-    /**
-     * 下载空白模板（表头 + 两行示例）。
-     */
+    /** 下载空白模板（表头 + 两行示例）。 */
     public function apiQuestionTemplate(Request $request): Response
     {
         $this->requireCapability('trivia.view');
@@ -1060,7 +1035,6 @@ class TriviaController extends Controller
 
     /**
      * 模板一行 → 数据库行；返回 [row, error]
-     *
      * @param array<string,string> $data
      * @param array<int,string> $presetNames
      * @param array<int,int> $moneyRange
@@ -1135,7 +1109,6 @@ class TriviaController extends Controller
 
     /**
      * 模板里的"答案"支持 1-4 / A-D / 甲-丁 / 选项原文。
-     *
      * @param array<int,string> $options
      * @param array<int,string> $labels
      */
@@ -1177,9 +1150,7 @@ class TriviaController extends Controller
         return null;
     }
 
-    /**
-     * 直接上传文件时的入口（前端默认把文件内容读进文本框，这个入口留给 multipart 提交）。
-     */
+    /** 直接上传文件时的入口（前端默认把文件内容读进文本框，这里留给 multipart 提交）。 */
     private function uploadedTemplate(): string
     {
         if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
@@ -1199,7 +1170,6 @@ class TriviaController extends Controller
         return (string) file_get_contents($tmp);
     }
 
-    // ------------------------------------------------------------------ 排行
 
     public function apiWinnersClear(Request $request): Response
     {
@@ -1227,14 +1197,11 @@ class TriviaController extends Controller
         ]);
     }
 
-    // ------------------------------------------------------------------ 内部
 
     /**
      * 通过 SOAP 读脚本的实时状态（.trivia api 返回单行 JSON）。
-     *
-     * 失败时一律返回本地化的可读原因（error），技术细节放在 detail 里，不要把
-     * "Could not connect to host" 这类底层报错直接甩到页面上。
-     *
+     * 失败时一律返回本地化的可读原因（error），技术细节放 detail，不要把 "Could not connect to host"
+     * 这类底层报错直接甩到页面上。
      * @return array{available:bool,error:string,detail:string,data:array<string,mixed>,raw:string}
      */
     private function liveStatus(): array
@@ -1301,8 +1268,8 @@ class TriviaController extends Controller
             $options['timeout_total'] = (float) $soap['timeout_total'];
         }
 
-        // 双保险：worldserver 没启动时 SOAP 会发 PHP warning，而面板的 ErrorHandler 会把
-        // warning 直接渲染成一段异常 HTML 插进页面。这里临时静音，调用结束立刻恢复。
+        // 双保险：worldserver 没启动时 SOAP 会发 PHP warning，而面板的 ErrorHandler 会把 warning 渲染成
+        // 一段异常 HTML 插进页面，所以这里临时静音、调用结束立刻恢复
         set_error_handler(static function (): bool {
             return true;
         }, E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE | E_DEPRECATED);
@@ -1314,9 +1281,7 @@ class TriviaController extends Controller
         }
     }
 
-    /**
-     * 视图用的设置数据：数据库行 + 每列的默认值，保证表单永远有值可渲染。
-     */
+    /** 视图用的设置数据：数据库行 + 每列的默认值，保证表单永远有值可渲染。 */
     private function settingsViewData(array $row): array
     {
         $defaults = [
@@ -1390,7 +1355,6 @@ class TriviaController extends Controller
 
     /**
      * 收集题目/预设里用到的物品 ID → 名字，供视图显示。
-     *
      * @param array<int,array<string,mixed>> $presets
      * @param array<int,array<string,mixed>> $questions
      * @return array<int,string>

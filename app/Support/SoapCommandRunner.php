@@ -26,9 +26,8 @@ final class SoapCommandRunner
     }
 
     /**
-     * @param array $options 支持 strict_marker（默认 false，保持既有模块行为不变）：
-     *                       为 true 时，输出里既没有 [AGMP_OK] 也没有 [AGMP_ERROR]
-     *                       标记的调用会被判定为失败，避免「命令根本没到游戏」被当成成功。
+     * @param array $options 支持 strict_marker（默认 false）：为 true 时，输出里既没有 [AGMP_OK] 也没有
+     *        [AGMP_ERROR] 标记的调用会被判定为失败，避免「命令根本没到游戏」被当成成功。
      */
     public static function normalize(array $execution, array $options = []): array
     {

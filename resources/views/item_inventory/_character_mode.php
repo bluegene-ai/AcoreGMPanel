@@ -1,9 +1,7 @@
 <?php
 /**
  * File: resources/views/item_inventory/_character_mode.php
- * Purpose: Character axis of the unified module — "what does this character
- *          carry?". Search by character name or account username, pick a
- *          character, then inspect or edit their inventory.
+ * Purpose: 统一模块的角色轴向 —— "这个角色带着什么"：按角色名/账号搜角色，再查看或编辑背包。
  */
 
 ?>
@@ -54,8 +52,7 @@
   <?php
   $iiItemsTitle = __('app.item_inventory.items.title');
   $iiShowSelect = true;
-  // Mirror the capability check the mutation endpoints enforce, so an operator
-  // without inventory.manage never sees a delete control that would be rejected.
+  // 与变更接口一致的能力校验：没有 inventory.manage 的人不会看到注定被拒的删除控件
   $iiShowDelete = (bool) ($__pageCapabilities['manage'] ?? false);
   include dirname(__DIR__) . '/components/inventory_items_panel.php';
   ?>

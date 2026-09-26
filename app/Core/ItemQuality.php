@@ -2,14 +2,6 @@
 /**
  * File: app/Core/ItemQuality.php
  * Purpose: Defines class ItemQuality for the app/Core module.
- * Classes:
- *   - ItemQuality
- * Functions:
- *   - code()
- *   - english()
- *   - label()
- *   - css()
- *   - allLocalized()
  */
 
 namespace Acme\Panel\Core;

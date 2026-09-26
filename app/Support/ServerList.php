@@ -2,11 +2,6 @@
 /**
  * File: app/Support/ServerList.php
  * Purpose: Defines class ServerList for the app/Support module.
- * Classes:
- *   - ServerList
- * Functions:
- *   - options()
- *   - valid()
  */
 
 namespace Acme\Panel\Support;

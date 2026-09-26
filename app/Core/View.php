@@ -2,10 +2,6 @@
 /**
  * File: app/Core/View.php
  * Purpose: Defines class View for the app/Core module.
- * Classes:
- *   - View
- * Functions:
- *   - make()
  */
 
 namespace Acme\Panel\Core;

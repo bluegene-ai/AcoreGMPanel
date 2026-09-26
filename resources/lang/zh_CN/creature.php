@@ -30,6 +30,7 @@ return array (
       'apply' => '应用',
       'clear' => '清除',
       'mode_hint' => '模式：所有选定位必须同时存在（AND）',
+      'mode_hint_short' => '多个标志为「同时满足」。',
     ),
     'table' => 
     array (

@@ -2,10 +2,6 @@
 /**
  * File: app/Http/Middleware/AuthMiddleware.php
  * Purpose: Defines class AuthMiddleware for the app/Http/Middleware module.
- * Classes:
- *   - AuthMiddleware
- * Functions:
- *   - handle()
  */
 
 namespace Acme\Panel\Http\Middleware;

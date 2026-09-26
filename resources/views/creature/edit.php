@@ -2,8 +2,6 @@
 /**
  * File: resources/views/creature/edit.php
  * Purpose: Provides functionality for the resources/views/creature module.
- * Functions:
- *   - creature_localize_config_value()
  */
 
   use Acme\Panel\Support\ConfigLocalization;

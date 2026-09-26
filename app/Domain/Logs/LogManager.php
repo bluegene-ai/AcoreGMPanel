@@ -2,29 +2,6 @@
 /**
  * File: app/Domain/Logs/LogManager.php
  * Purpose: Defines class LogManager for the app/Domain/Logs module.
- * Classes:
- *   - LogManager
- * Functions:
- *   - __construct()
- *   - defaults()
- *   - modules()
- *   - getModule()
- *   - getType()
- *   - sanitizeLimit()
- *   - tail()
- *   - loadConfig()
- *   - resolvePath()
- *   - readTail()
- *   - parseLine()
- *   - parseJsonLine()
- *   - parsePipeSql()
- *   - parsePipeDeleted()
- *   - parseMassmail()
- *   - parseItemSql()
- *   - parsePlain()
- *   - summariseArray()
- *   - truncate()
- *   - normalizeServer()
  */
 
 namespace Acme\Panel\Domain\Logs;

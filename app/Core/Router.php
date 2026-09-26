@@ -2,15 +2,6 @@
 /**
  * File: app/Core/Router.php
  * Purpose: Defines class Router for the app/Core module.
- * Classes:
- *   - Router
- * Functions:
- *   - get()
- *   - post()
- *   - group()
- *   - dispatch()
- *   - loadAndDispatch()
- *   - add()
  */
 
 declare(strict_types=1);

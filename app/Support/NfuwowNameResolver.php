@@ -15,9 +15,9 @@ final class NfuwowNameResolver
     private const BASE = 'https://db.nfuwow.com/80/?';
 
     /**
-     * @param string $type Allowed: spell, skill, achievement, achievementcriteria, quest, faction, item
+     * @param string $type allowed: spell, skill, achievement, achievementcriteria, quest, faction, item
      * @param int[] $ids
-     * @return array<int, string|null> Map of id => name (null when not found)
+     * @return array<int, string|null> id => name (null when not found)
      */
     public static function resolveMany(string $type, array $ids, int $timeoutSeconds = 3): array
     {
@@ -91,7 +91,6 @@ final class NfuwowNameResolver
         return $base . DIRECTORY_SEPARATOR . 'nfuwow_' . $type . '_' . $safeLocale . '.json';
     }
 
-    /** @return array<string, string|null> */
     private static function loadCache(string $type, string $locale): array
     {
         $file = self::cacheFile($type, $locale);
@@ -103,7 +102,6 @@ final class NfuwowNameResolver
         return is_array($data) ? $data : [];
     }
 
-    /** @param array<string, string|null> $cache */
     private static function persistCache(string $type, string $locale, array $cache): void
     {
         if (!$cache) {

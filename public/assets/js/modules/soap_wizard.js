@@ -1,43 +1,6 @@
 /**
  * File: public/assets/js/modules/soap_wizard.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - init()
- *   - buildCommandIndex()
- *   - renderMeta()
- *   - renderCategories()
- *   - renderCommandList()
- *   - bindEvents()
- *   - selectCommand()
- *   - findRawCommand()
- *   - renderDetail()
- *   - renderRiskBadge()
- *   - renderNotes()
- *   - renderTargetHint()
- *   - renderFields()
- *   - handleFieldInput()
- *   - getFormValues()
- *   - canSubmit()
- *   - updatePreview()
- *   - mapArgs()
- *   - handleSubmit()
- *   - handleResponse()
- *   - renderOutput()
- *   - resetOutput()
- *   - clearFieldError()
- *   - clearAllFieldErrors()
- *   - applyFieldError()
- *   - copyCommand()
- *   - fallbackCopy()
- *   - sendExecute()
- *   - resolveUrl()
- *   - escapeHtml()
- *   - escapeAttr()
- *   - cssEscape()
- *   - riskLabel()
- *   - qs()
- *   - qsa()
  */
 
 (function(){
@@ -594,10 +557,8 @@
     }
   }
 
-  // panel.js injects page modules from an immediately-invoked body script, so
-  // this module can execute while the document is still parsing. Defer via the
-  // panel helper (it covers loading AND interactive) instead of the classic
-  // readyState check, which silently skips init() in the interactive state.
+  // 模块可能在文档仍解析时执行；用 panel 的 ready 助手（覆盖 loading 与 interactive），
+  // 别用经典 readyState 判断式——它在 interactive 状态会静默跳过 init()。
   if (window.Panel && typeof window.Panel.whenDomReady === 'function') {
     window.Panel.whenDomReady(init);
   } else if (document.readyState === 'loading') {

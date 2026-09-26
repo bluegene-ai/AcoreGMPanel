@@ -7,6 +7,7 @@ final class ModuleAssets
 {
     private const CORE_STYLE_ASSETS = [
         'css/app-core.css',
+        'css/panel-hint.css',
     ];
 
     private const PANEL_SCRIPT_ASSET = 'js/panel.js';

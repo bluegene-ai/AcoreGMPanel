@@ -1,9 +1,9 @@
 # 多区部署（多个 realm 共用一套 auth）
 
 面板本身就按「区服」分区：`config/generated/servers.php` 里的每个条目是一套
-`auth / characters / world / soap`，而 `?server=<索引>`（页头的区服下拉框）决定当前页
-读写哪一套。本文说明**活动 Boss** 与**拍卖机器人**这两个「跑在 worldserver 里」的模块
-在多区下的绑定关系、独立启停方式，以及新增一个区时要改什么。
+`auth / characters / world / soap`，`?server=<索引>`（页头的区服下拉框）决定当前页读写哪一套。
+本文说明**活动 Boss** 与**拍卖机器人**这两个跑在 worldserver 里的模块在多区下的绑定关系、
+按区启停方式，以及新增一个区时要改什么。
 
 ## 1. 拓扑
 
@@ -48,7 +48,7 @@
 | 拍卖机器人区服目录 / conf / 日志 | `config/auctionator.php` → `server_overrides` | 键 = server 索引；缺省值在文件顶部的 `server_root` / `conf_file` / `log_file` |
 | 拍卖机器人**强制**可管理的区 | `config/auctionator.php` → `supported_server_ids` | 白名单：写进去的区直接算"已部署"，跳过自动探测（快路径） |
 | 拍卖机器人**强制**只读的区 | `config/auctionator.php` → `unsupported_server_ids` | 黑名单：优先于白名单与探测，给"不想从面板动"的区留出口 |
-| 拍卖机器人默认怎么判定 | 自动探测该区 world 库有没有 `mod_auctionator_disabled_items` | 装了就能管、没装就只读；**不必**为了"支持多区"再手改白名单 |
+| 拍卖机器人默认怎么判定 | 自动探测该区 world 库有没有 `mod_auctionator_disabled_items` | 装了就能管、没装就只读 |
 | 守护实例（每区一个） | `config/supervisor.php` → `instances` | 一区一个 `acore_supervisor.exe`，各自 ini/logs；共享的 authserver 只交给其中一个实例守护 |
 
 > 仓库里的 `config/boss.php` / `config/auctionator.php` **只放通用默认值**（`server_overrides`
@@ -57,8 +57,7 @@
 > 不会覆盖）。改完不需要清缓存。
 >
 > 合并规则要留意：`Core\Config` 是**递归合并**，generated 里只写部分 `server_overrides` 不会
-> 删掉跟踪文件里的其它条目；但扁平列表 `supported_server_ids` 是整体替换，所以用
-> "只给本机部署的区写 override"就足够，其余条目不会被读到。
+> 删掉跟踪文件里的其它条目；但扁平列表 `supported_server_ids` 是整体替换。
 
 ### 拍卖机器人的「本区能不能管」怎么判定
 
@@ -72,8 +71,8 @@
    - **连不上该区库** → 只读，reason `db_unreachable`（说的是连接问题，不是"没装模块"）。
 
 页面把结论发布在 `.au-page` 的 `data-au-supported` / `data-au-support-reason` 上，只读时
-**只给一条**带区名的说明，并且不去碰该区的库表——不会再有满屏 `SQLSTATE ... Unknown table`
-冒充"面板坏了"。写配置 / 物品查询 / GM 动作 / 按区一键启停四个接口走同一判定，只读时一律 422。
+只给一条带区名的说明，且不去碰该区的库表。写配置 / 物品查询 / GM 动作 / 按区一键启停四个接口
+走同一判定，只读时一律 422。
 
 ## 3. 按区独立启停
 
@@ -85,10 +84,9 @@ SOAP 命令（面板发出的每条命令都带当前区服的 `server_id`，落
 | 活动 Boss | 「Boss 活动管理」→ 生成 / 击杀 / 重置 / 重载配置 | `.boss spawn` / `.boss kill` / `.boss clear` / `.boss config reload` | 是 |
 | 拍卖机器人 | 「拍卖机器人」→ 模块状态卡 → **启动本区机器人 / 停止本区机器人** | 写本区 `mod_auctionator.conf` 的 `Auctionator.Enabled`，再发 `.auctionator start` / `.auctionator stop` | 是（配置跨重启保持） |
 
-拍卖机器人的总开关单独做一个按钮的原因：`Auctionator.Enabled` 是启动时读一次的，
-只改配置文件必须重启该区 worldserver 才生效；`.auctionator start|stop` 是运行时开关
-（`Auctionator::SetEnabled()`，会重建事件排程），两者一起做才是"一键启停且重启后保持"。
-worldserver 没在跑时按钮会明确回报「配置已写、命令未生效」，而不是谎报成功。
+两个动作必须一起做：`Auctionator.Enabled` 只在启动时读一次，光改 conf 要重启该区
+worldserver 才生效；`.auctionator start|stop` 是运行时开关（`Auctionator::SetEnabled()`，
+会重建事件排程）。worldserver 没在跑时按钮会明确回报「配置已写、命令未生效」，而不是谎报成功。
 
 事件/贡献的按区隔离由**两侧共同保证**：脚本写入时带上本区 key，面板 4 条查询都带
 `state_key` 过滤。面板对缺列的情况**失败关闭**：该区脚本还没升级时页面只给一条
@@ -99,10 +97,9 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
 1. **部署该区 worldserver**：复制一份 `release\<区>`，改
    `configs/worldserver.conf` 的 `RealmID` / `WorldServerPort` /
    `WorldDatabaseInfo` / `CharacterDatabaseInfo` / `SOAP.Port` / `DataDir` / `LogsDir` / `TempDir`；
-   `Data` 目录可以用 junction 指到已有副本（省几 GB）：
+   `Data` 目录可用 junction 指到已有副本（省几 GB）：
    `New-Item -ItemType Junction -Path <新区>\Data -Target <老区>\Data`。
-   新区的 DB 如果是旧核心导入的，第一次启动时核心的 DB 更新器会自动补齐（几百条 update，
-   先备份；这一步可能耗时几分钟，期间该区起不来）。
+   旧核心导入的库第一次启动时核心的 DB 更新器会自动补齐（几百条 update，先备份；可能耗时几分钟）。
 2. **在 acore_auth.realmlist 加一行**（端口与 `WorldServerPort` 一致）。
 3. **活动 Boss**：**不需要建库**，只要给该区一个自己的 key：
    ```powershell
@@ -120,13 +117,13 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
    （`data/sql/db-world/base/*.sql`、`data/sql/db-characters/updates/*.sql`），
    并把 `Auctionator.CharacterId` / `CharacterGuid` 指向该区自己的机器人角色
    （各区必须各有一个专用角色），最后给该区写一条 `server_overrides`（区目录）。
-   模块一装上，面板就会自动认出这个区可管理（探测到模块自己的表）；只有想跳过探测、
-   或反过来**禁止**面板管某个区时，才需要动 `supported_server_ids` / `unsupported_server_ids`。
+   模块一装上，面板就会自动认出这个区可管理；只有想跳过探测或反过来**禁止**面板管某个区时，
+   才需要动 `supported_server_ids` / `unsupported_server_ids`。
 5. **只部署与「按区 key」兼容的 Eluna 脚本**：`boss.lua` 已经支持；
    仍写死默认库名（`ac_eluna`）且没有按区分租的脚本——`TriviaReward.lua`、
    `RecruitAFriend*.lua`、`LevelUpReward.lua`——**不能**同时上第二个区，否则两个区共用同一份
    数据（题库/开关/中奖名单、招募链接、升级奖励都会串）。把它们先放在 `lua_scripts/` 之外
-   （建议 `<区>\lua_scripts_disabled_shared_db\` 并留一份说明，Eluna 不加载该目录），
+   （建议 `<区>\lua_scripts_disabled_shared_db\`，Eluna 不加载该目录），
    等它们也照 `boss.lua` 这样加一列 `state_key`（或各自独立库）后再放回来。
 6. **守护**：复制一份 `release\supervisor-<区>`，改 `InstanceName` / `WorkDir` / `ServerConf`，
    `[authserver] Enabled = false`（共享登录服只由一个实例守护），然后在
@@ -142,7 +139,7 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
 ## 5. 验收清单（每次加区都跑一遍）
 
 > 下面的校验脚本在本地 `tools/` 目录，按本仓库约定**不入库**（`.gitignore` 里 `/tools/` 标注为
-> 本地校验工具）；`docs/multi-realm.md` 本身入库。
+> 本地校验工具）。
 
 自动：
 - [ ] `php tools/verify_multi_realm.php` —— 配置层/数据层/页面层/启停接线；加
@@ -172,8 +169,7 @@ worldserver 没在跑时按钮会明确回报「配置已写、命令未生效�
       （`verify_multi_realm_live.php` 已自动断言这条）。
 - [ ] 面板切到新区点「停止本区机器人」→ 该区 conf 的 `Auctionator.Enabled` 变 0，
       `.auctionator status` 显示 stopped；老区仍为 running。
-- [ ] 面板切到**没装模块**的区 → 拍卖页只有一条带区名的只读说明（不是一屏 SQL 报错、
-      也不是"本模块只支持单区"），字段仍能看到该区 conf 的内容。
+- [ ] 面板切到**没装模块**的区 → 拍卖页只有一条带区名的只读说明，字段仍能看到该区 conf 的内容。
 - [ ] `supervisor` 页每个实例都能单独启停，且不会有两个实例守护同一个 worldserver。
 - [ ] 该区脚本若是旧版（事件表还没有 `state_key` 列），Boss 页应只给一条"本区脚本未升级"警告，
       绝不能显示别的区的事件/贡献。

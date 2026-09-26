@@ -2,14 +2,6 @@
 /**
  * File: app/Core/Response.php
  * Purpose: Defines class Response for the app/Core module.
- * Classes:
- *   - Response
- * Functions:
- *   - __construct()
- *   - view()
- *   - json()
- *   - redirect()
- *   - send()
  */
 
 declare(strict_types=1);

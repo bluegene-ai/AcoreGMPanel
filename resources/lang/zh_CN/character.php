@@ -263,6 +263,7 @@ return [
         'boost_target_level_placeholder' => '目标等级（未选模板时必填）',
         'boost_submit' => '直升',
         'boost_hint' => '选择模板则按模板发放奖励；不选模板则仅调整等级，不发送奖励物品和金币。',
+        'boost_hint_short' => '选模板才发放奖励物品和金币。',
         'boost_manage_templates' => '模板配置',
         'boost_manage_codes' => '兑换码生成',
         'boost_success' => '角色直升命令已执行',

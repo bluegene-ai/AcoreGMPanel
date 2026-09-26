@@ -7,27 +7,17 @@ namespace Acme\Panel\Domain\Support;
 use RuntimeException;
 
 /**
- * 「定时启停」时间段解析（每天的时间段，例如 08:00-09:00）。
+ * File: app/Domain/Support/ScheduleWindows.php
+ * Purpose: 「定时启停」时间段解析（每天的时间段，例如 08:00-09:00）；面板侧只负责给出人话的错误，
+ * 真正执行（到点开关/生成）在 Lua 的 tick 里。
  *
- * 共用方：
- *   - 聊天答题：Acme\Panel\Domain\Trivia\ScheduleWindows 直接继承本类（列名 trivia_reward_settings）
- *   - Boss 活动：AGMP config/boss.php 的扩展配置列（activity_schedule_windows）
- *
- * 语法（与 Lua 侧完全一致，改一边必须改另一边）：
- *   - 聊天答题：ac-trivia/TriviaReward.lua 的 parseScheduleWindows
- *   - Boss 活动：acore-boss-smartai/boss.lua §8.5 的 ParseScheduleWindows
- *   多段之间用 ; 或换行分隔；不带星期前缀 = 每天
- *   "08:00-09:00"                  每天 08:00-09:00
- *   "08:00-09:00, 20:00-22:00"     用逗号分隔也可以（片段里没有 @ 时逗号当分隔符）
- *   "1-5@08:00-09:00"              周一至周五（1=周一 … 7=周日，也认 mon-fri 与 一/日）
- *   "6,7@20:00-21:00"              周六、周日
- *   "22:00-02:00"                  跨夜（到次日凌晨 2 点）
- *
- * 面板侧负责"给出人话的错误"，真正执行（到点开关/生成）在 Lua 的 tick 里。
+ * 共用方：聊天答题 Trivia\ScheduleWindows 继承本类（列 trivia_reward_settings）、Boss 活动的扩展配置列
+ * （activity_schedule_windows）。语法与 Lua 侧完全一致（TriviaReward.lua 的 parseScheduleWindows、
+ * boss.lua §8.5 的 ParseScheduleWindows），改一边必须改另一边：多段之间用 ; 或换行分隔，不带星期前缀
+ * = 每天；"1-5@08:00-09:00" = 周一至周五（1=周一 … 7=周日，也认 mon-fri 与 一/日）；"22:00-02:00" 跨夜。
  */
 class ScheduleWindows
 {
-    /** @var array<string,int> */
     private const DAY_NAMES = [
         'mon' => 1, 'tue' => 2, 'wed' => 3, 'thu' => 4, 'fri' => 5, 'sat' => 6, 'sun' => 7,
         '一' => 1, '二' => 2, '三' => 3, '四' => 4, '五' => 5, '六' => 6, '日' => 7, '天' => 7,
@@ -35,7 +25,6 @@ class ScheduleWindows
 
     /**
      * 解析成结构化时间段；非法片段被跳过（用于展示，不抛错）。
-     *
      * @return array<int,array{from:int,to:int,days:array<int,bool>|null,text:string}>
      */
     public static function parse(string $raw): array
@@ -51,9 +40,7 @@ class ScheduleWindows
         return $windows;
     }
 
-    /**
-     * 校验并归一化成写库用的文本；非法时抛 RuntimeException（reason 里是被拒绝的那一段）。
-     */
+    /** 校验并归一化成写库用的文本；非法时抛 RuntimeException（reason 里是被拒绝的那一段）。 */
     public static function normalize(string $raw): string
     {
         $raw = trim($raw);
@@ -73,9 +60,7 @@ class ScheduleWindows
         return implode('; ', $parts);
     }
 
-    /**
-     * @return array<int,string> 归一化后的时间段文本
-     */
+    /** @return array<int,string> 归一化后的时间段文本 */
     public static function describe(string $raw): array
     {
         $parts = [];
@@ -87,14 +72,9 @@ class ScheduleWindows
     }
 
     /**
-     * 把原始文本拆成 [星期掩码, 时间段] 组合。
-     *
-     * 规则（与 Lua 侧一致）：
-     *   - 先用 ; 与换行切成段；
-     *   - 段里有 @ 时，@ 之前是星期、之后是时间；时间部分再按逗号拆（共享同一组星期）
-     *     —— 所以 "1-5@08:00-09:00, 20:00-22:00" 是"工作日两段"；
-     *   - 段里没有 @ 时，整个段按逗号拆成多段（每天）。
-     *
+     * 把原始文本拆成 [星期掩码, 时间段] 组合。规则（与 Lua 侧一致）：先用 ; 与换行切成段；段里有 @ 时
+     * @ 之前是星期、之后是时间，时间部分再按逗号拆（共享同一组星期，所以 "1-5@08:00-09:00, 20:00-22:00"
+     * 是"工作日两段"）；段里没有 @ 时整个段按逗号拆成多段（每天）。
      * @return array<int,array{0:string|null,1:string}>
      */
     private static function windows(string $raw): array
@@ -125,9 +105,7 @@ class ScheduleWindows
         return $out;
     }
 
-    /**
-     * @return array{from:int,to:int,days:array<int,bool>|null,text:string}|null
-     */
+    /** @return array{from:int,to:int,days:array<int,bool>|null,text:string}|null */
     private static function parseWindow(?string $dayPart, string $timeToken): ?array
     {
         $days = null;
@@ -155,9 +133,7 @@ class ScheduleWindows
         ];
     }
 
-    /**
-     * @return array{0:int,1:int}|null
-     */
+    /** @return array{0:int,1:int}|null */
     private static function parseClockRange(string $text): ?array
     {
         if (preg_match('/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/', trim($text), $m) !== 1) {
@@ -175,9 +151,7 @@ class ScheduleWindows
         return [$h1 * 60 + $m1, $h2 * 60 + $m2];
     }
 
-    /**
-     * @return array<int,bool>|null
-     */
+    /** @return array<int,bool>|null */
     private static function parseDaySet(string $text): ?array
     {
         $days = [];
@@ -230,9 +204,7 @@ class ScheduleWindows
         return self::DAY_NAMES[$token] ?? null;
     }
 
-    /**
-     * @param array<int,bool> $days
-     */
+    /** @param array<int,bool> $days */
     private static function formatDaySet(array $days): string
     {
         $numbers = array_map('intval', array_keys($days));

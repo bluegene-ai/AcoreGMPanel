@@ -1,4 +1,3 @@
-/* Base extracted styles (will progressively move inline <style> here). */
 :root{--c-bg:#101418;--c-surface:#182028;--c-border:#28323c;--c-accent:#3fa8ff;--c-text:#e4e8ec;--radius:6px;--space:14px;--panel-card-width:360px;--control-height:38px;--control-height-sm:28px;--control-gap:10px;}
 /* Status semantic colors */
 :root{--c-status-online:#16a34a;--c-status-online-alt:#155e31;--c-status-banned:#7a1b1b;--c-status-offline-bg:#24303a;}
@@ -65,12 +64,10 @@ h1.page-title{margin-top:0;font-size:22px;letter-spacing:.5px;}
 .btn-xs{padding:3px 6px;font-size:11px;line-height:1.1;border-radius:4px;}
 .sql-section{margin-top:16px;}
 .sql-result{background:#121a21;border:1px solid var(--c-border);padding:10px 12px;font-size:12px;line-height:1.4;border-radius:6px;max-height:220px;overflow:auto;}
-/* Modal 改为通过 .active 控制显示 */
 /* 通用 modal 隐藏/显示控制：所有 .modal-backdrop 默认为隐藏，.active 时显示 */
 .modal-backdrop{display:none;}
 .modal-backdrop.active{display:flex;}
 body.modal-open{overflow:hidden;}
-/* 兼容旧 id 选择器（可以保留，不再必须） */
 #bitmask-modal{display:none;}
 #bitmask-modal.active{display:flex;}
 .table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;}
@@ -86,7 +83,7 @@ body.modal-open{overflow:hidden;}
 .login-form__fields{display:flex;flex-direction:column;gap:14px;}
 .login-form__field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#c8d4e0;}
 .login-form__field input{margin-top:0;}
-/* Extra utility (inline style 清理新增) */
+/* Extra utility */
 .no-margin{margin:0!important;}
 .flex-1{flex:1 1 auto!important;}
 .align-center{align-items:center!important;}
@@ -102,14 +99,12 @@ body.modal-open{overflow:hidden;}
 .bit-cell{padding:4px 0;font-size:12px;border:1px solid #2e4450;background:#23323c;color:#9db1bf;border-radius:4px;cursor:pointer;}
 .bit-cell[data-active="1"]{background:#1b6b3d;color:#d6ffe8;}
 .bitmask-popup__footer{margin-top:6px;display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:8px;}
-/* 筛选面板（账号 / 角色 / 邮件共用外观）。字段一律"标签在上、控件在下"，
-   宽度由 12 栏栅格 + --narrow/--third/--half 修饰符控制，避免旧版横向工具条
-   的 flex-basis 落到纵轴上把输入框压成又窄又高的方块。 */
+/* 筛选面板（账号 / 角色 / 邮件共用外观）：字段一律"标签在上、控件在下"，宽度由 12 栏栅格 + 修饰符控制 */
 .mail-filter-form{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:14px 16px;background:linear-gradient(180deg,rgba(16,28,43,.78),rgba(13,23,35,.74));border:1px solid rgba(90,146,199,.12);border-radius:16px;box-shadow:0 18px 44px rgba(3,10,18,.22);backdrop-filter:blur(8px);}
 .list-summary,.char-results-meta{margin:0 0 14px;color:#9db0c1;font-size:13px;}
 .account-bulk-toolbar,.char-bulk-bar{margin:0 0 16px;padding:12px 14px;background:rgba(18,31,46,.72);border:1px solid rgba(80,131,181,.12);border-radius:14px;}
 
-/* ===== 列表页共用筛选面板（账号管理 / 角色管理共用同一套布局） ===== */
+/* ==== 列表页共用筛选面板（账号管理 / 角色管理） ==== */
 .list-filter{
   display:flex;flex-direction:column;gap:0;
   margin:0 0 18px;padding:16px 18px;
@@ -131,12 +126,8 @@ body.modal-open{overflow:hidden;}
 .list-filter__range input{flex:1 1 0;min-width:0;}
 .list-filter__range-sep{color:#6f8296;flex:0 0 auto;}
 
-/* 单行筛选条：字段宽度按"最大可输入长度"给足即可。
-   等分栅格会把"角色名/等级"这类短字段拉得很空旷，所以这里改用
-   "以压缩下限参与换行、最大只长到理想宽度"的弹性行：
-     --lfw      理想宽度（字段最多长到这里）
-     --lfw-min  压缩下限（也是参与换行的基准宽度）
-   这样空间够就一行排开，略挤就自动压窄，实在不够才换行。 */
+/* 单行筛选条：等分栅格会把"角色名/等级"这类短字段拉得很空旷，所以用弹性行 ——
+   --lfw 理想宽度（字段最多长到这里）、--lfw-min 压缩下限（换行基准宽度）。 */
 .list-filter__grid--fit{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 12px;}
 .list-filter__grid--fit .list-filter__field{
   flex:1 1 var(--lfw-min,160px);
@@ -151,8 +142,7 @@ body.modal-open{overflow:hidden;}
 .list-filter__grid--fit input[type=number]{-webkit-appearance:textfield;appearance:textfield;}
 .list-filter__grid--fit input[type=number]::-webkit-outer-spin-button,
 .list-filter__grid--fit input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-/* 字段宽度预设（--lfw 理想宽度，--lfw-min 压缩下限；均含 padding/border）
-   下限按"占位符/最长选项刚好放得下"取值，保证压缩时也不截断。 */
+/* 字段宽度预设（--lfw 理想宽度，--lfw-min 压缩下限；均含 padding/border，下限按占位符刚好放得下来取） */
 .list-filter__field--fit-name{--lfw:calc(11ch + 26px);--lfw-min:80px;}
 .list-filter__field--fit-id{--lfw:calc(6ch + 26px);--lfw-min:60px;}
 .list-filter__field--fit-account{--lfw:calc(15ch + 26px);--lfw-min:92px;}
@@ -171,8 +161,7 @@ body.modal-open{overflow:hidden;}
 .list-filter .panel-flash{margin:0;}
 
 @media (max-width:1439px){
-  /* 侧边栏占 220px，中等宽度下用 3 栏最稳：字段约 190–340px，
-     既不会把"全部封禁状态"这类选项压到截断，也不会拉成超宽控件 */
+  /* 侧边栏占 220px，中等宽度下用 3 栏最稳：字段约 190–340px */
   .list-filter__grid{grid-template-columns:repeat(3,minmax(0,1fr));}
   .list-filter__field,
   .list-filter__field--narrow,
@@ -180,8 +169,7 @@ body.modal-open{overflow:hidden;}
   .list-filter__field--half{grid-column:span 1;}
 }
 @media (max-width:1112px){
-  /* 961–1112px 之间侧边栏仍是竖排，面板会被压到 ~575px；
-     收紧面板内边距和字段间距，保证单行筛选条依然排得下 */
+  /* 961–1112px 之间侧边栏仍是竖排，收紧面板内边距与字段间距，保证单行筛选条排得下 */
   .list-filter{padding:14px;}
   .list-filter__grid--fit{gap:14px 10px;}
 }
@@ -213,12 +201,9 @@ body.modal-open{overflow:hidden;}
 .table td,.table th{overflow:visible;}
 
 /*
- * "更多"菜单的浮层态。
- *
- * .row-menu__list 默认是 position:absolute，但祖先链上有
- * .app-shell-panel{overflow:hidden}，单元格里的 overflow:visible 无法突破它，
- * 因此菜单会被页面框架裁掉（表格越靠下越明显）。account.js 在菜单打开时会把它
- * 临时挂到 <body> 下并加上本类，坐标由脚本按触发按钮计算。
+ * "更多"菜单的浮层态：.row-menu__list 默认 absolute，但祖先链上的
+ * .app-shell-panel{overflow:hidden} 会把它裁掉（单元格的 overflow:visible 无法突破）；
+ * account.js 打开时把它挂到 <body> 下并加上本类，坐标由脚本按触发按钮计算。
  */
 .row-menu__list--portal{
   position:fixed;
@@ -287,7 +272,7 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 /* Monospace & code blocks */
 .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:13px;}
 .code-block{background:#121a21;border:1px solid var(--c-border);padding:10px 12px;border-radius:6px;overflow:auto;max-height:300px;line-height:1.45;}
-/* Modal table alignment utility (replaces previous inline style in account.js) */
+/* Modal table alignment utility */
 .modal-table-left th, .modal-table-left td { text-align:left; }
 /* Flash unified styles */
 .flash-msg{padding:8px 12px;margin:0 0 10px;border-radius:6px;font-size:14px;line-height:1.4;background:rgba(0,0,0,.35);border:1px solid #34424e;display:block;}
@@ -320,7 +305,7 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 	--item-quality-epic:#a335ee;
 	--item-quality-legendary:#ff8000;
 	--item-quality-artifact:#e6cc80;
-	--item-quality-heirloom:#e6cc80; /* 可与 artifact 区分时再调整 */
+	--item-quality-heirloom:#e6cc80;
 	--item-quality-unknown:#b4c0cc;
 }
 /* Number-based (backward compatibility) */
@@ -432,7 +417,7 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 .panel-flash.is-visible{display:block;}
 .panel-flash--success{background:rgba(32,168,127,.18);border-color:rgba(32,168,127,.45);color:#58d2a0;}
 .panel-flash--error{background:rgba(205,72,69,.18);border-color:rgba(205,72,69,.45);color:#ff9090;}
-/* 角色页等模块脚本用的是 --danger，历史别名，样式与 --error 保持一致 */
+/* 模块脚本用的是 --danger（与 --error 同色的历史别名） */
 .panel-flash--danger{background:rgba(205,72,69,.18);border-color:rgba(205,72,69,.45);color:#ff9090;}
 .panel-flash--info{background:rgba(63,168,255,.18);border-color:rgba(63,168,255,.45);color:#82c9ff;}
 .panel-flash--inline{margin-top:-4px;margin-bottom:6px;padding:6px 10px;border-radius:8px;font-size:12px;}
@@ -503,10 +488,7 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 	.markdown-body table{min-width:0;display:block;overflow:auto;}
 }
 
-/* =============================================
-	Mail Detail Modal (migrated from inline style)
-	Namespace: #modal-mail-detail
-	============================================= */
+/* ==== Mail Detail Modal（#modal-mail-detail） ==== */
 #modal-mail-detail{position:fixed;inset:0;display:none;z-index:300;background:rgba(0,0,0,.55);padding:40px 20px;overflow:auto;}
 #modal-mail-detail.active{display:flex;align-items:flex-start;justify-content:center;}
 #modal-mail-detail .modal-panel{width:840px;max-width:100%;background:#141b1f;border:1px solid #2c3945;border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.55);animation:popIn .18s ease;}
@@ -546,9 +528,7 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 .mail-log-box{max-height:420px;overflow:auto;background:#10161d;color:#94ffc7;padding:10px 12px;border:1px solid #23313c;border-radius:6px;font-family:"Consolas","Menlo","Courier New",monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;}
 
 
-/* =============================================
-	Mass Mail Layout & Components
-	============================================= */
+/* ==== Mass Mail Layout & Components ==== */
 .massmail-layout{display:flex;flex-wrap:wrap;gap:18px;align-items:stretch;width:100%;}
 .massmail-card{background:linear-gradient(180deg,rgba(20,29,36,.92),rgba(14,22,29,.9));border:1px solid rgba(79,124,164,.18);border-radius:18px;padding:18px 20px;box-shadow:0 18px 42px rgba(0,0,0,.28);position:relative;overflow:hidden;display:flex;flex-direction:column;flex:0 0 var(--panel-card-width);width:var(--panel-card-width);max-width:var(--panel-card-width);min-width:var(--panel-card-width);}
 .massmail-card:before{content:"";position:absolute;inset:0 auto auto 0;width:100%;height:68px;background:linear-gradient(180deg,rgba(77,138,207,.08),rgba(77,138,207,0));pointer-events:none;}

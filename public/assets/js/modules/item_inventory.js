@@ -1,14 +1,9 @@
 /**
  * File: public/assets/js/modules/item_inventory.js
- * Purpose: Client controller for the unified item / inventory module.
+ * Purpose: 统一物品/背包模块的前端控制器。
  *
- * Two axes share one panel set:
- *   character mode — search characters, inspect one character's bags, remove stacks
- *   item mode      — search item templates, locate every owner, bulk delete / replace
- *
- * The character detail page boots this same script in embedded mode: it publishes
- * window.__ITEM_INVENTORY_CTX = { embed: { guid, name } } before loading it, and
- * only the shared items panel is rendered.
+ * 一套面板两个轴向：角色模式（搜角色 → 看背包 → 删堆叠）/ 物品模式（搜物品 → 定位持有者 → 批量删改）。
+ * 角色详情页以嵌入模式启动同一脚本（先发 window.__ITEM_INVENTORY_CTX = { embed: {...} }，只渲染共用物品面板）。
  */
 
 (function () {
@@ -26,19 +21,15 @@
   const ctxCanManage = ctx.canManage !== false;
   const ctxLabels = ctx.labels || {};
 
-  // The panel context is emitted by the shared items panel itself, so it is the
-  // authoritative description of this particular panel instance.
+  // 面板上下文由共用的物品面板自己输出，因此它是这个面板实例的权威描述
   const panelConfig = window.__ITEM_INVENTORY_PANEL || {};
   const panelShowDelete = panelConfig.showDelete !== false;
   const panelShowOwners = panelConfig.showOwners === true;
-  // Base href for the item editor (already includes base_path + ?edit_id=), or
-  // null when the operator cannot view content.
+  // 物品编辑器的 base href（已含 base_path 与 ?edit_id=），无查看权限时为 null
   const panelEditUrl = typeof panelConfig.editUrl === 'string' && panelConfig.editUrl !== '' ? panelConfig.editUrl : null;
 
-  // Embedded mode (character detail inventory tab) is decided by the mount point
-  // that the character page renders, NOT by the context payload: character.js
-  // injects this script dynamically and the module body runs before the
-  // assignment to window.__ITEM_INVENTORY_CTX is observable in every order.
+  // 嵌入模式（角色详情页背包 Tab）由角色页渲染的挂载点决定，而不是上下文负载：
+  // character.js 动态注入本脚本，模块体可能早于 __ITEM_INVENTORY_CTX 赋值可见就执行。
   const embedMount = () => document.getElementById('char-bag-query');
 
   function resolveEmbed() {
@@ -73,9 +64,7 @@
     }
   };
 
-  /* ------------------------------------------------------------------ *
-   * Small helpers
-   * ------------------------------------------------------------------ */
+  /* ---- Small helpers ---- */
 
   function translate(path, fallback, replacements) {
     let text = moduleTranslator ? moduleTranslator(path, fallback ?? path) : (fallback ?? path);
@@ -148,9 +137,7 @@
     return CLASS_SLUGS[classId] || null;
   }
 
-  /* ------------------------------------------------------------------ *
-   * API access
-   * ------------------------------------------------------------------ */
+  /* ---- API access ---- */
 
   async function request(method, path, payload) {
     if (hasPanelApi) {
@@ -196,9 +183,7 @@
     bulk: (payload) => request('POST', '/item-inventory/api/bulk', payload)
   };
 
-  /* ------------------------------------------------------------------ *
-   * State
-   * ------------------------------------------------------------------ */
+  /* ---- State ---- */
 
   const state = {
     mode: 'character',
@@ -217,9 +202,7 @@
 
   const ownsCharacterPanel = () => !!qs('[data-mode-panel="character"]');
 
-  /* ------------------------------------------------------------------ *
-   * Mode switching
-   * ------------------------------------------------------------------ */
+  /* ---- Mode switching ---- */
 
   function setMode(mode) {
     if (mode !== 'character' && mode !== 'item') return;
@@ -254,9 +237,7 @@
     });
   }
 
-  /* ------------------------------------------------------------------ *
-   * Character axis
-   * ------------------------------------------------------------------ */
+  /* ---- Character axis ---- */
 
   function updateItemsSubtitle(extra) {
     const el = qs('#iiItemsCurrent');
@@ -485,10 +466,7 @@
     });
   }
 
-  /**
-   * "View owners" jumps to the item axis and loads that entry. Because the
-   * character panel is only removed in embedded mode, this is a no-op there.
-   */
+  /** "查看持有者"：切到物品轴向并加载该条目；嵌入模式下没有角色面板，因此是无操作。 */
   async function locateOwners(entry) {
     if (!entry || Number.isNaN(entry)) return;
     setMode('item');
@@ -515,9 +493,7 @@
     });
   }
 
-  /* ------------------------------------------------------------------ *
-   * Item axis
-   * ------------------------------------------------------------------ */
+  /* ---- Item axis ---- */
 
   async function runItemSearch(keyword) {
     const trimmed = typeof keyword === 'string' ? keyword.trim() : '';
@@ -721,9 +697,7 @@
     if (replaceBtn) replaceBtn.disabled = !hasSelection;
   }
 
-  /* ------------------------------------------------------------------ *
-   * Modals
-   * ------------------------------------------------------------------ */
+  /* ---- Modals ---- */
 
   function openModal(modal) {
     if (!modal) return;
@@ -748,7 +722,7 @@
     modal.__iiDismissBound = true;
   }
 
-  /* ---------------------------- reduce one instance ------------------ */
+  /* ---- reduce one instance ---- */
 
   function openDeleteModal(instanceGuid) {
     const instance = parseInt(instanceGuid, 10) || 0;
@@ -879,8 +853,7 @@
     const message = (res && res.message) || translate('modal.delete.error', 'Operation failed');
     Feedback.error('#iiDelFeedback', message);
 
-    // Container refusal: surface the explicit confirmation control instead of
-    // leaving the operator with no way forward.
+    // 容器拒绝时给出明确的确认控件，而不是让操作者无路可走
     const destroyRow = qs('#iiDelDestroyRow', modal);
     if (destroyRow && res && typeof res.contained === 'number' && res.contained > 0) {
       destroyRow.hidden = false;
@@ -888,7 +861,7 @@
     }
   }
 
-  /* ---------------------------- bulk delete -------------------------- */
+  /* ---- bulk delete ---- */
 
   function bindBulkDelete() {
     const btn = qs('#iiBulkDeleteBtn');
@@ -976,7 +949,7 @@
     if (state.ownershipItem) await loadOwnership(state.ownershipItem.entry, state.ownershipPage);
   }
 
-  /* ---------------------------- bulk replace ------------------------- */
+  /* ---- bulk replace ---- */
 
   function bindBulkReplace() {
     const btn = qs('#iiBulkReplaceBtn');
@@ -1049,9 +1022,7 @@
     Feedback.error('#iiReplaceFeedback', message);
   }
 
-  /* ------------------------------------------------------------------ *
-   * Wiring
-   * ------------------------------------------------------------------ */
+  /* ---- Wiring ---- */
 
   function bindSelectAll() {
     const selectAll = qs('#iiSelectAll');
@@ -1154,9 +1125,8 @@
   function init() {
     bindItemFilter();
 
-    // Embedded mode (character detail inventory tab): only the shared items panel
-    // exists. The guid comes from the mount point, which is rendered server-side
-    // and therefore always present by now.
+    // 嵌入模式（角色详情页背包 Tab）只有共用物品面板；guid 来自服务端渲染的挂载点，
+    // 到这里必然已经存在。
     const embedInfo = resolveEmbed();
     if (embedInfo) {
       state.characterGuid = embedInfo.guid;
@@ -1188,8 +1158,7 @@
     try {
       init();
     } finally {
-      // Observable marker so a future "panel is empty" report can be diagnosed
-      // from the server side without a browser.
+      // 可观测标记：以后遇到"面板空白"的报告，服务端不靠浏览器也能定位
       window.__PANEL_BOOT = window.__PANEL_BOOT || {};
       window.__PANEL_BOOT.item_inventory = {
         mode: state.mode,
@@ -1199,8 +1168,7 @@
     }
   }
 
-  // Must tolerate being injected while the document is still parsing (panel.js
-  // loads page modules from an immediately-invoked body script).
+  // 必须容忍在文档仍解析时被注入（panel.js 用 body 内联脚本加载页面模块）
   if (window.Panel && typeof window.Panel.whenDomReady === 'function') {
     window.Panel.whenDomReady(boot);
   } else if (document.readyState === 'loading') {

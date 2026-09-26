@@ -2,12 +2,6 @@
 /**
  * File: app/Http/Controllers/LogsController.php
  * Purpose: Defines class LogsController for the app/Http/Controllers module.
- * Classes:
- *   - LogsController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiList()
  */
 
 namespace Acme\Panel\Http\Controllers;

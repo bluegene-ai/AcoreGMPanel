@@ -82,7 +82,6 @@ class RafRepository extends MultiServerRepository
 
     /**
      * 计算当前条件命中的账号 ID，供 "已产生奖励的绑定" 这类跨表统计使用。
-     *
      * @return int[]
      */
     public function rewardedAccountIds(array $filters): array
@@ -233,8 +232,7 @@ class RafRepository extends MultiServerRepository
         if ($stmt->rowCount() > 0)
             return true;
 
-        // MySQL 在"新旧备注完全相同"时返回 0 affected rows，这不代表失败；
-        // 再确认一次当前值，可同时覆盖"值未变化"与"行不存在"两种情况
+        // MySQL 在"新旧备注完全相同"时返回 0 affected rows，这不代表失败；再查一次当前值可同时覆盖"值未变化"与"行不存在"
         $check = $this->characters()->prepare(
             'SELECT comment FROM ' . $this->table('recruit_a_friend_links')
             . ' WHERE account_id = :account_id LIMIT 1'
@@ -250,8 +248,7 @@ class RafRepository extends MultiServerRepository
     }
 
     /**
-     * 奖励发放记录：由 RecruitAFriend.lua 在成功寄出奖励邮件时写入。
-     * 每条记录回答"因哪次招募达标、何时、给谁发了什么奖励"。
+     * 奖励发放记录：由 RecruitAFriend.lua 在成功寄出奖励邮件时写入，每条记录回答"因哪次招募达标、何时、给谁发了什么奖励"。
      */
     public function listRewardLogs(array $filters, int $page, int $perPage): Paginator
     {
@@ -441,8 +438,7 @@ class RafRepository extends MultiServerRepository
             $params[':recruiter_guid'] = $recruiterGuid;
         }
 
-        // 注意：条件已启用但命中 0 个账号时，必须落成 1 = 0，
-        // 否则 "已产生奖励的绑定" 会静默退化成"全部绑定"
+        // 条件已启用但命中 0 个账号时必须落成 1 = 0，否则 "已产生奖励的绑定" 会静默退化成"全部绑定"
         if (!empty($filters['rewarded_only'])) {
             $rewardedAccountIds = is_array($filters['rewarded_account_ids'] ?? null)
                 ? array_values(array_filter(
@@ -500,10 +496,8 @@ class RafRepository extends MultiServerRepository
 
     /**
      * 把 "已产生奖励的绑定" 这类跨表条件落成具体的账号 ID 列表。
-     *
-     * 统计卡与明细必须走同一套口径，否则会出现"卡片显示 12，点开却是全部"的偏差。
-     * 注意：命中 0 个账号时必须留下"已启用该条件"的标记，否则条件会被静默丢弃，
-     * 下钻就会退化成"返回全部绑定"。
+     * 统计卡与明细必须走同一套口径，否则会出现"卡片显示 12，点开却是全部"的偏差；命中 0 个账号时
+     * 必须留下"已启用该条件"的标记，否则条件会被静默丢弃，下钻退化成"返回全部绑定"。
      */
     protected function filterBindingsForExecution(array $filters): array
     {
@@ -515,9 +509,7 @@ class RafRepository extends MultiServerRepository
         return $filters;
     }
 
-    /**
-     * "默认奖励组合" 在统计卡与明细中必须使用同一套判定。
-     */
+    /** "默认奖励组合" 在统计卡与明细中必须使用同一套判定。 */
     protected function filterRewardLogsForExecution(array $filters): array
     {
         if (!empty($filters['default_only']))
@@ -648,7 +640,6 @@ class RafRepository extends MultiServerRepository
 
     /**
      * 解析 Lua 写入的 "itemId:count,itemId:count" 文本
-     *
      * @return array<int, array{entry:int, count:int, name:string, quality:?int}>
      */
     private function parseRewardItems(string $raw): array
@@ -852,9 +843,7 @@ class RafRepository extends MultiServerRepository
         unset($row);
     }
 
-    /**
-     * 为 reward_items 中的物品补充名称与品质；物品库不可用时只显示 ID。
-     */
+    /** 为 reward_items 中的物品补充名称与品质；物品库不可用时只显示 ID。 */
     private function hydrateRewardItems(array &$rows): void
     {
         $entries = [];

@@ -2,10 +2,6 @@
 /**
  * File: app/Support/Paginator.php
  * Purpose: Defines class Paginator for the app/Support module.
- * Classes:
- *   - Paginator
- * Functions:
- *   - __construct()
  */
 
 namespace Acme\Panel\Support;

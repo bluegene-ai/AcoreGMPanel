@@ -30,6 +30,7 @@ return array (
       'apply' => 'Apply',
       'clear' => 'Clear',
       'mode_hint' => 'Mode: all selected bits must be present (AND)',
+      'mode_hint_short' => 'Multiple flags combine with AND.',
     ),
     'table' => 
     array (

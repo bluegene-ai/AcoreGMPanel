@@ -54,7 +54,6 @@ final class LogPath
 
             @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
         } catch (\Throwable $e) {
-            // swallow
         }
     }
 }

@@ -312,8 +312,7 @@ class CharacterBoostRedeemCodeAdminController extends Controller
     }
 
     /**
-     * 使用状态筛选：all | unused | used。
-     * 旧客户端只发 unused_only 布尔，这里保留兼容回退（1 → unused，其余 → all）。
+     * 使用状态筛选：all | unused | used；旧客户端只发 unused_only 布尔：1 → unused，其余 → all。
      */
     private function normalizedRedeemCodeStatus(Request $request): string
     {

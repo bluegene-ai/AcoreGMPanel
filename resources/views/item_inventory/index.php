@@ -4,9 +4,7 @@
  * Purpose: Unified item / inventory page shell. Hosts both search axes and
  *          hands the client a single context payload.
  *
- * The shared item-instance panel lives in
- * resources/views/components/inventory_items_panel.php because the character
- * detail "inventory" tab renders the very same markup.
+ * 共用的物品实例面板放在 components/inventory_items_panel.php：角色详情页的背包 Tab 用同一份标记。
  */
 
 include dirname(__DIR__) . '/components/page_header.php';

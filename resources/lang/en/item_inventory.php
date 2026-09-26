@@ -134,6 +134,7 @@ return [
             'entry_label' => 'New item ID',
             'entry_placeholder' => 'Enter an item ID',
             'entry_hint' => 'Selected instances become this item. Stacks larger than the new item stack size are split into free slots of the same container.',
+            'entry_hint_short' => 'Overflow beyond the new stack size is split into free slots.',
             'cancel' => 'Cancel',
             'confirm' => 'Apply',
             'success' => 'Replace completed',

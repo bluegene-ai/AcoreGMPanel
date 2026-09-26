@@ -1,51 +1,37 @@
 # Quest Editor Gap Analysis
 
-> Drafted to guide the refactor toward Keira3-level functionality.
+对照 Keira3 的多表任务编辑能力，记录当前面板已覆盖的范围与仍缺的部分。
 
-## Current Implementation Snapshot
+## 现状
 
-- **Data scope**: Only `quest_template` is editable, surfaced through ~20 fields defined in `config/quest.php` (`fields` 部分)。The repository exposes a larger whitelist but the UI ignores most columns.
-- **UI capabilities**: Single-page tabbed form with client-side diff tracking, SQL preview/execute helpers, and limited bitmask editors.
-- **Ancillary tooling**: No integrated lookup helpers (creature/GO selectors, item search, etc.); quest start/end relations, scripts, conditions, and locales are absent.
-- **Persistence flow**: Changes produce a single `UPDATE quest_template ... LIMIT 1`; there is no concept of child-table transactions.
+- **数据范围**：`QuestAggregateService` 在一个事务里读写 `quest_template`、`quest_template_addon`、
+  `quest_details` / `quest_request_items` / `quest_offer_reward`、`quest_objectives`、
+  `quest_reward_choice_item` / `quest_reward_item` / `quest_reward_currency` / `quest_reward_faction`、
+  `creature_queststarter` / `creature_questender` / `gameobject_queststarter` / `gameobject_questender`
+  与各 `*_locale` 表；表不存在时按表跳过而不是报错。
+- **编辑器字段**：由 `config/quest.php` 的 `fields` / `groups` / `metadata` 白名单驱动。
+- **保存**：`/quest/api/editor/preview` 校验并返回差异，`/quest/api/editor/save` 事务化保存，
+  用复合 hash 做乐观锁（`expectedHash` 不匹配即拒绝）；旧的单表路径 `/quest/api/save`（`UPDATE quest_template ... LIMIT 1`）仍在。
+- **UI**：客户端差异跟踪 + SQL 预览/执行助手 + 有限的位置掩码编辑器。
 
-## Keira3 Feature Surface (Reference)
+## Keira3 的能力面（对照目标）
 
-The Keira3 quest editor (paired with AzerothCore) spans multiple tables and workflows:
+1. **Quest Template (core)** – `quest_template` 全列：XP/金钱缩放、奖励选择包、POI、声望覆盖、计时器、事件标记等。
+2. **Quest Template Addon** – 阵营要求、脚本 ID、前置标记、每周重置数据。
+3. **Quest Details / Request Items / Offer Reward** – 接取/完成文本、进度文本、emote、镜头/装备展示。
+4. **Quest Objectives** – `quest_objectives` 按目标记录（type / asset / amount / description，含特殊法术与物件数据）。
+5. **Quest Starter / Ender bindings** – `creature_queststarter`、`creature_questender`、`gameobject_queststarter`、`gameobject_questender` 以及物品起始关系。
+6. **Quest Rewards** – 多选奖励包、声望、货币、法术触发（`quest_reward_choice_item`、`quest_reward_item`、`quest_reward_currency` 等）。
+7. **Locales** – 以上各表的本地化字符串（`quest_template_locale`、`quest_request_items_locale` …）。
+8. **SmartScripts / Conditions 挂钩** – 任务的 `smart_scripts`、`conditions`、`waypoints` 快捷入口或内嵌编辑器。
+9. **校验与易用性** – 自动生成 ID、重复检测、必填提示、服务端差异合并、撤销栈。
 
-1. **Quest Template (core)** – full coverage of `quest_template` columns, including XP/money scaling, reward choice bundles, POI, reputation overrides, timers, event flags, etc.
-2. **Quest Template Addon** – faction requirement, script IDs, prerequisite flags, weekly reset data.
-3. **Quest Details / Request Items / Offer Reward** – narrative texts (accept/completion, progress), emotes, camera/equipment, and quest giver/finisher presentations.
-4. **Quest Objectives** – per-objective records (`quest_objectives`), including storage for type, asset, amount, and description for up to four objectives plus special spell/object data.
-5. **Quest Starter / Ender bindings** – CRUD for relations in `creature_queststarter`, `creature_questender`, `gameobject_queststarter`, `gameobject_questender`, and item starters.
-6. **Quest Rewards** – multi-choice reward sets, reputation gains, currency, spell triggers (`quest_reward_choice_item`, `quest_reward_item`, `quest_reward_currency`, etc.).
-7. **Locales** – localized strings across the above tables (`quest_template_locale`, `quest_request_items_locale`, ...).
-8. **SmartScripts / Conditions hooks** – quick links or in-line editors for `smart_scripts`, `conditions`, and `waypoints` associated with the quest.
-9. **Validation aides** – automatic ID generation, duplicate detection, required field prompts, server-side diff merging, undo stacks.
+## 仍缺的部分
 
-## Identified Gaps
-
-| Domain | Current Panel | Expected (Keira3) | Gap Notes |
-| --- | --- | --- | --- |
-| Quest template coverage | ~20 fields (basic level/reward/flags) | Full column coverage including XP diff, honor, reputation, POI, fail conditions | Missing ~80% of columns despite repository support |
-| Addon table (`quest_template_addon`) | Not surfaced | Editable inline with defaults and toggles | Entire table absent |
-| Narrative tables (`quest_details`, `quest_request_items`, `quest_offer_reward`) | Not surfaced | Rich text editors, emote selectors, cinematic toggles | No CRUD or preview |
-| Objectives (`quest_objectives`) | Not surfaced | Row-based editor (type/asset/amount/done events) | Need list + row management |
-| Starter/Ender bindings | Delete-only via SQL | Visual selectors and batch add/remove | Completely missing UI + API |
-| Reward bundles (choice/fixed/currency) | 4 fixed reward items only | Support up to 6 choice items, multiple reward types, reputation bundles | Partial coverage, no currency/honor/talents handling |
-| Locales | Not surfaced | Tabbed interface per locale | Need schema + UI strategy |
-| Linked systems (conditions, SmartAI, scripts) | External manual edits | Shortcut links or inline editors | Determine scope for MVP |
-| Validation & UX | Manual numeric entry | Contextual lookups, ID resolvers, safe defaults, undo | Need pickers, search modals, undo/redo |
-| Multi-table transactions | Single-table update | Coordinated save across child tables, with optimistic locking | Requires backend transaction orchestration |
-
-## Immediate Questions for Design
-
-1. **Scope** – which Keira3 components are mandatory for first delivery? (e.g., is locales support required from day one?)
-2. **Data access layer** – extend current repository or introduce service layer per quest domain (template/addon/objectives...).
-3. **UI architecture** – modular stepper vs. tabbed layout; strategy for lazy-loading heavy datasets (objectives, relations).
-4. **Lookups** – reuse existing item/creature search components or build lightweight APIs.
-5. **Versioning** – Should edits produce revision logs beyond current SQL diff logging?
-
----
-
-*This document will evolve alongside the refactor plan. Add follow-up notes as decisions land.*
+| 领域 | 现状 |
+| --- | --- |
+| 物品起始/结束关系 | `QuestAggregateService::saveRelations()` 只映射 creature/gameobject，`item_queststarter` / `item_questender` 未覆盖 |
+| 模板列覆盖 | 只暴露 `config/quest.php` 白名单内的列，未覆盖 `quest_template` 全列（XP 差、honor、POI、失败条件等） |
+| 关联系统 | `smart_scripts` / `conditions` / `waypoints` 没有入口，仍需外部手工编辑 |
+| 查询端点 | 设计文档中的 `POST /quest/api/editor/delete-objective` 与 `GET /quest/api/lookup/{type}` 未在 `routes/web.php` 注册 |
+| 校验与 UX | 位置掩码之外缺少 ID 解析器、搜索弹窗与撤销/重做 |

@@ -1,14 +1,14 @@
 # Acore GM Panel
 
-A web game management toolkit for AzerothCore realms. Acore GM Panel is a modern MVC control panel for [AzerothCore](https://www.azerothcore.org/) realms. It streamlines daily server operations with a consistent UI, unified tooling, and multi-realm aware services that cover the most common GM and administrator workflows.
+A multi-realm aware MVC control panel for [AzerothCore](https://www.azerothcore.org/) realms, covering the common GM and administrator workflows.
 
 ## Highlights
 
-- **Modular architecture** – Each feature lives in an isolated domain (Account, Item, Creature, Quest, Mail, Mass Mail, Items / Inventory, SmartAI, SOAP). Modules share common helpers, middleware, and UI components.
-- **Multi-realm support** – Dynamic realm switching with per-realm database and SOAP credentials, plus inheritance rules for shared authentication.
-- **Secure by default** – CSRF protection, authentication middleware, audit logging, and configurable SOAP whitelisting.
-- **Consistent UX** – Shared layout, design tokens, reusable components, and a front-end helper (`panel.js`) that abstracts base-path aware API calls.
-- **Setup wizard** – Five step installer that validates environment, collects credentials, creates generated config, and locks the installation.
+- **Modular architecture** – each feature is an isolated domain (Account, Item, Creature, Quest, Mail, Mass Mail, Items / Inventory, SmartAI, SOAP), sharing helpers, middleware and UI components.
+- **Multi-realm support** – per-realm database and SOAP credentials, with inheritance rules for shared authentication.
+- **Secure by default** – CSRF protection, authentication middleware, audit logging, configurable SOAP whitelisting.
+- **Consistent UX** – shared layout, design tokens, reusable components, and `panel.js` for base-path aware API calls.
+- **Setup wizard** – five-step installer that validates the environment, collects credentials, creates the generated config and writes `install.lock`.
 
 ## System Requirements
 
@@ -71,12 +71,11 @@ When deploying under a sub-path (e.g. `/panel`), set `'base_path' => '/panel'` i
 ```
 AcoreGMPanel/
 ├── app/                  # Core services, domain logic, controllers, middlewares
-│   ├── Core/             # Framework-like utilities (Routing, Lang, Request, Response)
+│   ├── Core/             # Routing, Lang, Request, Response
 │   ├── Domain/           # Business logic grouped by module
 │   ├── Http/             # Controllers and HTTP middleware
 │   └── Support/          # Shared helpers (auth, audit, SOAP, game meta)
 ├── bootstrap/            # Autoload bootstrap and global helper registration
-├── cli/                  # Maintenance and utility scripts (e.g., comment updater)
 ├── config/               # Base configuration blueprints
 ├── config/generated/     # Runtime-generated config produced by the setup wizard
 ├── public/               # Web entry point (`index.php`) and static assets
@@ -84,6 +83,7 @@ AcoreGMPanel/
 │   ├── lang/             # Localization files (en, zh_CN)
 │   └── views/            # PHP view templates and components
 ├── routes/               # Route declarations (`web.php`)
+├── scripts/              # Local helper scripts (dependency installer)
 ├── storage/
 │   ├── cache/            # Cached data (mass mail names, ...)
 │   └── logs/             # Runtime logs per module
@@ -105,22 +105,11 @@ AcoreGMPanel/
 | SmartAI Wizard | `/smart-ai` | Guided builder for `smart_scripts` entries with SQL export. |
 | SOAP Wizard | `/soap` | Browse SOAP commands, fill dynamic forms, preview and execute requests securely. |
 | Supervisor | `/supervisor` | Inspect and control `acore_supervisor.exe` (the worldserver / authserver watchdog): state, world-loop heartbeat, auth probe, restart counters, plus per-service start / stop / restart. On a multi-realm machine the page gets an **instance switcher** (see below). |
-| Boss Activity | `/boss` | Management page for the [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) `boss.lua` event: runtime state (active boss, health, phase, **schedule status**), basic + extended config (yells, taunts, AI cadence, phase thresholds, patrol, minions, helpers, classes, managed tiers, **daily start/stop windows**), difficulty tiers, event log and contributor snapshots, plus spawn / kill / reset / reload commands. One database per realm (see below). |
-| Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event, split into tabs (runtime status / question bank / reward presets / leaderboard / settings): live round state (via SOAP `.trivia api`), a next-question countdown, start / stop / pause-resume / enable-disable controls (one toggle each, labelled from the live state), daily **scheduled start/stop windows**, pacing + answer-channel + label + participation + broadcast-prefix settings (everything the retired `TriviaReward_conf.lua` used to hold), question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
-| Auction Bot | `/auctionator` | Management page for the [mod-auctionator](https://github.com/bluegene-ai/mod-auctionator) seller, split into tabs (status / settings / item policy / actions): live listing counters (bot vs player, bid-only vs buyout, per house), market-price table state and the module log tail; **in-place editing of `configs/modules/mod_auctionator.conf`** (only changed keys are rewritten, the previous file is kept as `.agmp.bak`, and the page states that the worldserver must be restarted); CRUD for the three policy tables (`mod_auctionator_disabled_items`, `mod_auctionator_itemclass_config`, `mod_auctionator_gm_list`); and the module's own GM commands through the worldserver SOAP channel (`.auctionator status`, `addlist`, `expireall`, `enable`/`disable`, `multiplier`, `marketimport`, `marketprune`, `add`). **GM listings take an explicit shape**: both the pick-list row form and the add form ask for 一口价 / 竞拍 plus the start-bid and buyout unit prices (with a live whole-stack preview), so a listing no longer inherits the realm-wide `Auctionator.Seller.BidOnly` by accident — the panel sends the module's option form (`.auctionator add … mode=… bid=… buyout=…`), and the pick-list's `mode` column is honoured by `addlist`. `mod_auctionator_gm_list` therefore needs the module's `2026_09_24_00_gm_list_mode.sql` update; a realm whose table still predates it is told so instead of being shown an empty list. **Item filtering and a buyout switch** complete the page: the class/subclass whitelist is grouped per item type with a one-click "apply to whole class" quota (creating the rows a type needs to enter the whitelist, or `max_count = 0` to leave it), a new per-quality card drives the module's `mod_auctionator_quality_config` gate (`2026_09_24_01_quality_config.sql`; a quality with no row is allowed, so the shipped state changes nothing), and a buyout-mode switch next to the master switch writes `Auctionator.Seller.BidOnly` **and** sends `.auctionator buyout 0|1`, so "buyout off = bidding only" applies to the next seller run instead of waiting for a restart. Both policy tables are re-read every seller cycle, so all filter edits are hot. The market card can also **price this realm's own auction house** (`.auctionator marketscan`): one SQL aggregation over the live listings writes per-unit market prices, so no external CSV export is needed, with an optional timer in the config tab. |
+| Boss Activity | `/boss` | Management page for the [acore-boss-smartai](https://github.com/bluegene-ai/acore-boss-smartai) `boss.lua` event: runtime card (state, respawn countdown, schedule status), basic config (identity / combat strength / helpers & respawn / spawn points, with a parsed preview), extended config (yells, taunts, AI cadence, phase thresholds, patrol, minions, helpers, classes, managed tiers, **random skill preset**, **six independent reward pools**, **daily start/stop windows**), difficulty tiers, event log and contributor snapshots, plus spawn / kill / reset / reload commands. Reward pools take item IDs (resolved item names shown immediately), can be class filtered, **simulated** with the script's own algorithm, and copied to another realm. Config lives in that realm's own `ac_eluna` schema (see below). |
+| Chat Trivia | `/trivia` | Admin page for the [ac-trivia](https://github.com/bluegene-ai/ac-trivia) Lua event, split into tabs (runtime status / question bank / reward presets / leaderboard / settings): live round state (via SOAP `.trivia api`), a next-question countdown, start / stop / pause-resume / enable-disable controls, daily **scheduled start/stop windows**, pacing + answer-channel + label + participation + broadcast-prefix settings, question bank CRUD with CSV/TSV/JSON template import & export, reward presets, and the winner leaderboard. Settings and questions live in the server's `ac_eluna` database (tables are created by the Lua script). |
+| Auction Bot | `/auctionator` | Management page for the [mod-auctionator](https://github.com/bluegene-ai/mod-auctionator) seller, split into tabs (status / settings / item policy / actions): live listing counters (bot vs player, bid-only vs buyout, per house), market-price table state and the module log tail; **in-place editing of `configs/modules/mod_auctionator.conf`** (only changed keys are rewritten, the previous file is kept as `.agmp.bak`, and the worldserver must be restarted); CRUD for the three policy tables (`mod_auctionator_disabled_items`, `mod_auctionator_itemclass_config`, `mod_auctionator_gm_list`); per-realm start/stop; and the module's own GM commands through the worldserver SOAP channel (`.auctionator status`, `addlist`, `expireall`, `enable`/`disable`, `multiplier`, `marketimport`, `marketprune`, `add`, `buyout`, `marketscan`). **GM listings take an explicit shape**: the pick-list row form and the add form both ask for 一口价 / 竞拍 plus the start-bid and buyout unit prices, and the panel sends the module's option form (`.auctionator add … mode=… bid=… buyout=…`); `mod_auctionator_gm_list` therefore needs the module's `2026_09_24_00_gm_list_mode.sql` update, and a realm whose table still predates it is told so instead of being shown an empty list. **Item filtering and a buyout switch**: the class/subclass whitelist is grouped per item type with a one-click "apply to whole class" quota (creating the rows a type needs, or `max_count = 0` to leave it), a per-quality card drives the module's `mod_auctionator_quality_config` gate (`2026_09_24_01_quality_config.sql`), and a buyout-mode switch writes `Auctionator.Seller.BidOnly` **and** sends `.auctionator buyout 0|1`. Both policy tables are re-read every seller cycle, so filter edits are hot. The market card can also **price this realm's own auction house** (`.auctionator marketscan`): one SQL aggregation over the live listings writes per-unit market prices, with an optional timer in the config tab. |
 
-## Further Reading
-
-Additional focused guides live in the `docs/` directory and project root:
-
-- `docs/multi-realm.md` — multi-realm deployment (several realms sharing one auth database): the
-  per-realm bindings of the boss activity and the auction bot, how each realm is started/stopped
-  independently, the steps to add a realm and the acceptance checklist.
-- `docs/DATABASES.md` — the databases/tables the panel touches and how.
-- `docs/creature_editor.md`, `docs/quest_editor_design.md`, `docs/quest_editor_gap_analysis.md` —
-  creature and quest editor design notes.
-
-### Several supervisors (one per realm)
+## Supervisor instances (one per realm)
 
 One `acore_supervisor.exe` supervises exactly one worldserver + one authserver, so a multi-realm
 machine runs one supervisor process per realm. List them in `config/supervisor.php` (or the
@@ -149,9 +138,9 @@ for these entries:
   every API call and is reflected in the URL, so a refresh keeps the selection.
 - An **unlisted instance id is refused** by the APIs (404) rather than silently falling back to
   another realm; the audit entry (`panel_audit`) records the instance.
-- Without `instances` (or with an empty array) nothing changes: one implicit instance `default`.
+- Without `instances` (or with an empty array) there is one implicit instance `default`.
 
-### Per-realm management of the boss activity and the auction bot
+## Per-realm management (boss activity and auction bot)
 
 Both modules run inside each realm's own worldserver, so switching realm in the page header switches
 the whole data source:
@@ -160,11 +149,18 @@ the whole data source:
 |---|---|---|
 | Data | `config/boss.php` → `server_overrides[<realm>].custom_db_name` (that realm's own Eluna schema) | `config/auctionator.php` → `server_overrides[<realm>].server_root` (that realm's worldserver directory) |
 | Start / stop | spawn / kill / reset buttons, sent to that realm's SOAP port only | "start / stop this realm's bot" in the status card: writes `Auctionator.Enabled` into that realm's conf **and** sends `.auctionator start`·`stop`, so it applies at once and survives a restart |
-| A realm without the module | outside `supported_server_ids` → the page is read-only with a warning and every mutating endpoint answers 422 instead of touching another realm | auto-detected per realm (probes that realm's world database for `mod_auctionator_disabled_items`): deployed → manageable, missing → read-only with one realm-named note and no SQL error wall; `supported_server_ids` / `unsupported_server_ids` force either verdict |
+| A realm without the module | outside `supported_server_ids` → the page is read-only with a warning and every mutating endpoint answers 422 instead of touching another realm | auto-detected per realm (probes that realm's world database for `mod_auctionator_disabled_items`): deployed → manageable, missing → read-only with one realm-named note; `supported_server_ids` / `unsupported_server_ids` force either verdict |
 
 Topology, the steps for adding a realm and the acceptance checklist live in `docs/multi-realm.md`.
 
+## Further Reading
 
+Additional focused guides live in the `docs/` directory:
+
+- `docs/multi-realm.md` — multi-realm deployment (several realms sharing one auth database).
+- `docs/DATABASES.md` — the databases/tables the panel touches and how.
+- `docs/creature_editor.md`, `docs/quest_editor_design.md`, `docs/quest_editor_gap_analysis.md` —
+  creature and quest editor design notes.
 
 ## IP Geolocation (Local Database)
 
@@ -183,7 +179,6 @@ To build `vendor/` locally (PowerShell):
 - `powershell -ExecutionPolicy Bypass -File .\scripts\install-deps.ps1`
 
 Note: the `.mmdb` file is not committed; place it manually under `storage/ip_geo/`.
-
 
 ## Contributing
 

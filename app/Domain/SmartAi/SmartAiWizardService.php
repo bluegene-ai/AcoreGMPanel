@@ -2,30 +2,6 @@
 /**
  * File: app/Domain/SmartAi/SmartAiWizardService.php
  * Purpose: Defines class SmartAiWizardService for the app/Domain/SmartAi module.
- * Classes:
- *   - SmartAiWizardService
- * Functions:
- *   - __construct()
- *   - metadata()
- *   - baseFields()
- *   - events()
- *   - actions()
- *   - targets()
- *   - catalog()
- *   - build()
- *   - buildSegment()
- *   - normalizeSegmentBase()
- *   - loadCatalog()
- *   - indexCatalog()
- *   - resolveParams()
- *   - normalizeParamValue()
- *   - intValue()
- *   - boolValue()
- *   - defaultColumns()
- *   - buildSql()
- *   - escapeSql()
- *   - hasErrors()
- *   - hasAnySegmentErrors()
  */
 
 namespace Acme\Panel\Domain\SmartAi;

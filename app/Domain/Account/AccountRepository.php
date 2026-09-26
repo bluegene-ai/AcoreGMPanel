@@ -2,30 +2,6 @@
 /**
  * File: app/Domain/Account/AccountRepository.php
  * Purpose: Defines class AccountRepository for the app/Domain/Account module.
- * Classes:
- *   - AccountRepository
- * Functions:
- *   - __construct()
- *   - rebind()
- *   - search()
- *   - findByUsername()
- *   - listCharacters()
- *   - setGmLevel()
- *   - ban()
- *   - unban()
- *   - changePassword()
- *   - createAccount()
- *   - banStatus()
- *   - accountsByLastIp()
- *   - fetchAccountColumns()
- *   - inspectAccountColumns()
- *   - inspectAccountSchema()
- *   - hasColumn()
- *   - columnName()
- *   - getColumnInfo()
- *   - columnRequiresValue()
- *   - columnLength()
- *   - columnIsBinary()
  */
 
 namespace Acme\Panel\Domain\Account;
@@ -379,7 +355,6 @@ class AccountRepository extends MultiServerRepository
                 }
             }
         } catch(\Throwable $e){
-            // ignore
         }
 
         $account = $this->findById($accountId);
@@ -501,7 +476,6 @@ class AccountRepository extends MultiServerRepository
             try {
                 $this->authPdo->prepare("DELETE FROM `{$tableSafe}` WHERE `{$colSafe}`=:v")->execute([':v'=>$value]);
             } catch(\Throwable $e){
-                // ignore
             }
         }
     }
@@ -605,7 +579,6 @@ class AccountRepository extends MultiServerRepository
         }
         $oldUsername = (string)($row['username'] ?? '');
 
-        // Unique check
         $chk = $this->authPdo->prepare('SELECT id FROM account WHERE username=:u LIMIT 1');
         $chk->execute([':u'=>$newUsername]);
         $existing = (int)($chk->fetchColumn() ?: 0);

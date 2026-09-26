@@ -2,19 +2,6 @@
 /**
  * File: app/Http/Controllers/Mail/MailController.php
  * Purpose: Defines class MailController for the app/Http/Controllers/Mail module.
- * Classes:
- *   - MailController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiList()
- *   - apiView()
- *   - apiMarkRead()
- *   - apiMarkReadBulk()
- *   - apiDelete()
- *   - apiDeleteBulk()
- *   - apiStats()
- *   - apiLogs()
  */
 
 namespace Acme\Panel\Http\Controllers\Mail;

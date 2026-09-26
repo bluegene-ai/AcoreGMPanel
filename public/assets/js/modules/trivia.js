@@ -91,9 +91,7 @@
   }
 
   /**
-   * 固定在右上角的提示区。
-   *
-   * 题库/奖励预设面板在页面很靠下的位置，行内提示留在页面顶部（运行状态卡下面）时，
+   * 固定在右上角的提示区：题库/奖励预设面板在页面很靠下，行内提示留在顶部时，
    * 在下面点「启用/保存」根本看不到反馈，失败看起来就是「点了没反应」。
    */
   function flashHost() {
@@ -143,10 +141,8 @@
   }
 
   /**
-   * 「下一题」字段的渲染：暂停/关闭时给出原因，否则显示倒计时。
-   *
-   * 每秒本地自减，让"到底还有多久出下一题"可见——这正是之前"恢复自动出题点了没反应"
-   * 的关键：脚本当时其实已经排好队了，只是面板上没有任何倒计时，看不出还在等。
+   * 「下一题」字段：暂停/关闭时给出原因，否则显示倒计时。每秒本地自减，让"还有多久出下一题"可见 ——
+   * 否则恢复自动出题后看不出还在等（脚本其实已经排好队了）。
    */
   function renderCountdown() {
     const live = state.live;
@@ -182,11 +178,8 @@
   }
 
   /**
-   * 「暂停/恢复」与「开启/关闭」各自只有一个按钮：按实时状态切换文案与动作。
-   *
-   * 之前是四个按钮常驻，看不出当前到底是暂停还是恢复、开着还是关着；
-   * 系统关闭时点「暂停自动出题」更是完全没有反馈（tick 在 enabled 判定处就返回了，
-   * 根本走不到 paused 分支），现在这种无意义的按钮会被禁用并给出原因。
+   * 「暂停/恢复」与「开启/关闭」各只有一个按钮，按实时状态切换文案与动作。系统关闭时
+   * 暂停/恢复没有意义（tick 在 enabled 判定处就返回），这类按钮会被禁用并给出原因。
    */
   function applyControls(live, available) {
     const enabled = available ? live.enabled !== false : false;
@@ -455,11 +448,8 @@
   }
 
   /**
-   * 把编辑表单所在面板的标题栏滚到视口顶部。
-   *
-   * 不能用 scrollIntoView({block:'center'})：编辑表单比很多笔记本视口还高（约 520-670px），
-   * 居中会把表单自己的标题与「取消」按钮推到视口上边缘之外，看起来就是"顶部被覆盖、没有返回按钮"。
-   * 标题栏对齐到顶部则始终能看到「题库 / 奖励预设」上下文，表单头部紧跟在下面。
+   * 把编辑表单所在面板的标题栏滚到视口顶部。不能用 scrollIntoView({block:'center'})：
+   * 表单比很多笔记本视口还高（约 520-670px），居中会把标题与「取消」推到视口外。
    */
   function revealEditorPanel(form) {
     if (!form) return;
@@ -619,7 +609,7 @@
     await reloadWinners();
   }
 
-  // ---------------------------------------------------------------- 模板导入
+  // ---- 模板导入 ----
   function renderImportResult(json) {
     if (!dom.importResult) return;
     dom.importResult.innerHTML = (json && json.html) || '';
@@ -674,7 +664,7 @@
     await previewImport();   // 再跑一次预览，把剩下的错误显示出来
   }
 
-  // ---------------------------------------------------------------- 事件绑定
+  // ---- 事件绑定 ----
   document.addEventListener('click', function (event) {
     const actionBtn = event.target.closest('[data-tv-action]');
     if (actionBtn && data.canControl) {
@@ -753,7 +743,7 @@
     }
   });
 
-  // ---------------------------------------------------------------- Tab 分页
+  // ---- Tab 分页 ----
   function availableTabs() {
     const names = [];
     document.querySelectorAll('[data-tv-tabpanel]').forEach(function (node) {
@@ -763,10 +753,8 @@
   }
 
   /**
-   * 切换 Tab 并把当前 Tab 记到 URL hash（刷新/换服后回到同一页）。
-   *
-   * 用 replaceState 而不是 location.hash = …，避免浏览器把每次点 Tab 都塞进历史记录
-   * （在标签页之间来回点要按很多次"后退"才能离开这个页面）。
+   * 切换 Tab 并把当前 Tab 记到 URL hash（刷新/换服后回到同一页）。用 replaceState 而不是
+   * location.hash = …，避免每次点 Tab 都往浏览器历史塞一条（要按很多次"后退"才能离开）。
    */
   function activateTab(name, remember) {
     const names = availableTabs();
@@ -878,10 +866,9 @@
   }
 
   // ------------------------------------------------------------------ 导入文件解码
-  // 浏览器 readAsText(file, 'utf-8') 会把非 UTF-8 的字节直接替换成 U+FFFD（�），
-  // 这一步是不可逆的：中文 Windows 上 Excel「另存为 CSV」写的是 ANSI/GB18030，
-  // 「Unicode 文本」写的是 UTF-16，两者都会在预览框里变成一堆 �。
-  // 所以按字节读进来，自己判断编码再解码，解出来的是正确的字符串（提交时就是 UTF-8 了）。
+  // 浏览器 readAsText(file, 'utf-8') 会把非 UTF-8 字节换成 U+FFFD（�），不可逆：中文 Windows 的
+  // Excel「另存为 CSV」写 ANSI/GB18030、「Unicode 文本」写 UTF-16，预览框里就是一堆 �。
+  // 所以按字节读入、自行判断编码再解码（提交时已是 UTF-8）。
   function decodeImportBytes(buffer) {
     const bytes = new Uint8Array(buffer);
     const decode = function (label, fatal) {

@@ -2,11 +2,6 @@
 /**
  * File: app/Support/SoapService.php
  * Purpose: Defines class SoapService for the app/Support module.
- * Classes:
- *   - SoapService
- * Functions:
- *   - __construct()
- *   - execute()
  */
 
 namespace Acme\Panel\Support;

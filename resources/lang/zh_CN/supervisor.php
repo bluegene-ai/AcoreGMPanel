@@ -7,6 +7,8 @@
 return [
     'page_title' => '守护管理',
     'intro' => '查看并控制 acore_supervisor.exe：worldserver / authserver 的运行状态、世界循环心跳、登录服探活与重启次数，并可直接启停或重启。',
+    'intro_short' => '查看并控制 worldserver / authserver 的状态与心跳，可直接启停或重启。',
+    'intro_short' => '查看并控制 worldserver / authserver 守护进程。',
 
     'supervisor' => [
         'running' => '守护程序运行中',
@@ -27,6 +29,7 @@ return [
     'diagnostics' => [
         'title' => '为什么找不到守护程序',
         'intro' => '面板按下面的顺序查找 acore_supervisor.exe / supervisor.ini，全部落空就会显示"未找到守护程序目录"。守护在别的目录跑完全没问题，只要让面板知道它在哪。',
+        'intro_short' => '面板按下面的路径查找守护程序。',
         'configured' => '配置的目录',
         'configured_empty' => '（未配置，使用自动探测）',
         'env' => '环境变量 :var',
@@ -48,6 +51,7 @@ return [
         'source_default' => '使用默认文件名',
         'source_none' => '未能解析',
         'conflict_title' => '面板配置与 supervisor.ini 不一致（面板配置优先，可能让指令写进守护不读的文件）：',
+        'conflict_title_short' => '面板配置与 supervisor.ini 不一致：',
         'conflict_line' => '面板写的是 :configured，ini 里是 :ini',
         'ini_key_status' => 'StatusFile',
         'ini_key_control' => 'ControlFile',
@@ -56,16 +60,20 @@ return [
         'open_basedir' => 'open_basedir',
         'open_basedir_empty' => '（未限制）',
         'open_basedir_warning' => 'PHP 设置了 open_basedir，守护目录在该列表之外时面板永远看不到它，需要把该目录加进去。',
+        'open_basedir_warning_short' => 'PHP 的 open_basedir 未包含守护目录。',
         'candidate_path' => '查找过的目录',
         'candidate_state' => '存在 / exe / ini / 状态文件',
         'exists_yes' => '有',
         'exists_no' => '无',
         'fix_title' => '怎么修',
         'fix_configured' => '上面的"配置的目录"写错了或者盘符/目录已改名：改 config/generated/supervisor.php 里的 dir，或删掉这一项改回自动探测。',
+        'fix_configured_short' => '「配置的目录」写错了或目录已改名。',
         'fix_hint' => '任选一种，然后刷新本页：',
+        'fix_hint_short' => '任选一种配置方式，然后刷新本页。',
         'fix_option_config' => '写死在面板配置里（推荐，最稳）：新建 :file',
         'fix_option_env' => '给 PHP 进程设置环境变量 :var（Apache 可写 SetEnv，或写进 .env）',
         'fix_option_note' => '路径用正斜杠或双反斜杠都行；不要指向 exe 本身，指向它所在的文件夹。',
+        'fix_option_note_short' => '指向守护程序所在的文件夹（不要指向 exe）。',
         'placeholder_dir' => 'C:/请改成守护程序所在的文件夹',
     ],
 

@@ -2,12 +2,6 @@
 /**
  * File: app/Support/Csrf.php
  * Purpose: Defines class Csrf for the app/Support module.
- * Classes:
- *   - Csrf
- * Functions:
- *   - token()
- *   - verify()
- *   - field()
  */
 
 namespace Acme\Panel\Support;

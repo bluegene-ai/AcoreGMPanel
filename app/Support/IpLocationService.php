@@ -2,15 +2,6 @@
 /**
  * File: app/Support/IpLocationService.php
  * Purpose: Defines class IpLocationService for the app/Support module.
- * Classes:
- *   - IpLocationService
- * Functions:
- *   - __construct()
- *   - lookup()
- *   - lookupMmdb()
- *   - lookupMmdbViaExtension()
- *   - pickName()
- *   - isPrivate()
  */
 
 namespace Acme\Panel\Support;

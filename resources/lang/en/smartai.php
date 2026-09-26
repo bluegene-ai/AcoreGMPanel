@@ -2,6 +2,7 @@
 return array (
   'page_title' => 'SmartAI Wizard',
   'intro' => 'Build events, actions, and targets following the AzerothCore Smart Scripts spec, then generate executable SQL.',
+  'intro_short' => 'Compose events, actions and targets, then generate SQL.',
   'sidebar' => 
   array (
     'nav_title' => 'Step guide',
@@ -20,26 +21,31 @@ return array (
   array (
     'title' => 'Basics',
     'description' => 'Define the script scope and shared fields (entry, chance, phase, etc.).',
+    'description_short' => 'Script scope and shared fields.',
   ),
   'segment' => 
   array (
     'add' => 'Add segment',
     'hint' => 'Each segment owns its event, action, and target, executed sequentially.',
+    'hint_short' => 'Each segment runs in order.',
   ),
   'event' => 
   array (
     'title' => 'Select Event',
     'description' => 'Events decide when the script runs. Pick a type and fill parameters based on the Wiki.',
+    'description_short' => 'Decides when the script runs.',
   ),
   'action' => 
   array (
     'title' => 'Configure Action',
     'description' => 'Actions run when the event fires; combine spells, dialogues, summons, and more.',
+    'description_short' => 'Runs when the event fires.',
   ),
   'target' => 
   array (
     'title' => 'Target & Preview',
     'description' => 'Choose targets and generate SQL for execution or download.',
+    'description_short' => 'Pick targets and generate SQL.',
   ),
   'preview' => 
   array (

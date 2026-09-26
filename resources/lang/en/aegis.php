@@ -2,6 +2,7 @@
 return array (
   'page_title' => 'Aegis Anti-Cheat',
   'intro' => 'Review offense history, investigate suspicious events, and run manual Aegis actions on the selected realm.',
+  'intro_short' => 'Review cheat history and events, then run manual Aegis actions.',
   'actions' => 
   array (
     'refresh_all' => 'Refresh all',

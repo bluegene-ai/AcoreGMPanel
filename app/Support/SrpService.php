@@ -2,15 +2,6 @@
 /**
  * File: app/Support/SrpService.php
  * Purpose: Defines class SrpService for the app/Support module.
- * Classes:
- *   - SrpService
- * Functions:
- *   - generate()
- *   - generateBinary32()
- *   - generatePair()
- *   - calculateVerifier()
- *   - importLittleEndian()
- *   - exportLittleEndian()
  */
 
 namespace Acme\Panel\Support;

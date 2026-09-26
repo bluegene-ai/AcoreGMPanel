@@ -1,32 +1,6 @@
 /**
  * File: public/assets/js/modules/mass_mail.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - toast()
- *   - post()
- *   - bindAnnounce()
- *   - bindMassSend()
- *   - updateCond()
- *   - countTargets()
- *   - needConfirm()
- *   - buildSummary()
- *   - openConfirm()
- *   - closeConfirm()
- *   - onConfirmOk()
- *   - actuallySend()
- *   - disableBtn()
- *   - formatGold()
- *   - refreshLogs()
- *   - renderLogs()
- *   - esc()
- *   - short()
- *   - bindLogs()
- *   - applyLogFilter()
- *   - init()
- *   - qs()
- *   - qsa()
- *   - formatNumber()
  */
 
 (function(){
@@ -66,10 +40,7 @@
     return text;
   }
 
-  /**
-   * 统一的界面反馈：以前这里只是 console.log，用户看不到任何结果。
-   * 优先用面板的 feedback 组件，缺失时退化为自绘的提示条。
-   */
+  /** 统一界面反馈：优先面板 feedback 组件，缺失时退化为自绘提示条 */
   function toast(msg, type){
     const text = String(msg == null ? '' : msg);
     if(!text) return;
@@ -137,13 +108,9 @@
   }
 
   /**
-   * "群发"提交链路跨越了两个作用域：绑定事件的 bindMassSend()，以及位于模块
-   * 作用域的 buildSummary() / summarizeItems() / actuallySend()。
-   *
-   * 这三个函数以前直接读取 bindMassSend() 内用 const/let 声明的东西，而模块
-   * 作用域看不到它们 —— 点击"群发"时抛 ReferenceError。因为提交处理器是 async
-   * 的，异常只会变成一条没人处理的 Promise 拒绝，浏览器不显示任何提示：按钮
-   * 看起来完全失效。共享状态统一提升到这里。
+   * "群发"提交链路跨两个作用域（bindMassSend() 与模块作用域的 buildSummary()/actuallySend()），
+   * 共享状态必须提升到这里：写在 bindMassSend() 内的 const/let 模块作用域看不到，点击时报
+   * ReferenceError，而 async 处理器把它吞成未处理的 Promise 拒绝（按钮看起来完全失效）。
    */
   let recipientsCountEl = null;   // #mmRecipientsCount —— buildSummary() 用它显示在线人数
   let confirmItemsMirror = '';    // 物品编辑器同步过来的"名称 ×数量"摘要，供 summarizeItems() 使用
@@ -153,8 +120,7 @@
     actionSel.addEventListener('change',()=> updateCond()); targetSel.addEventListener('change',()=> updateCond());
   if(goldInput){ goldInput.addEventListener('input',()=>{ const v=parseInt(goldInput.value||'0',10); preview.textContent=v? formatGold(v):translate('send.gold_preview_placeholder','—'); }); }
 
-    // Items editor: visual rows -> hidden items string ("id:qty id:qty")
-    // 同时按 ID 解析物品名（world 库 / DBC），并在行内提示重复与缺失
+    // 物品编辑器：可视化行 → 隐藏的 items 串（"id:qty id:qty"），并按 ID 解析物品名（world 库/DBC）
     let syncItemsToHidden = null;
     let itemsEditorApi = null;
 
@@ -425,7 +391,7 @@
     })();
 
     // 收件人预览：在线 = 实时查询人数；自定义 = 本地按行计数 + 服务端确认
-    recipientsCountEl = qs('#mmRecipientsCount'); // 提升到模块作用域，buildSummary() 也要读
+    recipientsCountEl = qs('#mmRecipientsCount');
     const recipientsDetailEl = qs('#mmRecipientsDetail');
     const recipientsRefreshBtn = qs('#mmRecipientsRefresh');
     const customListInput = qs('#mmCustomList', f);
@@ -590,9 +556,7 @@
   function parseItems(raw){
     const text = String(raw || '').trim();
     if(!text) return [];
-    // Supports:
-    // - lines: 123:2
-    // - space/comma separated: 123:2 456:1
+    // 支持 "123:2" 每行一条，或空格/逗号分隔的 "123:2 456:1"
     const tokens = text.split(/\s+|,|;|\r?\n/).map(s=>s.trim()).filter(Boolean);
     const out=[];
     tokens.forEach(tok=>{
@@ -807,10 +771,8 @@
     if(confirmModal){ confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) closeConfirm(); }); }
     refreshLogs();
   }
-  // panel.js injects page modules from an immediately-invoked body script, so
-  // this module can execute while the document is still parsing. Defer via the
-  // panel helper (it covers loading AND interactive) instead of the classic
-  // readyState check, which silently skips init() in the interactive state.
+  // 模块可能在文档仍解析时执行；用 panel 的 ready 助手（覆盖 loading 与 interactive），
+  // 别用经典 readyState 判断式——它在 interactive 状态会静默跳过 init()。
   if (window.Panel && typeof window.Panel.whenDomReady === 'function') {
     window.Panel.whenDomReady(init);
   } else if (document.readyState === 'loading') {

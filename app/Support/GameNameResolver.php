@@ -2,14 +2,10 @@
 /**
  * File: app/Support/GameNameResolver.php
  * Purpose: Resolve game object names (quest / faction / spell / skill / achievement /
- *          achievementcriteria / item) from the realm database and the client DBC files.
+ * achievementcriteria / item) from the realm database and the client DBC files.
  *
- * 设计要点：
- *   - 每个 realm + 语言只加载一次名字表（进程内静态缓存），磁盘上再持久化一份 JSON，
- *     避免每次请求都解析 49MB 的 Spell.dbc。
- *   - 数据库优先：任务标题、物品名等直接来自 world 库；DBC 表为空或缺失时
- *     回退解析 DataDir/dbc/*.dbc（faction / skill / spell / achievement）。
- *   - 任何解析失败都不抛异常，只返回 null，页面继续显示原始 ID。
+ * 每个 realm + 语言只加载一次（进程内静态缓存 + 磁盘 JSON），避免每次请求解析 49MB 的 Spell.dbc；
+ * 数据库优先，DBC 表为空或缺失时回退解析 DataDir/dbc 下的 dbc 文件；解析失败只返回 null，页面继续显示原始 ID。
  */
 
 declare(strict_types=1);
@@ -31,18 +27,13 @@ final class GameNameResolver
 
     /**
      * DBC 文件里名字字段的起点下标、可用于探测语种的字符掩码字段（按 AzerothCore DBCStructure.h）。
-     *
-     * 客户端把 16 个语种的字符串连续存放，但实际安装的 DBC 往往只填了 1~2 个语种，
-     * 且不一定是标准顺序，所以语种槽位在运行时探测（见 dbcLocaleIndex）。
+     * 客户端把 16 个语种的字符串连续存放，但实际安装的 DBC 往往只填 1~2 个语种且不一定是标准顺序，
+     * 所以语种槽位在运行时探测（见 dbcLocaleOffset）。
      */
     private const DBC_SPECS = [
-        // FactionEntry.name[16] @23，字符串掩码 @39
         'faction' => ['file' => 'Faction.dbc', 'idField' => 0, 'nameField' => 23, 'maskField' => 39, 'order' => self::DBC_LOCALE_ORDER],
-        // SkillLineEntry.name[16] @3，掩码 @19
         'skill' => ['file' => 'SkillLine.dbc', 'idField' => 0, 'nameField' => 3, 'maskField' => 19, 'order' => self::DBC_LOCALE_ORDER],
-        // SpellEntry.SpellName[16] @136，掩码 @152
         'spell' => ['file' => 'Spell.dbc', 'idField' => 0, 'nameField' => 136, 'maskField' => 152, 'order' => self::DBC_LOCALE_ORDER],
-        // AchievementEntry.name[16] @4，掩码 @20
         'achievement' => ['file' => 'Achievement.dbc', 'idField' => 0, 'nameField' => 4, 'maskField' => 20, 'order' => self::DBC_LOCALE_ORDER],
     ];
 
@@ -58,7 +49,6 @@ final class GameNameResolver
 
     /**
      * 批量解析，返回 id => name（未解析到的 id 不在结果里）。
-     *
      * @param int[] $ids
      * @return array<int, string>
      */
@@ -92,9 +82,7 @@ final class GameNameResolver
         return $out;
     }
 
-    /**
-     * 单个解析，解析不到返回 null。
-     */
+    /** 单个解析，解析不到返回 null。 */
     public static function resolve(string $type, int $id): ?string
     {
         if ($id <= 0) {
@@ -108,7 +96,6 @@ final class GameNameResolver
 
     /**
      * 只取某个类型的名字表（id => name），用于页面一次性批量解析。
-     *
      * @return array<int, string>
      */
     public static function map(string $type): array
@@ -138,9 +125,7 @@ final class GameNameResolver
         return self::$maps[$key];
     }
 
-    /**
-     * 清空进程内缓存（CLI 工具或切换服务器后使用）。
-     */
+    /** 清空进程内缓存（CLI 工具或切换服务器后使用）。 */
     public static function flush(): void
     {
         self::$maps = [];
@@ -148,7 +133,6 @@ final class GameNameResolver
 
     /**
      * 重新构建并落盘指定类型（不传则全部重建）。
-     *
      * @param string[] $types
      */
     public static function warm(array $types = []): array
@@ -182,9 +166,6 @@ final class GameNameResolver
         }
     }
 
-    // ------------------------------------------------------------------
-    // 缓存
-    // ------------------------------------------------------------------
 
     private static function cacheKey(string $type): string
     {
@@ -235,7 +216,6 @@ final class GameNameResolver
         return $out;
     }
 
-    /** @param array<int, string> $map */
     private static function persist(string $type, array $map): void
     {
         if ($map === []) {
@@ -268,11 +248,7 @@ final class GameNameResolver
         }
     }
 
-    // ------------------------------------------------------------------
-    // 构建
-    // ------------------------------------------------------------------
 
-    /** @return array<int, string> */
     private static function build(string $type): array
     {
         $fromDb = self::buildFromDatabase($type);
@@ -283,7 +259,6 @@ final class GameNameResolver
         return self::buildFromDbc($type);
     }
 
-    /** @return array<int, string> */
     private static function buildFromDatabase(string $type): array
     {
         return match ($type) {
@@ -297,8 +272,7 @@ final class GameNameResolver
 
     private static function achievementNames(): array
     {
-        // world 库的 achievement_dbc 常常只是"自定义成就"的补丁表，行数很少，
-        // 这里先取它，取不到就由 build() 回退到 DBC 文件
+        // world 库的 achievement_dbc 常常只是"自定义成就"的补丁表，行数很少；取不到就由 build() 回退到 DBC 文件
         return self::simpleIdNameMap('achievement_dbc', 'ID', ['Title_Lang_zhCN', 'Title_Lang_enUS', 'Title']);
     }
 
@@ -309,7 +283,6 @@ final class GameNameResolver
 
     /**
      * 从 world 库的简单 id/name 表取名字（表或列不存在时返回空数组）。
-     *
      * @param string[] $candidateColumns
      * @return array<int, string>
      */
@@ -408,10 +381,6 @@ final class GameNameResolver
         );
     }
 
-    /**
-     * @param array<string, mixed> $params
-     * @return array<int, string>
-     */
     private static function queryMap(string $sql, array $params): array
     {
         try {
@@ -452,7 +421,6 @@ final class GameNameResolver
         }
     }
 
-    /** @return string[] */
     private static function tableColumns(string $table): array
     {
         static $cache = [];
@@ -481,10 +449,6 @@ final class GameNameResolver
         return $cache[$table];
     }
 
-    /**
-     * @param string[] $columns
-     * @param string[] $candidates
-     */
     private static function firstExistingColumn(array $columns, array $candidates): ?string
     {
         $lookup = [];
@@ -507,11 +471,7 @@ final class GameNameResolver
         return '`' . str_replace('`', '', $identifier) . '`';
     }
 
-    // ------------------------------------------------------------------
-    // DBC 回退
-    // ------------------------------------------------------------------
 
-    /** @return array<int, string> */
     private static function buildFromDbc(string $type): array
     {
         $spec = self::DBC_SPECS[$type] ?? null;
@@ -546,15 +506,10 @@ final class GameNameResolver
 
     /**
      * 探测 DBC 里实际填充的语种槽位。
-     *
-     * 字符串掩码常常把"语言位"整片置位（例如 zhCN/enCN/enTW/zhTW 同时为 1），
-     * 但真正写入数据的只有一个槽位，所以掩码只能当"候选集合"，必须再抽样验证。
-     *
-     * 顺序：期望语种 → 同语系 → 英文 → 掩码里其它被置位的槽位 → 全字段抽样。
-     * 注意：客户端 DBC 往往只带一个语种（本站是 zhCN），面板切成英文时
-     * 回退显示 DBC 里的既有语言；数据库来源（任务/物品）仍按面板语言取。
-     *
-     * @param array{idField:int, nameField:int, maskField:int, order:string[]} $spec
+     * 字符串掩码常常把"语言位"整片置位（例如 zhCN/enCN/enTW/zhTW 同时为 1），但真正写入数据的只有一个
+     * 槽位，所以掩码只能当候选集合，必须再抽样验证：期望语种 → 同语系 → 英文 → 掩码里其它被置位的槽位
+     * → 全字段抽样。客户端 DBC 往往只带一个语种（本站是 zhCN），面板切成英文时回退显示 DBC 里既有的
+     * 语言；数据库来源（任务/物品）仍按面板语言取。
      */
     private static function dbcLocaleOffset(DbcReader $reader, array $spec, string $wanted): int
     {
@@ -589,7 +544,6 @@ final class GameNameResolver
 
     /**
      * 取一条掩码非零记录的字符串掩码值。
-     *
      * @param array{idField:int, nameField:int, maskField:int, order:string[]} $spec
      */
     private static function sampleLocaleMask(DbcReader $reader, array $spec): ?int
@@ -613,9 +567,7 @@ final class GameNameResolver
         return null;
     }
 
-    /**
-     * 抽样判断某个字段是否真的有字符串数据。
-     */
+    /** 抽样判断某个字段是否真的有字符串数据。 */
     private static function slotHasData(DbcReader $reader, int $field, int $sampleSize = 200): bool
     {
         if ($field < 0 || $field >= $reader->fieldCount()) {
@@ -639,7 +591,6 @@ final class GameNameResolver
 
     /**
      * 语种优先顺序：期望语种 → 同语系 → 英文 → 任意。
-     *
      * @return string[]
      */
     private static function dbcLocalePreference(string $wanted): array
@@ -655,9 +606,7 @@ final class GameNameResolver
         return array_values(array_unique(array_merge($preference, self::DBC_LOCALE_ORDER)));
     }
 
-    /**
-     * 面板语言期望的 DBC 语种。
-     */
+    /** 面板语言期望的 DBC 语种。 */
     private static function wantedDbcLocale(): string
     {
         $locale = self::localeKey();
@@ -676,9 +625,7 @@ final class GameNameResolver
         };
     }
 
-    /**
-     * 定位客户端 DBC 目录：优先配置，其次按已安装的 release/<realm>/Data/dbc 推断。
-     */
+    /** 定位客户端 DBC 目录：优先配置，其次按已安装的 release/<realm>/Data/dbc 推断。 */
     private static function dbcDirectory(): string
     {
         static $resolved = null;
@@ -723,9 +670,7 @@ final class GameNameResolver
         return $resolved;
     }
 
-    /**
-     * 面板所在服务器根目录（AGMP 的上级目录），用于推断 release/<realm>/Data。
-     */
+    /** 面板所在服务器根目录（AGMP 的上级目录），用于推断 release/<realm>/Data。 */
     private static function serverRoot(): string
     {
         $configured = trim((string) Config::get('app.server_root', ''));
@@ -736,9 +681,6 @@ final class GameNameResolver
         return dirname(__DIR__, 4);
     }
 
-    // ------------------------------------------------------------------
-    // 上下文
-    // ------------------------------------------------------------------
 
     private static function serverId(): int
     {

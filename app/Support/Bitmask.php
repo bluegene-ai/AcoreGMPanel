@@ -2,12 +2,6 @@
 /**
  * File: app/Support/Bitmask.php
  * Purpose: Defines class Bitmask for the app/Support module.
- * Classes:
- *   - Bitmask
- * Functions:
- *   - has()
- *   - set()
- *   - diff()
  */
 
 namespace Acme\Panel\Support;

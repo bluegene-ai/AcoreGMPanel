@@ -2,16 +2,6 @@
 /**
  * File: app/Core/Controller.php
  * Purpose: Defines class Controller for the app/Core module.
- * Classes:
- *   - Controller
- * Functions:
- *   - view()
- *   - json()
- *   - getPost()
- *   - getQuery()
- *   - requireLogin()
- *   - redirect()
- *   - response()
  */
 
 namespace Acme\Panel\Core;
@@ -120,11 +110,8 @@ abstract class Controller
     }
 
     /**
-     * 归一化布尔开关。
-     *
-     * 请求体可能是表单（'1'/'0'）、JSON（true/false）或前端 FormData（'true'/'false'），
-     * 所以统一交给 Request::bool() 判断。只写 (int) $value === 1 的话，前端传布尔值
-     * 时 'true' 会被当成 false——"启用"这类操作会被静默写成 0。
+     * 归一化布尔开关。请求体可能是表单（'1'/'0'）、JSON（true/false）或 FormData（'true'/'false'），
+     * 统一交给 Request::bool() 判断；只写 (int) $value === 1 会让 'true' 被当成 false，把"启用"静默写成 0。
      */
     protected function normalizedBoolFlag(Request $request, string $key): bool
     {

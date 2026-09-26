@@ -1,32 +1,6 @@
 /**
  * File: public/assets/js/modules/quest.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - questNotify()
- *   - resolveModal()
- *   - openModal()
- *   - hideModal()
- *   - hideAllModals()
- *   - refreshQuestLogs()
- *   - setupListPage()
- *   - setupEditPage()
- *   - countDirtyFields()
- *   - updateSqlAndCount()
- *   - highlightDirty()
- *   - updateTabDirtyIndicators()
- *   - bindValueChange()
- *   - applyRemoteRow()
- *   - showExecStatus()
- *   - updateMiniDiff()
- *   - escapeHtml()
- *   - buildGroupsUI()
- *   - initEnums()
- *   - initBitmasks()
- *   - qs()
- *   - qsa()
- *   - apiGet()
- *   - apiPost()
  */
 
 (function(){

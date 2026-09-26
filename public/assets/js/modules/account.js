@@ -1,32 +1,6 @@
 /**
  * File: public/assets/js/modules/account.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - esc()
- *   - el()
- *   - urlWithServer()
- *   - bodyWithServer()
- *   - request()
- *   - flash()
- *   - showModal()
- *   - closeModal()
- *   - isPrivateIp()
- *   - fetchIpLocation()
- *   - fillIpLocations()
- *   - formatDateTime()
- *   - formatBanDuration()
- *   - reloadAccountTable()
- *   - doCharacters()
- *   - doSetGm()
- *   - doBan()
- *   - doUnban()
- *   - doChangePass()
- *   - doCreateAccount()
- *   - doSameIpAccounts()
- *   - promise()
- *   - startPolling()
- *   - showError()
  */
 
 (function(){
@@ -172,8 +146,7 @@
 		const markup = `<div class="modal-backdrop"><div class="modal-panel"><header><h3>${esc(title)}</h3><button class="modal-close" aria-label="close">&times;</button></header><div class="modal-body"></div><div class="modal-footer modal-footer-right"></div></div></div>`;
 		const wrapper = el(markup);
 		wrapper.querySelector('.modal-body').innerHTML = contentHtml;
-		// Only close via the explicit close button; do not close on backdrop clicks.
-		// This prevents accidental closes while typing (e.g. IME / stray clicks).
+		// 只在点击关闭按钮时关闭，点遮罩不关闭：避免输入过程中误关（输入法回车/误点）
 		wrapper.addEventListener('click', event => {
 			const target = event.target;
 			if(target && target.classList && target.classList.contains('modal-close')){
@@ -193,16 +166,14 @@
 	}
 
 	/**
-	 * 在弹窗底部追加一个跳转链接（跨模块导航用，例如"到角色管理看该账号的角色"）。
-	 * 已存在时只更新 href/label，避免重复叠加。
+	 * 在弹窗底部追加跳转链接（跨模块导航，例如"到角色管理看该账号的角色"）；已存在时只更新 href/label，避免叠加。
 	 */
 	function appendModalFooterLink(modal, path, label){
 		if(!modal) return null;
 		const footer = modal.querySelector('.modal-footer');
 		if(!footer) return null;
 
-		// window.APP_BASE is never published by the server; Panel.url() prepends the
-		// real base path (data-app-base on <body>).
+		// window.APP_BASE 不存在；基路径由 Panel.url() 补（来自 <body data-app-base>）
 		const base = (window.Panel && typeof window.Panel.basePath === 'function')
 			? window.Panel.basePath()
 			: ((document.body && document.body.dataset ? document.body.dataset.appBase : '') || '').replace(/\/$/, '');
@@ -388,9 +359,8 @@
 			};
 
 			/**
-			 * 行内操作条：与 account/index.php 的服务端渲染保持完全一致的归组规则 ——
-			 * 每行只平铺"角色 / 封禁"两个高频操作，其余低频与危险操作收进"更多"菜单。
-			 * 两边都输出 button.action[data-action]，由同一个 document 级委托处理。
+			 * 行内操作条：归组规则与 account/index.php 的服务端渲染保持一致 —— 只平铺"角色 / 封禁"，
+			 * 其余收进"更多"菜单；两边都输出 button.action[data-action]，由同一个 document 级委托处理。
 			 */
 			const rowActionBarHtml = (inline, menu) => {
 				const button = (item) => {
@@ -1191,8 +1161,7 @@
 			gmLevel = row.dataset.gm;
 			lastIp = row.dataset.lastIp || '';
 		} else {
-			// 浮层态：菜单已被移到 <body> 下，按钮不再是 <tr> 的后代。
-			// 行标识由 openRowMenu() 快照在列表元素上。
+			// 浮层态：菜单已移到 <body> 下，按钮不再是 <tr> 的后代；行标识由 openRowMenu() 快照在列表上。
 			const list = button.closest('.row-menu__list');
 			if(!list) return;
 			id = parseInt(list.dataset.accountId, 10);
@@ -1260,18 +1229,9 @@
 	});
 
 	/**
-	 * 行内"更多"菜单的浮层定位。
-	 *
-	 * 原因：.row-menu__list 是 position:absolute，而外层容器链上存在
-	 * .app-shell-panel{overflow:hidden}（还有 .app-shell-panel > *{z-index:1}），
-	 * 因此菜单会被页面框架直接裁掉——表格越靠下越明显。
-	 *
-	 * 解法：打开时把菜单临时挂到 <body> 下并改用 position:fixed，按触发按钮的
-	 * 位置计算坐标；关闭（toggle / 点击别处 / Esc）时放回 <details> 内。这样不需要
-	 * 改动 overflow，面板的装饰性光晕仍按原样裁剪。
-	 *
-	 * 目前只有账号页使用 .row-menu（服务端渲染 + 本模块渲染各一处），所以先放在
-	 * 本模块内；若后续其他模块也用，再提取到 panel.js 作为公共能力。
+	 * 行内"更多"菜单的浮层定位：.row-menu__list 是 absolute，而外层 .app-shell-panel
+	 * {overflow:hidden} 会把它直接裁掉；所以打开时挂到 <body> 下改 position:fixed，
+	 * 关闭（toggle / 点击别处 / Esc）时放回 <details>，不必改动 overflow。
 	 */
 	function isRowMenuListVisible(list){
 		return !!list && !list.hidden && list.style.display !== 'none';
@@ -1279,9 +1239,8 @@
 
 	function placeRowMenu(details, list, measured){
 		const summary = details.querySelector('summary');
-		// The list may already have been moved to <body> (that is the whole point
-		// of the portal), so accept it as an argument instead of re-querying the
-		// <details> — otherwise this silently returns without positioning.
+		// list 可能已被移到 <body>（portal 的全部意义），所以按参数接收而不是重查 <details>，
+		// 否则这里会静默返回、不做定位。
 		if(!list) list = details.querySelector('.row-menu__list');
 		if(!summary || !list) return;
 
@@ -1307,10 +1266,8 @@
 	}
 
 	/**
-	 * 把浮层态还原回 <details> 内的默认绝对定位。
-	 *
-	 * 必须接收 list 引用：浮层打开时它挂在 <body> 下，此时
-	 * details.querySelector('.row-menu__list') 已经找不到它（与 placeRowMenu 同一坑）。
+	 * 把浮层态还原回 <details> 内的默认绝对定位。必须接收 list 引用：浮层期间它挂在
+	 * <body> 下，details.querySelector('.row-menu__list') 已找不到它（与 placeRowMenu 同一坑）。
 	 */
 	function restoreRowMenuList(details, list){
 		if(!list) list = details.querySelector('.row-menu__list');
@@ -1342,9 +1299,8 @@
 		const list = details.querySelector('.row-menu__list');
 		if(!list) return;
 
-		// 浮层期间按钮不再位于 <tr> 内，`button.closest('tr')` 会返回 null，
-		// 导致所有菜单操作静默失效。所以打开时把所属行的标识快照到列表上，
-		// 由点击委托回退读取（见文件下方的 button.action 处理器）。
+		// 浮层期间按钮不在 <tr> 内，button.closest('tr') 返回 null 会让所有菜单操作静默失效，
+		// 所以打开时把所属行标识快照到列表上，由点击委托回退读取。
 		const row = details.closest('tr');
 		if(row){
 			list.dataset.accountId = row.dataset.id || '';
@@ -1362,12 +1318,10 @@
 		list.style.display = 'flex';
 		list.style.visibility = 'hidden';
 
-		// 先入 <body> 再量尺寸：在 <details> 内它是被子元素撑开的，量不出菜单
-		// 应有的宽度；fixed 定位后才是它在视口中的真实尺寸。
+		// 先入 <body> 再量尺寸：在 <details> 内它是被子元素撑开的，量不出菜单应有的宽度
 		document.body.appendChild(list);
 
-		// 强制一次布局，确保离屏尺寸已可读；若环境未刷新布局则回退到菜单
-		// 已知的常用宽度，避免用 0 造成定位错乱。
+		// 强制一次布局，确保离屏尺寸已可读；读不到时回退到菜单常用宽度，避免用 0 导致定位错乱
 		const offsetWidth = list.offsetWidth;
 		const rect = list.getBoundingClientRect();
 		const measured = {
@@ -1411,9 +1365,8 @@
 			if(event.key === 'Escape') closeAllRowMenus(null);
 		});
 
-		// 浮层脱离文档流后需要跟随滚动/缩放重新定位。
-		// 注意：不能再用 details.querySelector('.row-menu__list') 取回列表——浮层期间
-		// 它挂在 <body> 下，details 内已查不到（会拿到 null 而抛错）。用打开时记录的引用。
+		// 浮层脱离文档流后要跟随滚动/缩放重新定位；只能用打开时记录的引用，
+		// 不能再 details.querySelector('.row-menu__list')（浮层期间它在 <body> 下，会拿到 null 抛错）。
 		const reposition = () => {
 			document.querySelectorAll('details.row-menu[open]').forEach(details => {
 				const list = details.__openRowMenuList || details.querySelector('.row-menu__list');

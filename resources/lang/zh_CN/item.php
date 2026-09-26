@@ -297,6 +297,7 @@ return array (
       'title' => '实时差异 SQL 预览',
       'full_mode' => '输出全部列',
       'hint' => '修改表单字段后会自动生成 UPDATE 语句。差异模式仅列出变更列，全量模式输出全部列；超过 200 字的文本会截断并标注。',
+      'hint_short' => '差异 SQL 只列出改动列，空字符串转 NULL。',
       'placeholder' => '-- 暂无变更 --',
       'exec_title' => '执行结果',
       'sample_title' => '示例行 / 变更预览',

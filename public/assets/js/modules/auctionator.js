@@ -1,13 +1,9 @@
 /**
- * mod-auctionator (拍卖机器人) management page.
+ * mod-auctionator（拍卖机器人）管理页：请求 /auctionator/api/{status,config,item,action,power}，
+ * 写入走 Panel.api（带 CSRF 与基路径），成功后刷新页面以免服务端快照过期。
  *
- * Talks to /auctionator/api/{status,config,item,action,power}. Every POST goes through
- * Panel.api (csrf + base path aware); the page reloads after a successful write so the
- * server-rendered snapshot is never stale.
- *
- * /auctionator/api/power is the per-realm master switch: it writes this realm's own
- * mod_auctionator.conf and sends ".auctionator start|stop" to this realm's worldserver,
- * so one realm's bot starts or stops without touching the other realms.
+ * /auctionator/api/power 是单区总开关：只写本区 mod_auctionator.conf 并向本区 worldserver 发
+ * ".auctionator start|stop"，不影响其它区。
  */
 (function () {
   if (document.body.dataset.module !== 'auctionator') return;
@@ -87,7 +83,7 @@
     if (dom.output) dom.output.textContent = text && String(text).trim() !== '' ? String(text) : t('actions.output_empty', '(no output)');
   }
 
-  // ------------------------------------------------------------------ tabs
+  // ---- tabs ----
   function activateTab(name, pushHash) {
     dom.tabs.forEach(function (tab) {
       const active = tab.dataset.auTab === name;
@@ -111,7 +107,7 @@
     activateTab(initialTab, false);
   }
 
-  // ------------------------------------------------------------------ settings
+  // ---- settings ----
   function collectFields() {
     const fields = {};
     document.querySelectorAll('[data-au-field]').forEach(function (node) {
@@ -147,7 +143,7 @@
     });
   }
 
-  // ------------------------------------------------------------------ item policy
+  // ---- item policy ----
   function policyPayload(source) {
     const payload = { action: source.dataset.auPolicy || '' };
     if (source.dataset.auItem !== undefined) payload.item = source.dataset.auItem;
@@ -231,12 +227,10 @@
     });
   });
 
-  // ------------------------------------------------------------------ listing mode + price preview
+  // ---- listing mode + price preview ----
   /**
-   * Both GM listing surfaces (the addlist pick-list form and the ".auctionator add" form) take a
-   * mode plus two UNIT prices, and the mode decides which of them the module uses. So the fields
-   * follow the chosen mode and the preview spells out the whole-stack prices that will actually be
-   * listed - "unit price x stack" is exactly what used to be ambiguous.
+   * 两种 GM 上架入口（addlist 表单与 ".auctionator add"）都用"模式 + 两个单价"，模式决定用哪个单价，
+   * 所以字段跟着模式切换，预览要写出整组价格（单价 × 堆叠）。
    */
   function copperText(value) {
     const copper = Math.max(0, Math.floor(Number(value) || 0));
@@ -267,8 +261,7 @@
     const stackInput = form.querySelector('[name="stack"]');
     const preview = form.querySelector('[data-au-listing-preview]');
 
-    // A fixed price has no start bid of its own (the module pins it to the buyout), so the
-    // field is hidden and must not block the submit with a stale `required`.
+    // 固定价没有自己的起拍价（模块把它钉在买断价），字段被隐藏后不能再用 required 挡住提交
     if (bidWrap) bidWrap.hidden = !bidMode;
     if (bidInput) bidInput.required = bidMode;
     if (priceInput) priceInput.required = buyoutMode;
@@ -319,7 +312,7 @@
     syncListingForm(form);
   });
 
-  // ------------------------------------------------------------------ GM actions
+  // ---- GM actions ----
   function actionExtraFields() {
     const extra = {};
     document.querySelectorAll('[data-au-action-field]').forEach(function (node) {
@@ -358,7 +351,7 @@
     });
   });
 
-  // ------------------------------------------------------------------ master switch (this realm)
+  // ---- master switch (this realm) ----
   async function runPower(enable) {
     const confirmMessage = t(enable ? 'confirm.power_start' : 'confirm.power_stop', '');
     if (confirmMessage && !window.confirm(confirmMessage)) return;
@@ -389,11 +382,10 @@
     });
   });
 
-  // ------------------------------------------------------------------ buyout mode (this realm)
+  // ---- buyout mode (this realm) ----
   /**
-   * The quick buyout switch is the master switch's twin: it writes Auctionator.Seller.BidOnly into
-   * this realm's conf (so the choice survives a restart) and sends ".auctionator buyout 0|1" so the
-   * seller follows it on its very next run. Note the inversion - buyout OFF means BidOnly = 1.
+   * 快速买断开关是总开关的孪生体：把 Auctionator.Seller.BidOnly 写进本区 conf（重启后仍生效）并发
+   * ".auctionator buyout 0|1"（卖家下一次运行即生效）。注意是反向的：buyout 关闭 = BidOnly 1。
    */
   async function runBuyout(enable) {
     const confirmMessage = t(enable ? 'confirm.buyout_enable' : 'confirm.buyout_disable', '');
@@ -428,9 +420,8 @@
   if (dom.addForm) {
     dom.addForm.addEventListener('submit', function (event) {
       event.preventDefault();
-      // The form owns house/mode/price/... for this action. runAction merges the page-wide
-      // [data-au-action-field] values first and this payload last, so the form wins for the
-      // keys they share (house) - the shared field is only there for addlist/expireall.
+      // runAction 先合并页面级 [data-au-action-field]，再叠加本表单 payload，冲突时表单优先（house）：
+      // 那些共享字段只是给 addlist/expireall 兜底的。
       runAction('add', formPayload(dom.addForm, 'add'));
     });
   }

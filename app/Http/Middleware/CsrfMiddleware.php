@@ -2,11 +2,6 @@
 /**
  * File: app/Http/Middleware/CsrfMiddleware.php
  * Purpose: Defines class CsrfMiddleware for the app/Http/Middleware module.
- * Classes:
- *   - CsrfMiddleware
- * Functions:
- *   - __construct()
- *   - handle()
  */
 
 namespace Acme\Panel\Http\Middleware;

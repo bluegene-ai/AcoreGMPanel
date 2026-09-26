@@ -2,15 +2,6 @@
 /**
  * File: app/Core/ItemFlags.php
  * Purpose: Defines class ItemFlags for the app/Core module.
- * Classes:
- *   - ItemFlags
- * Functions:
- *   - regular()
- *   - extra()
- *   - custom()
- *   - namesForMask()
- *   - labelString()
- *   - translate()
  */
 
 namespace Acme\Panel\Core;

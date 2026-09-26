@@ -1,16 +1,13 @@
 <?php
 /**
  * File: app/Support/DbcReader.php
- * Purpose: Minimal read-only reader for Blizzard WDBC files (used to resolve
- *          faction / skill / spell / achievement names offline).
+ * Purpose: Minimal read-only reader for Blizzard WDBC files (resolves faction / skill / spell /
+ * achievement names offline).
  *
- * WDBC 布局：
- *   头部 20 字节：magic "WDBC" + records(uint32) + fields(uint32)
- *                 + recordSize(uint32) + stringBlockSize(uint32)
- *   记录区：records * recordSize，每条记录是 fields 个 uint32
- *   字符串块：recordSize 里取到的偏移量指向这里的以 \0 结尾的字符串
- *
- * 只做只读解析，不依赖任何扩展；文件不可用时返回 null，调用方回退显示原始 ID。
+ * WDBC layout: 20-byte header (magic "WDBC" + records + fields + recordSize + stringBlockSize), then
+ * records * recordSize bytes (each record = fields uint32), then a string block addressed by offsets
+ * taken from the record. Read-only, no extension; an unreadable file returns null and the caller falls
+ * back to the raw ID.
  */
 
 declare(strict_types=1);
@@ -41,8 +38,7 @@ final class DbcReader
             return null;
         }
 
-        // 注意：unpack 的字段名必须与后面读取的键一致（WDBC 头部第 4/5 个字段是
-        // recordSize / stringSize），写错名字会静默得到 null
+        // unpack field names must match the keys read below (WDBC header fields 4/5 are recordSize / stringSize); a typo silently yields null
         $header = unpack('a4magic/Vrecords/Vfields/Vrecsize/Vstrsize', substr($raw, 0, 20));
         if ($header === false || ($header['magic'] ?? '') !== 'WDBC') {
             return null;
@@ -89,7 +85,6 @@ final class DbcReader
 
     /**
      * 按需读取记录，只解出 $fieldIndexes 指定的字段，避免为 5 万条记录生成完整数组。
-     *
      * @param int[] $fieldIndexes
      * @return iterable<int, array<int, int>> 每条记录返回 fieldIndex => uint32 值
      */
@@ -118,9 +113,7 @@ final class DbcReader
             yield $record => $out;
         }    }
 
-    /**
-     * 从字符串块读取以 \0 结尾的字符串。
-     */
+    /** 从字符串块读取以 \0 结尾的字符串。 */
     public function string(int $offset): ?string
     {
         if ($offset <= 0 || $offset >= $this->stringSize) {

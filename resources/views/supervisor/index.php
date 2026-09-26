@@ -19,6 +19,7 @@ $capabilities = $__pageCapabilities ?? [
 ];
 $__pageCapabilities = $capabilities;
 $capabilityNotice = ($capabilities['control'] ?? false) ? null : __('app.common.capabilities.read_only');
+$__pageHeader['intro_hint'] = __('app.supervisor.intro');
 
 $supervisorRunning = (bool) ($state['running'] ?? false);
 $toneClass = static function (string $tone): string {
@@ -41,12 +42,9 @@ $formatDuration = static function (?int $seconds): string {
     return sprintf('%dm%02ds', $minutes, $secs);
 };
 /**
- * Why the heartbeat timeout is what it is, and how fast the line really appears.
- *
- * The supervisor raises the effective timeout to max(configured, RecordUpdateTimeDiffInterval + 120s)
- * so a server whose world loop writes the line every few minutes is not declared dead. Without the
- * configured value and the cadence next to it, that auto-raise looks like the panel is showing the
- * wrong number (2026-09-23: a healthy server was killed by a timeout shorter than its cadence).
+ * 心跳超时为什么是这个值、这一行实际多久出现一次：supervisor 会把有效超时提高到
+ * max(configured, RecordUpdateTimeDiffInterval + 120s)，避免世界循环较慢的服务器被判死；
+ * 所以要连着显示配置值与实测节奏，否则自动抬高看起来就像面板显示了错的数字。
  */
 $heartbeatNote = static function (array $service): string {
     $effective = (int) ($service['heartbeat_timeout_seconds'] ?? 0);
@@ -67,9 +65,8 @@ $heartbeatNote = static function (array $service): string {
     return implode(' · ', $bits);
 };
 /**
- * Where a resolved path came from: the panel config, the supervisor's own ini, a file found in the
- * directory, or the built-in default name. A renamed status/control file looks exactly like a
- * "supervisor not running" until you can see which of those applied.
+ * 解析出的路径来自哪里：面板配置 / supervisor 自己的 ini / 目录里找到的文件 / 内置默认名。
+ * 状态或控制文件被改过名时，看起来和"supervisor 没在运行"一模一样。
  */
 $sourceBadge = static function (array $diagnostics, string $key): string {
     $source = (string) ($diagnostics['file_sources'][$key] ?? '');
@@ -151,9 +148,8 @@ $sourceBadge = static function (array $diagnostics, string $key): string {
 </div>
 
 <?php
-// The status file must belong to the supervisor described by <dir>/supervisor.ini. A different
-// InstanceName means the folder (or status_file) points at ANOTHER realm's supervisor - and the
-// page would happily show that realm as running.
+// 状态文件必须属于 <dir>/supervisor.ini 描述的那个 supervisor：InstanceName 不同说明这个目录
+// （或 status_file）指向另一个区的 supervisor —— 而页面会照样把那个区显示成"运行中"。
 $instanceCheck = is_array($state['instance_check'] ?? null) ? $state['instance_check'] : null;
 $iniInfo = is_array($state['ini'] ?? null) ? $state['ini'] : [];
 ?>
@@ -168,8 +164,7 @@ $iniInfo = is_array($state['ini'] ?? null) ? $state['ini'] : [];
 <?php endif; ?>
 
 <?php
-// Two panel instances pointing at the same supervisor directory would show (and control) the same
-// realm twice - one acore_supervisor.exe per worldserver+authserver, so that is always a mistake.
+// 两个面板实例指向同一个 supervisor 目录会把同一个区显示（并控制）两次：一个 worldserver+authserver 只有一个 supervisor。
 $dirGroups = [];
 foreach ($instances as $instanceRow) {
     $instanceDir = trim((string) ($instanceRow['dir'] ?? ''));
@@ -205,15 +200,13 @@ $dirCollisions = array_filter($dirGroups, static fn (array $labels): bool => cou
 <?php endif; ?>
 
 <?php
-// Why the panel cannot see the supervisor: the directories it tried and the two ways to point it
-// at the real one. A production deployment commonly keeps the supervisor outside the web root,
-// and without this the page only said "supervisor directory not found" (see the usage doc 2.10).
+// 面板为什么看不到 supervisor：它试过哪些目录，以及指向真实位置的两种办法。生产部署常把
+// supervisor 放在 web 根之外，没有这段时页面只会说"supervisor directory not found"。
 $diagnostics = is_array($state['diagnostics'] ?? null) ? $state['diagnostics'] : null;
 $pathExample = __('app.supervisor.diagnostics.placeholder_dir');
 if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
-    // prefer a directory that really holds the supervisor / its ini; the second loop deliberately
-    // does NOT fall back to "any existing directory" - that example would send people to a path
-    // that cannot work, and the placeholder tells them to fill in the real one
+    // 优先选真正放着 supervisor / ini 的目录；第二个循环故意不回退到"任何已存在的目录" ——
+    // 那个示例会把人送到一个不可能工作的路径，占位符会提示填真实路径。
     foreach ($diagnostics['candidates'] as $candidate) {
         if (($candidate['has_exe'] ?? false) || ($candidate['has_ini'] ?? false)) {
             $pathExample = (string) ($candidate['path'] ?? $pathExample);
@@ -227,10 +220,10 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
   <header class="sv-panel__head">
     <h3><?= htmlspecialchars(__('app.supervisor.diagnostics.title')) ?></h3>
   </header>
-  <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro')) ?></p>
+  <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.intro')) ?>">i</span></p>
   <?php if (($diagnostics['ini_conflicts'] ?? []) !== []): ?>
     <div class="sv-notice sv-notice--error">
-      <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title')) ?>
+      <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title')) ?>">i</span>
       <ul class="sv-muted sv-small">
         <?php foreach ((array) $diagnostics['ini_conflicts'] as $conflictKey => $conflictPair): ?>
           <?php
@@ -298,7 +291,7 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
           : __('app.supervisor.diagnostics.open_basedir_empty')) ?></dd></div>
   </dl>
   <?php if ((string) ($diagnostics['open_basedir'] ?? '') !== ''): ?>
-    <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning')) ?></div>
+    <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning')) ?>">i</span></div>
   <?php endif; ?>
 
   <table class="table">
@@ -332,9 +325,9 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
   <div class="sv-notice">
     <strong><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_title')) ?></strong>
     <?php if (($state['reason'] ?? '') === 'dir_missing'): ?>
-      <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured')) ?></div>
+      <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured')) ?>">i</span></div>
     <?php endif; ?>
-    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint')) ?></div>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint')) ?>">i</span></div>
     <ol class="sv-muted sv-small">
       <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_config', ['file' => (string) ($diagnostics['override_file'] ?? 'config/generated/supervisor.php')])) ?>
         <pre>return [
@@ -343,7 +336,7 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
       </li>
       <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_env', ['var' => (string) ($diagnostics['env_var'] ?? '')])) ?></li>
     </ol>
-    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note')) ?></div>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note')) ?>">i</span></div>
   </div>
 </section>
 <?php endif; ?>
@@ -379,8 +372,7 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
         <dd data-sv-field="uptime"><?= htmlspecialchars($formatDuration((int) ($service['uptime_seconds'] ?? 0))) ?></dd></div>
       <div><dt><?= htmlspecialchars(__('app.supervisor.fields.heartbeat')) ?></dt>
         <dd data-sv-field="heartbeat">
-          <?php // the live updater writes into these spans; overwriting the whole cell would drop
-                // the timeout and the explanation on the first poll (see supervisor.js) ?>
+          <?php // 实时更新器只写这些 span；整格覆写会在第一次轮询时丢掉超时与说明（见 supervisor.js） ?>
           <span data-sv-field="heartbeat_age"><?= htmlspecialchars($heartbeat >= 0
               ? __('app.supervisor.fields.heartbeat_ago', ['seconds' => $heartbeat])
               : __('app.supervisor.fields.not_available')) ?></span>
@@ -411,9 +403,8 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
       <span class="sv-muted sv-small"><?= htmlspecialchars((string) ($service['log_file'] ?? '')) ?></span>
     </div>
     <?php
-      // A service this supervisor does not run (Enabled = false in its ini, e.g. the shared
-      // authserver owned by another realm) gets NO control buttons: naming it in a command would
-      // start a second copy of a service that another supervisor owns.
+      // 本 supervisor 不跑的服务（ini 里 Enabled=false，例如由别的区托管的共享 authserver）不给任何控制按钮：
+      // 点名会启动一份属于另一个 supervisor 的服务副本。
       $serviceEnabled = (bool) ($service['enabled'] ?? true);
     ?>
     <?php if (($capabilities['control'] ?? false) && $serviceEnabled): ?>

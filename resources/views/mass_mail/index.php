@@ -110,7 +110,7 @@
             </div>
           </div>
 
-          <div class="massmail-hint muted small"><?= __('app.mass_mail.index.sections.send.items_hint') ?></div>
+          <div class="massmail-hint muted small"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint')) ?>">i</span></div>
         </div>
         <div class="massmail-field massmail-cond" data-for="send_gold|send_item_gold">
           <label for="goldAmount"><?= __('app.mass_mail.index.sections.send.gold_label') ?></label>

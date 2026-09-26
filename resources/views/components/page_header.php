@@ -6,7 +6,9 @@
 
 $__pageHeader = is_array($__pageHeader ?? null) ? $__pageHeader : [];
 $__pageHeaderIntro = trim((string)($__pageHeader['intro'] ?? ''));
+$__pageHeaderIntroHint = trim((string)($__pageHeader['intro_hint'] ?? ''));
 $__pageHeaderNote = trim((string)($__pageHeader['note'] ?? ''));
+$__pageHeaderNoteHint = trim((string)($__pageHeader['note_hint'] ?? ''));
 $__pageHeaderActions = is_array($__pageHeader['actions'] ?? null) ? $__pageHeader['actions'] : [];
 
 if ($__pageHeaderIntro === '' && $__pageHeaderNote === '' && $__pageHeaderActions === []) {
@@ -16,10 +18,16 @@ if ($__pageHeaderIntro === '' && $__pageHeaderNote === '' && $__pageHeaderAction
 <div class="page-header">
   <div class="page-header__main">
     <?php if ($__pageHeaderIntro !== ''): ?>
-      <p class="page-header__intro muted"><?= htmlspecialchars($__pageHeaderIntro) ?></p>
+      <p class="page-header__intro muted">
+        <?= htmlspecialchars($__pageHeaderIntro) ?>
+        <?php if ($__pageHeaderIntroHint !== ''): ?><span class="panel-hint" title="<?= htmlspecialchars($__pageHeaderIntroHint) ?>">i</span><?php endif; ?>
+      </p>
     <?php endif; ?>
     <?php if ($__pageHeaderNote !== ''): ?>
-      <div class="page-header__note muted"><?= htmlspecialchars($__pageHeaderNote) ?></div>
+      <div class="page-header__note muted">
+        <?= htmlspecialchars($__pageHeaderNote) ?>
+        <?php if ($__pageHeaderNoteHint !== ''): ?><span class="panel-hint" title="<?= htmlspecialchars($__pageHeaderNoteHint) ?>">i</span><?php endif; ?>
+      </div>
     <?php endif; ?>
   </div>
   <?php if ($__pageHeaderActions !== []): ?>

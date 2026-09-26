@@ -2,40 +2,6 @@
 /**
  * File: app/Domain/Quest/QuestRepository.php
  * Purpose: Defines class QuestRepository for the app/Domain/Quest module.
- * Classes:
- *   - QuestRepository
- * Functions:
- *   - __construct()
- *   - questInfoLabelOverrides()
- *   - repoMessage()
- *   - repoError()
- *   - validColumns()
- *   - questInfoOptions()
- *   - questInfoFallback()
- *   - firstQuestId()
- *   - search()
- *   - enrichListRows()
- *   - loadQuestXpByLevel()
- *   - loadItemSummaries()
- *   - loadQuestInfoLabels()
- *   - resolveQuestXp()
- *   - formatMoney()
- *   - buildRewardItems()
- *   - describeItem()
- *   - isMissingTable()
- *   - find()
- *   - create()
- *   - delete()
- *   - updatePartial()
- *   - execLimitedSql()
- *   - shortVal()
- *   - logsDir()
- *   - appendDeletedLog()
- *   - appendSqlLog()
- *   - currentUser()
- *   - tailLog()
- *   - parseLogLine()
- *   - rowHash()
  */
 
 namespace Acme\Panel\Domain\Quest;

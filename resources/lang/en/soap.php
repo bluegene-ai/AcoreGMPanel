@@ -8,6 +8,7 @@ return array (
   array (
     'title' => 'Select a command',
     'hint' => 'Choose a category and command on the left. Use search to filter, and switch realms through the top dropdown.',
+    'hint_short' => 'Pick a command, fill params, then run.',
   ),
   'target_hint' => 'Requires selecting a target in-game before executing.',
   'steps' => 

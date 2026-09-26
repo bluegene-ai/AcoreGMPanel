@@ -1,20 +1,12 @@
 <?php
 /**
  * File: app/Support/ContentLink.php
- * Purpose: Builds deep links from a game content id to that content's management
- *          screen, so any list that shows a raw entry can link into the editor
- *          instead of forcing the operator to copy the id and search for it.
+ * Purpose: Builds deep links from a game content id to that content's management screen, so any list
+ * that shows a raw entry can link into the editor instead of forcing the operator to copy the id.
  *
- * Both target screens are pure-GET list pages that already open their editor
- * from a query parameter, so a deep link costs ZERO extra database work:
- *   /item?edit_id=<entry>   → ItemController::index  renders the item edit page
- *   /quest?edit_id=<id>     → QuestController::index opens the quest editor
- *
- * The target pages enforce their own `content.view` capability; callers decide
- * whether to render a link at all (see the `$canLink` argument helpers below).
- *
- * Classes:
- *   - ContentLink
+ * Both target screens are pure-GET pages that already open their editor from a query parameter, so a
+ * deep link costs ZERO extra database work (/item?edit_id=<entry>, /quest?edit_id=<id>). The target
+ * pages enforce their own `content.view`; callers decide whether to render a link at all.
  */
 
 declare(strict_types=1);
@@ -26,8 +18,8 @@ use Acme\Panel\Core\Url;
 final class ContentLink
 {
     /**
-     * Character detail page query parameter names, keyed by content type.
-     * Kept here so both the server-rendered markup and the client module agree.
+     * Editor query parameter names, keyed by content type: shared by the server-rendered markup and the
+     * client module.
      */
     private const EDIT_PARAM = [
         'item' => 'edit_id',
@@ -41,8 +33,8 @@ final class ContentLink
     ];
 
     /**
-     * Absolute (base-path aware) URL that opens $id in its editor on the current
-     * realm. Returns null for an unknown type or a non-positive id.
+     * Absolute (base-path aware) URL that opens $id in its editor on the current realm; null for an
+     * unknown type or a non-positive id.
      */
     public static function url(string $type, int $id, ?int $serverId = null): ?string
     {
@@ -54,8 +46,7 @@ final class ContentLink
 
         $query = $path . '?' . http_build_query([$param => $id]);
 
-        // Both helpers come from bootstrap/helpers.php, which this class cannot
-        // assume has been loaded (CLI probes, early bootstrap failures).
+        // these helpers come from bootstrap/helpers.php, which may not be loaded (CLI probes, early bootstrap failures)
         if (function_exists('url_with_server')) {
             return url_with_server($query, $serverId);
         }

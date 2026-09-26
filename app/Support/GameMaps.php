@@ -2,9 +2,7 @@
 /**
  * File: app/Support/GameMaps.php
  * Purpose: Centralized game mapping helpers (race/class/quality/colors/zone).
- *
- * This is a self-contained mapping layer for AGMP.
- * Do NOT depend on external projects/files.
+ * Self-contained mapping layer for AGMP: do NOT depend on external projects/files.
  */
 
 declare(strict_types=1);
@@ -318,9 +316,7 @@ final class GameMaps
         return $fallback ?? (self::isZh() ? ('未知(' . $id . ')') : ('Unknown(' . $id . ')'));
     }
 
-    /**
-     * 性别：0=男 1=女 2=无。字典缺失时回落到 game.fallbacks.gender 文案。
-     */
+    /** 性别：0=男 1=女 2=无。字典缺失时回落到 game.fallbacks.gender 文案。 */
     public static function genderName(int $id): string
     {
         $genders = Lang::getArray('game.genders', []);

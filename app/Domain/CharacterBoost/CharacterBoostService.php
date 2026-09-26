@@ -26,9 +26,7 @@ class CharacterBoostService
         $this->templates->rebind($serverId);
     }
 
-    /**
-     * @return array{character:array<string,mixed>,commands:array<int,array<string,mixed>>}
-     */
+    /** @return array{character:array<string,mixed>,commands:array<int,array<string,mixed>>} */
     public function boostByGuid(int $realmId, int $guid, ?int $templateId, ?int $targetLevel, array $operator): array
     {
         $summary = $this->characters->findSummary($guid);
@@ -104,7 +102,6 @@ class CharacterBoostService
 
     /**
      * 把模板将要发放的物品汇总成 "entry:qty,entry:qty"，用于历史记录。
-     *
      * @param array<string,mixed>|null $template
      */
     private function summarizeTemplateItems(?array $template, int $classId): string
@@ -144,11 +141,8 @@ class CharacterBoostService
 
     /**
      * 只读预览：不发送任何 SOAP 命令，返回将要发放的内容。
-     *
-     * 直升管理页在执行前用它做"这将发放什么"的确认，规则与真正执行完全一致，
+     * 直升管理页在执行前用它确认"这将发放什么"，规则与真正执行完全一致，
      * 避免预览说能升、执行却被守卫拦下。
-     *
-     * @return array<string,mixed>
      */
     public function previewByGuid(int $realmId, int $guid, ?int $templateId, ?int $targetLevel): array
     {
@@ -200,7 +194,6 @@ class CharacterBoostService
 
     /**
      * 解析并校验模板 / 目标等级 / 账号等级要求。
-     *
      * @param array<string,mixed> $summary
      * @return array{template:?array<string,mixed>,target_level:int,account_highest_level:?int}
      */
@@ -254,10 +247,7 @@ class CharacterBoostService
 
     /**
      * 按职业取出模板里的套装奖励（预览用）。
-     *
-     * 复用执行路径上的同一个 resolveClassRewardAttachments()，保证
-     * "预览看到的"和"实际发放的"完全一致。
-     *
+     * 复用执行路径上的同一个 resolveClassRewardAttachments()，保证"预览看到的"与"实际发放的"一致。
      * @param array<string,mixed> $template
      * @return array<int, array{entry:int,quantity:int}>
      */
@@ -281,9 +271,7 @@ class CharacterBoostService
     }
 
     /**
-     * 写一条直升历史。归属直升模块自己的 panel_boost_log 表，
-     * 不再借用群发的 panel_massmail_log。
-     *
+     * 写一条直升历史（直升模块自己的 panel_boost_log 表）。
      * @param array<int, string> $errors
      */
     public function recordHistory(string $characterName, int $level, bool $ok, string $itemSummary, int $quantity, int $moneyCopper, array $errors = []): void

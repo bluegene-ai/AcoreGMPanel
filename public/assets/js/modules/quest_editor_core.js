@@ -1,28 +1,6 @@
 /**
  * File: public/assets/js/modules/quest_editor_core.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - ensureInit()
- *   - cloneDeep()
- *   - isObject()
- *   - isNumeric()
- *   - valuesEqual()
- *   - parsePath()
- *   - getByPath()
- *   - normalizePath()
- *   - setByPath()
- *   - deleteByPath()
- *   - traverseDiff()
- *   - computeDirty()
- *   - getPublicDirty()
- *   - pushUndo()
- *   - withRecordSuspended()
- *   - on()
- *   - off()
- *   - emit()
- *   - diffShallow()
- *   - sqlEscape()
  */
 
 (function(global){

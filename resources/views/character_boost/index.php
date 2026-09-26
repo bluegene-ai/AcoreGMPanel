@@ -3,8 +3,7 @@
  * File: resources/views/character_boost/index.php
  * Purpose: 直升管理统一入口：执行直升、模板概览、兑换码概览、直升历史。
  *
- * 原先"执行直升"散落在角色详情页与群发管理页，这里收敛为唯一入口；
- * 模板与兑换码的增删改仍由各自的子页面负责。
+ * 模板与兑换码的增删改由各自的子页面负责。
  */
 
 use Acme\Panel\Support\Csrf;
@@ -38,7 +37,7 @@ include dirname(__DIR__) . '/components/page_header.php';
   <?php if ($boostCapabilities['apply']): ?>
   <section class="cb-hub__card cb-hub__card--apply">
     <h3 class="cb-section-title"><?= htmlspecialchars(__('app.character_boost.admin.apply.title')) ?></h3>
-    <p class="cb-hub__note muted small"><?= htmlspecialchars(__('app.character_boost.admin.apply.note', ['realm' => (string) $boostRealmId])) ?></p>
+    <p class="cb-hub__note muted small"><?= htmlspecialchars(__('app.character_boost.admin.apply.note_short', ['realm' => (string) $boostRealmId])) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character_boost.admin.apply.note', ['realm' => (string) $boostRealmId])) ?>">i</span></p>
 
     <form
       id="boostApplyForm"
@@ -85,7 +84,7 @@ include dirname(__DIR__) . '/components/page_header.php';
         <button class="btn success" type="submit" id="boostApplySubmit"><?= htmlspecialchars(__('app.character_boost.admin.actions.apply')) ?></button>
       </div>
 
-      <p class="cb-help"><?= htmlspecialchars(__('app.character_boost.admin.apply.hint')) ?></p>
+      <p class="cb-help"><?= htmlspecialchars(__('app.character_boost.admin.apply.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character_boost.admin.apply.hint')) ?>">i</span></p>
     </form>
 
     <div id="boostApplyPreviewBox" class="cb-preview" hidden>

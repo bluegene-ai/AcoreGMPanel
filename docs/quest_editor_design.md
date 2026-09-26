@@ -1,39 +1,38 @@
-# Quest Editor Refactor Design
+# Quest Editor Design
 
-*Objective: deliver a Keira3-level quest editor inside the panel, covering multi-table quest authoring with coherent UX and transactional backend saves.*
+覆盖多表任务编辑（`quest_template` + 子表），带一致性 UX 与事务化保存。
 
 ## Functional Scope (MVP)
 
-1. **Quest core (`quest_template`)** – expose all columns, grouped into digestible sections (general, progression, flags, rewards, internal).
-2. **Quest addon (`quest_template_addon`)** – support create/update/delete record linked by `ID`.
-3. **Narrative blocks** – manage `quest_details`, `quest_request_items`, and `quest_offer_reward` (text fields, emotes, cinematic IDs).
-4. **Objectives** – CRUD for `quest_objectives` (multiple rows with type/asset/amount/special data) and ensure numbering continuity.
-5. **Rewards** – manage `quest_reward_choice_item`, `quest_reward_item`, `quest_reward_currency`, and reputation gains. Mirror Keira3 grouping (choice rewards vs. guaranteed vs. currency/honor/talents).
-6. **Starters / Enders** – edit relations in creature/gameobject/item starter & ender tables; provide quick search/attach UI.
-7. **Locales** – allow editing simplified locale strings (initially zhCN + enUS). Additional locales can hook into same components later.
-8. **Validation aides** – inline warnings for missing required fields, type mismatch, and cross-table consistency (e.g., reward items referencing existing entries).
-9. **Logging & audit** – reuse existing SQL log appenders per table, with quest-specific context.
+1. **Quest core (`quest_template`)** – 全部列，按 general / progression / flags / rewards / internal 分组。
+2. **Quest addon (`quest_template_addon`)** – 按 `ID` 关联的增删改。
+3. **Narrative blocks** – `quest_details`、`quest_request_items`、`quest_offer_reward`（文本、emote、cinematic ID）。
+4. **Objectives** – `quest_objectives` 多行 CRUD（type/asset/amount/special data），保证编号连续。
+5. **Rewards** – `quest_reward_choice_item`、`quest_reward_item`、`quest_reward_currency` 与声望奖励，按 Keira3 分组（choice / fixed / currency·honor·talents）。
+6. **Starters / Enders** – creature/gameobject/item 的 starter & ender 关联表，提供搜索/挂接 UI。
+7. **Locales** – 先支持 zhCN + enUS，其余 locale 复用同一组件。
+8. **Validation aides** – 必填缺失、类型不匹配、跨表一致性（例如奖励物品必须存在）的行内警告。
+9. **Logging & audit** – 复用各表已有的 SQL 日志记录器，附加任务上下文。
 
 ## Backend Architecture
 
 ### Layering
 
-- **`QuestAggregateService` (new)**
-  - Coordinates repositories per table.
+- **`QuestAggregateService`**
+  - 协调各表 repository；在 world 库上开事务。
   - `load(int $id): QuestAggregateDTO`
   - `save(QuestAggregateDTO $payload, string $expectedHash): SaveResult`
-  - Handles transactions (via PDO `beginTransaction` on world DB).
 
-- **Repositories (new / extended)**
-  - `QuestTemplateRepository` (existing `QuestRepository` will be split): responsible for `quest_template` CRUD + search.
-  - `QuestAddonRepository` – `quest_template_addon` single-row access.
-  - `QuestNarrativeRepository` – wraps details/request/offer tables.
-  - `QuestObjectiveRepository` – row-based operations with auto-incremented `ID` (guid) and `QuestID`.
-  - `QuestRewardRepository` – manage choice/fixed/currency/reputation sets.
-  - `QuestRelationRepository` – starter/ender tables for creatures/gameobjects/items.
-  - `QuestLocaleRepository` – locale tables (optional per locale).
+- **Repositories**
+  - `QuestTemplateRepository` – `quest_template` CRUD + 搜索（`QuestRepository` 拆出）。
+  - `QuestAddonRepository` – `quest_template_addon` 单行访问。
+  - `QuestNarrativeRepository` – details/request/offer 三表。
+  - `QuestObjectiveRepository` – 按行操作，自增 `ID`（guid）与 `QuestID`。
+  - `QuestRewardRepository` – choice/fixed/currency/reputation 集合。
+  - `QuestRelationRepository` – creature/gameobject/item 的 starter/ender 表。
+  - `QuestLocaleRepository` – locale 表（按 locale 可选）。
 
-Each repository should expose `fetch(int $questId): array`, `persist(int $questId, array $payload, PDO $tx)` to allow transaction reuse.
+每个 repository 暴露 `fetch(int $questId): array`、`persist(int $questId, array $payload, PDO $tx)` 以复用事务。
 
 ### DTO Shape
 
@@ -64,88 +63,83 @@ Each repository should expose `fetch(int $questId): array`, `persist(int $questI
 }
 ```
 
-Hashing strategy: compute a composite hash over all fetched tables to enforce optimistic locking (`expectedHash`).
+Hashing：对所有读取的表算一个复合 hash，用于乐观锁（`expectedHash`）。
 
 ### API Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/quest/api/editor` (`id` query) | Load aggregate DTO |
+| `GET` | `/quest/api/editor/load` (`id` query) | Load aggregate DTO |
 | `POST` | `/quest/api/editor/preview` | Validate payload, return diff summary without saving |
 | `POST` | `/quest/api/editor/save` | Persist payload transactionally (requires CSRF token) |
 | `POST` | `/quest/api/editor/delete-objective` | Optional targeted deletions if not handled via bulk save |
 | `GET` | `/quest/api/lookup/{type}` | Reuse for creature/item search (wrap existing search endpoints or provide thin proxies) |
 
-Existing list/search endpoints remain unchanged for the index table.
+索引列表/搜索仍走原有 `/quest` 端点。
 
 ### Transactions & Logging
 
-- Begin a transaction on the selected world database.
-- Persist tables in deterministic order: template → addon → narrative (three tables) → objectives → rewards → relations → locales.
-- On error, rollback and return structured validation message.
-- Record audit entry summarizing changed tables + counts.
-- Append SQL snapshots similar to current logger but per-table to `quest_sql.log` with JSON payload for non-template tables.
+- 在选定的 world 库上开事务。
+- 按固定顺序落库：template → addon → narrative（三表）→ objectives → rewards → relations → locales。
+- 出错回滚并返回结构化校验信息。
+- 审计记录变更表与条数。
+- 每表追加 SQL 快照到 `quest_sql.log`（非 template 表带 JSON payload）。
 
 ### Validation Rules (non-exhaustive)
 
-- Enforce unique objective `Index` per quest (0–4).
-- Validate reward choice count ≤ 6.
-- Ensure relation IDs reference existing entries (optional soft validation w/ warnings using lookup endpoints).
-- For locales, ensure string fields align with base table columns.
+- 同一任务内 objective `Index` 唯一（0–4）。
+- 奖励 choice 数量 ≤ 6。
+- 关系 ID 必须指向已存在的条目（可通过 lookup 端点做软校验 + 警告）。
+- locale 字符串字段必须与基础表列对齐。
 
 ## Frontend Architecture
 
 ### Overall Layout
 
-- Replace current free-form tabs with a **five-step wizard**:
-  1. General (template core).
-  2. Rewards (template + reward tables).
-  3. Objectives (quest_objectives CRUD list).
-  4. Narrative (details/request/offer texts & emotes).
-  5. Relations & Locales.
-
-- Keep side diff summary; extend to indicate table/section.
-- Provide status ribbon for validation errors.
+- 用**五步向导**取代现有的自由 Tab：General（template core）→ Rewards（template + 奖励表）→
+  Objectives（`quest_objectives` 列表）→ Narrative（details/request/offer 文本与 emote）→ Relations & Locales。
+- 保留侧边差异摘要，扩展到标出表/分区。
+- 顶部状态条显示校验错误。
 
 ### State Management
 
-- Upgrade `QuestEditorCore` to support nested entities:
-  - Store `state.original` / `state.current` as structured object.
-  - Track diffs per table + per row (`dirtyMap` becomes hierarchical: `{template:{field:{old,new}}, objectives:{id:{field...}}, ...}`).
-  - Provide helpers `Core.setField(path, value)` where `path` is dot-notation (e.g., `template.LogTitle`, `objectives[2].ItemId`).
-  - Provide `Core.addRow('objectives', data)` / `Core.deleteRow`
-  - Generate SQL preview using dedicated builders for each table; surface as multi-statement script.
+- `QuestEditorCore` 支持嵌套实体：
+  - `state.original` / `state.current` 结构化对象。
+  - 差异按表 + 按行记录（`dirtyMap` 分层：`{template:{field:{old,new}}, objectives:{id:{field...}}, ...}`）。
+  - `Core.setField(path, value)`，`path` 为点号路径（如 `template.LogTitle`、`objectives[2].ItemId`）。
+  - `Core.addRow('objectives', data)` / `Core.deleteRow`。
+  - SQL 预览由各表的专用 builder 生成，输出多语句脚本。
 
 ### UI Components
 
-- **General tab**: dynamic form from expanded metadata (reuse renderer, extended config file to include all template columns grouped logically).
-- **Rewards tab**: table editors for choice/fixed/currency/reputation; include add/remove row buttons and quick item lookup modal.
-- **Objectives tab**: data grid with row forms; allow reordering (drag-drop or index field).
-- **Narrative tab**: textareas with preview toggles; include emote selectors using dropdown enumerations.
-- **Relations tab**: search pickers for creatures/gameobjects/items (AJAX to existing modules) with ability to remove.
-- **Locales tab** (maybe share with relations step or separate) with collapsible panels per locale.
+- **General tab**：按扩展元数据（`config/quest.php`）渲染动态表单。
+- **Rewards tab**：choice/fixed/currency/reputation 表格编辑器 + 增删行 + 快速物品查询弹窗。
+- **Objectives tab**：数据网格 + 行表单，支持排序（拖拽或 index 字段）。
+- **Narrative tab**：textarea + 预览开关，emote 用下拉枚举。
+- **Relations tab**：creature/gameobject/item 搜索选择器（AJAX 复用已有模块），可移除。
+- **Locales tab**（可与 relations 合并）：按 locale 折叠面板。
 
 ### Reuse & Utilities
 
-- Share existing `Panel.api` helper.
-- Introduce `QuestLookupModal` JS module for item/creature search (can wrap item/creature modules list endpoints).
-- Introduce `QuestValidator` module to run client-side checks before save.
+- 复用 `Panel.api`。
+- 新增 `QuestLookupModal` JS 模块做物品/生物搜索（包装 item/creature 模块的列表端点）。
+- 新增 `QuestValidator` 模块做保存前客户端校验。
 
 ### Save Workflow
 
-1. User clicks **Save** (new button).
-2. Client validates; if pass, send payload to `/quest/api/editor/save` with `expectedHash`.
-3. On success, backend returns refreshed DTO + new hash; `Core.rebaseline` updates state.
-4. SQL preview area updates with comment `-- Saved @ timestamp`.
-5. On conflict (hash mismatch), show diff overlay comparing server vs local.
+1. 点击 **Save**。
+2. 客户端校验通过后带 `expectedHash` POST 到 `/quest/api/editor/save`。
+3. 成功后后端返回刷新后的 DTO + 新 hash，`Core.rebaseline` 更新状态。
+4. SQL 预览区加注释 `-- Saved @ timestamp`。
+5. hash 不匹配（冲突）时弹出服务端 vs 本地差异对比。
 
 ### SQL Preview
 
-- Compose multi-statement script per table (INSERT/UPDATE/DELETE as needed).
-- Label sections with comments (e.g., `-- quest_template`, `-- quest_objectives`).
-- Offer copy-to-clipboard for entire script or per section.
+- 按表拼多语句脚本（按需 INSERT/UPDATE/DELETE）。
+- 用注释标出分区（如 `-- quest_template`、`-- quest_objectives`）。
+- 支持整段或按分区复制。
 
-## Data Contracts (Draft)
+## Data Contracts
 
 ### Load Response
 
@@ -185,24 +179,10 @@ Existing list/search endpoints remain unchanged for the index table.
 }
 ```
 
-## Open Items / Assumptions
+## Assumptions
 
-- **Locale coverage**: start with minimal locale set (enUS, zhCN) until more are requested.
-- **Lookup modals**: reuse existing creature/item editors for search; avoid duplicating search SQL.
-- **Undo history**: maintain per-field/row; consider capping to avoid memory bloat.
-- **Permissions**: re-use existing quest ACL; no extra roles assumed.
-- **Testing**: add integration coverage via CLI harness (`cli/verify.php`) to assert repository transactions.
-
-## Milestones
-
-1. Schema mapping & metadata（扩展 `config/quest.php` 中 `fields` / `metadata` 配置，按需追加 objectives/rewards 结构）。
-2. Backend services & DTO serialization.
-3. API endpoints + routing adjustments (with CSRF protection).
-4. Frontend state core upgrade + new UI skeleton.
-5. Feature parity for template/addon/narrative/objective/reward.
-6. Relations & locale editors.
-7. QA, docs, polish.
-
----
-
-*Document owner: quest-editor refactor team. Keep updated as implementation details evolve.*
+- **Locale coverage**：先 enUS / zhCN。
+- **Lookup modals**：复用现有 creature/item 编辑器，不重复实现搜索 SQL。
+- **Undo history**：按字段/行保留，需考虑内存上限。
+- **Permissions**：复用现有任务 ACL。
+- **Testing**：用 CLI harness（`cli/verify.php`）断言 repository 事务。

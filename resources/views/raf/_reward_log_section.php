@@ -1,8 +1,6 @@
 <?php
 /**
- * 奖励发放记录区块（可被 AJAX 整块替换）。
- *
- * 变量由 RafController::buildRewardLogViewData() 提供：$raf_reward_log。
+ * 奖励发放记录区块（可被 AJAX 整块替换）。变量由 RafController::buildRewardLogViewData() 提供。
  */
 
 $rewardSection = is_array($raf_reward_log ?? null) ? $raf_reward_log : [];
@@ -78,7 +76,7 @@ if ($rewardSectionDefaultOnly) {
     <div class="raf-section__heading">
       <h2 class="raf-section__title"><?= htmlspecialchars(__('app.raf.reward_log.title')) ?></h2>
       <p class="muted raf-panel__meta" data-raf-summary><?= htmlspecialchars($rewardSectionSummary) ?></p>
-      <p class="muted raf-section__note"><?= htmlspecialchars(__('app.raf.reward_log.subtitle')) ?></p>
+      <p class="muted raf-section__note"><?= htmlspecialchars(__('app.raf.reward_log.subtitle_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.raf.reward_log.subtitle')) ?>">i</span></p>
     </div>
     <div class="raf-section__actions">
       <button

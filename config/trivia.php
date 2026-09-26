@@ -18,7 +18,7 @@ return [
     'presets_table' => 'trivia_reward_presets',
     'winners_table' => 'trivia_reward_winners',
 
-    // SOAP 单次执行超时（秒）：worldserver 卡顿时不要让页面等太久
+    
     'soap' => [
         'timeout_connect' => 3,
         'timeout_total' => 8,
@@ -28,7 +28,7 @@ return [
     'page_size_options' => [20, 30, 50, 100],
     'winner_limit' => 30,
 
-    // 内置频道 ID（解析自本服客户端 ChatChannels.dbc），与脚本内置对照表一致
+    
     'channels' => [
         ['id' => 1, 'label' => '综合'],
         ['id' => 2, 'label' => '交易'],
@@ -38,7 +38,7 @@ return [
         ['id' => 26, 'label' => '寻求组队'],
     ],
 
-    // 选项标号预设（写入 option_labels，逗号分隔；脚本也支持不带逗号的 "甲乙丙丁"）
+    
     'label_presets' => [
         ['value' => 'A,B,C,D', 'label' => 'A / B / C / D'],
         ['value' => '甲,乙,丙,丁', 'label' => '甲 / 乙 / 丙 / 丁'],
@@ -46,7 +46,7 @@ return [
         ['value' => '是,否', 'label' => '是 / 否'],
     ],
 
-    // 选项排版预设（写入 option_format，两个 %s：标号、选项文本）
+    
     'format_presets' => [
         ['value' => '%s) %s', 'label' => 'A) 选项文本'],
         ['value' => '%s、%s', 'label' => '甲、选项文本'],
@@ -55,7 +55,7 @@ return [
 
     'reward_modes' => ['question', 'pool'],
 
-    // 数值上下限（控制器统一按这里收敛，防止面板写进离谱的值）
+    
     'limits' => [
         'interval_seconds' => [60, 86400],
         'answer_seconds' => [10, 600],

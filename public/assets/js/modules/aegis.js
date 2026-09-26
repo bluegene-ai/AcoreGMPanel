@@ -14,12 +14,8 @@
   const currentServer = searchParams.get('server') || '';
 
   /**
-   * Base path of the panel install ("/agmp", or "" at the web root).
-   *
-   * The server publishes it only as data-app-base on <body>; window.APP_BASE is
-   * never defined. API calls go through panel.api(), which prepends the base
-   * itself, but plain href links do not — building one without this prefix
-   * yields a root-relative URL that 404s on a sub-path install.
+   * 面板基路径（"/agmp"，部署在根时为 ""）。服务端只通过 <body data-app-base> 发布：
+   * window.APP_BASE 永远不存在，普通 href 少了这个前缀就会在子路径下 404。
    */
   function resolveBasePath(){
     return ((window.Panel && window.Panel.basePath && window.Panel.basePath())
@@ -28,12 +24,8 @@
   }
 
   /**
-   * Panel-relative path -> absolute URL, base path included.
-   *
-   * Never build a plain href from a root-relative literal: on a sub-path
-   * install (/agmp) the browser resolves "/character/view" against the web
-   * root and 404s. API calls go through panel.api(), which prepends the base
-   * itself, so those must stay panel-relative.
+   * panel 相对路径 → 含基路径的绝对 URL。别用根相对字面量拼 href（子路径部署会 404）；
+   * API 调用走 panel.api() 自带前缀，必须保持 panel 相对路径。
    */
   const panelUrl = (typeof panel.absoluteUrl === 'function')
     ? (path) => panel.absoluteUrl(path)
@@ -93,9 +85,8 @@
   }
 
   /**
-   * Adds the `server` query arg to an API path. The base path is left to
-   * panel.api() -> buildUrl(), which prepends it for every request, so callers
-   * here must pass a panel-relative path (never a panelUrl()).
+   * 给 API 路径补上 server 查询参数。基路径交给 panel.api() -> buildUrl() 处理，
+   * 所以这里必须传 panel 相对路径（不能传 panelUrl() 的结果）。
    */
   function withServer(path){
     if(!currentServer) return path;

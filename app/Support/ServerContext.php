@@ -2,18 +2,6 @@
 /**
  * File: app/Support/ServerContext.php
  * Purpose: Defines class ServerContext for the app/Support module.
- * Classes:
- *   - ServerContext
- * Functions:
- *   - cfg()
- *   - defaultId()
- *   - currentId()
- *   - set()
- *   - debugEnabled()
- *   - logSwitch()
- *   - server()
- *   - soap()
- *   - db()
  */
 
 namespace Acme\Panel\Support;

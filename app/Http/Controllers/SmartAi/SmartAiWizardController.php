@@ -2,12 +2,6 @@
 /**
  * File: app/Http/Controllers/SmartAi/SmartAiWizardController.php
  * Purpose: Defines class SmartAiWizardController for the app/Http/Controllers/SmartAi module.
- * Classes:
- *   - SmartAiWizardController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiPreview()
  */
 
 namespace Acme\Panel\Http\Controllers\SmartAi;

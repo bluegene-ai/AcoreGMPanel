@@ -166,6 +166,7 @@ return [
         'diff' => [
             'title' => '差异 SQL 预览',
             'hint' => '自动生成 UPDATE，仅包含改动字段，并附带 LIMIT 1 保护。',
+            'diff_hint_short' => '自动生成 UPDATE，只含改动字段。',
             'empty' => '-- 无改动 --',
         ],
         'tabs' => [

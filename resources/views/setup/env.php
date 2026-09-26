@@ -14,7 +14,7 @@ $actions = is_array($page['actions'] ?? null) ? $page['actions'] : [];
   <div class="setup-section__header">
     <div>
       <h2 class="setup-section__title" id="setup-env-title"><?= htmlspecialchars((string)($section['title'] ?? __('app.setup.env.title'))) ?></h2>
-      <p class="setup-section__hint"><?= htmlspecialchars((string)($section['hint'] ?? __('app.setup.env.hint'))) ?></p>
+      <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.env.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($section['hint'] ?? __('app.setup.env.hint'))) ?>">i</span></p>
     </div>
     <span class="setup-section__pill"><?= htmlspecialchars((string)($section['pill'] ?? __('app.setup.env.pill'))) ?></span>
   </div>

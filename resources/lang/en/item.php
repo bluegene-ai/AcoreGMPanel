@@ -297,6 +297,7 @@ return array (
       'title' => 'Diff preview',
       'full_mode' => 'Include all columns',
       'hint' => 'An UPDATE statement is generated automatically whenever fields change.',
+      'hint_short' => 'Diff SQL lists changed columns only; empty text becomes NULL.',
       'placeholder' => '-- No changes --',
       'exec_title' => 'Execution result',
       'sample_title' => 'Sample row',

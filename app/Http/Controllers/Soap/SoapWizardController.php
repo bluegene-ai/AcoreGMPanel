@@ -2,12 +2,6 @@
 /**
  * File: app/Http/Controllers/Soap/SoapWizardController.php
  * Purpose: Defines class SoapWizardController for the app/Http/Controllers/Soap module.
- * Classes:
- *   - SoapWizardController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiExecute()
  */
 
 namespace Acme\Panel\Http\Controllers\Soap;

@@ -1,15 +1,6 @@
 /**
  * File: public/assets/js/modules/character_boost.js
  * Purpose: 直升管理入口页交互：预览将要发放的内容、执行直升、刷新历史。
- * Functions:
- *   - translate()
- *   - toast()
- *   - post()
- *   - collectPayload()
- *   - renderPreview()
- *   - bindApply()
- *   - refreshHistory()
- *   - init()
  */
 
 (function(){

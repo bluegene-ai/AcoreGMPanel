@@ -2,34 +2,6 @@
 /**
  * File: app/Domain/Mail/MailRepository.php
  * Purpose: Defines class MailRepository for the app/Domain/Mail module.
- * Classes:
- *   - MailRepository
- * Functions:
- *   - __construct()
- *   - search()
- *   - getWithItems()
- *   - get()
- *   - getItems()
- *   - markRead()
- *   - markReadBulk()
- *   - delete()
- *   - deleteBulk()
- *   - stats()
- *   - tailLog()
- *   - countWith()
- *   - characterAccount()
- *   - isGmAccount()
- *   - resolveItemNames()
- *   - loadItemNameCache()
- *   - persistItemNameCache()
- *   - logsDir()
- *   - currentUser()
- *   - appendSqlLog()
- *   - appendDeletedLog()
- *   - readLogTail()
- *   - parseLogLine()
- *   - formatLogEntry()
- *   - parseServerId()
  */
 
 namespace Acme\Panel\Domain\Mail;

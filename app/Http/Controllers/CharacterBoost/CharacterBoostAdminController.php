@@ -2,9 +2,7 @@
 /**
  * File: app/Http/Controllers/CharacterBoost/CharacterBoostAdminController.php
  * Purpose: 直升管理统一入口：概览、执行直升、直升历史。
- *
- * 直升原本分散在三处：角色详情页、群发管理页、兑换码页。
- * 现在统一到 /character-boost 概览页执行，模板与兑换码仍由各自的子页面管理。
+ * 模板与兑换码仍由各自的子页面管理。
  */
 
 declare(strict_types=1);
@@ -43,9 +41,7 @@ class CharacterBoostAdminController extends Controller
         $this->requireCapability('boost.codes');
     }
 
-    /**
-     * 概览页：能执行直升就要求 boost.apply；只有模板/兑换码权限时仍可查看概览。
-     */
+    /** 概览页：能执行直升就要求 boost.apply；只有模板/兑换码权限时仍可查看概览。 */
     public function index(Request $request): Response
     {
         $this->requireLogin();
@@ -99,9 +95,7 @@ class CharacterBoostAdminController extends Controller
         ]);
     }
 
-    /**
-     * 执行直升：支持角色名或 GUID，模板优先、其次目标等级。
-     */
+    /** 执行直升：支持角色名或 GUID，模板优先、其次目标等级。 */
     public function apiApply(Request $request): Response
     {
         $this->requireApplyCapability();
@@ -235,9 +229,7 @@ class CharacterBoostAdminController extends Controller
         ]);
     }
 
-    /**
-     * 直升历史（只读）。
-     */
+    /** 直升历史（只读）。 */
     public function apiHistory(Request $request): Response
     {
         $this->requireApplyCapability();
@@ -253,7 +245,6 @@ class CharacterBoostAdminController extends Controller
 
     /**
      * 最近直升记录（只读，来自 BoostLogRepository）。
-     *
      * @return array<int, array<string, mixed>>
      */
     private function recentBoostHistory(int $limit): array

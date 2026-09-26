@@ -2,14 +2,6 @@
 /**
  * File: app/Domain/Support/MultiServerRepository.php
  * Purpose: Defines class MultiServerRepository for the app/Domain/Support module.
- * Classes:
- *   - MultiServerRepository
- * Functions:
- *   - __construct()
- *   - rebind()
- *   - world()
- *   - characters()
- *   - auth()
  */
 
 namespace Acme\Panel\Domain\Support;

@@ -2,18 +2,6 @@
 /**
  * File: app/Core/ItemMeta.php
  * Purpose: Defines class ItemMeta for the app/Core module.
- * Classes:
- *   - ItemMeta
- * Functions:
- *   - qualityName()
- *   - qualities()
- *   - classes()
- *   - className()
- *   - subclassesOf()
- *   - subclassName()
- *   - allSubclassesFlat()
- *   - get_item_class_name()
- *   - get_item_subclass_name()
  */
 
 namespace Acme\Panel\Core;

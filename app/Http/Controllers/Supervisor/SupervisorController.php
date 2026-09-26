@@ -2,16 +2,6 @@
 /**
  * File: app/Http/Controllers/Supervisor/SupervisorController.php
  * Purpose: "Supervisor" page: state of the worldserver/authserver watchdog plus start/stop/restart.
- * Classes:
- *   - SupervisorController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiStatus()
- *   - apiLog()
- *   - apiCommand()
- *   - manager()
- *   - unknownInstance()
  */
 
 declare(strict_types=1);
@@ -33,8 +23,8 @@ final class SupervisorController extends Controller
     }
 
     /**
-     * Manager for the requested instance, or null when the id is not configured.
-     * Never silently falls back: a command must not reach another realm's supervisor.
+     * Manager for the requested instance, or null when the id is not configured: never silently falls
+     * back, a command must not reach another realm's supervisor.
      */
     private function manager(Request $request): ?SupervisorManager
     {

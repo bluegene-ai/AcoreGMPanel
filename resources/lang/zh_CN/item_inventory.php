@@ -134,6 +134,7 @@ return [
             'entry_label' => '新的物品 ID',
             'entry_placeholder' => '输入物品 ID',
             'entry_hint' => '选中的实例将替换为该物品；若原堆叠超过新物品的堆叠上限，超出的部分会拆分到同容器的空闲格。',
+            'entry_hint_short' => '超出新物品堆叠上限的部分会拆分到同容器空位。',
             'cancel' => '取消',
             'confirm' => '应用',
             'success' => '替换完成',

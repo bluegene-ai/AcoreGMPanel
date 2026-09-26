@@ -2,15 +2,6 @@
 /**
  * File: app/Core/Database.php
  * Purpose: Defines class Database for the app/Core module.
- * Classes:
- *   - Database
- * Functions:
- *   - purge()
- *   - connection()
- *   - auth()
- *   - world()
- *   - characters()
- *   - forServer()
  */
 
 namespace Acme\Panel\Core;

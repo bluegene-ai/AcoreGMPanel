@@ -2,8 +2,8 @@
 /**
  * 招募管理顶部统计区：绑定概况 + 奖励发放概况。
  *
- * 每张卡片都可通过 data-raf-card / data-raf-card-group / data-raf-card-key
- * 交给 raf.js 打开下钻弹窗；数值节点带 data-raf-stat 由 AJAX 刷新时更新。
+ * 卡片靠 data-raf-card / data-raf-card-group / data-raf-card-key 交给 raf.js 打开下钻弹窗；
+ * 数值节点带 data-raf-stat，由 AJAX 刷新时更新。
  */
 
 $statsBindings = is_array($raf_stats ?? null) ? $raf_stats : [];
@@ -29,7 +29,7 @@ $bindingCards = [
 
 $rewardLogCards = [
     ['key' => 'total', 'label' => __('app.raf.reward_log.stats.total'), 'value' => (int) ($statsRewardLog['total'] ?? 0), 'text' => null, 'hint' => $statsGroupHint(__('app.raf.reward_log.stats.hints.total'))],
-    ['key' => 'recruiters', 'label' => __('app.raf.reward_log.stats.recruiters'), 'value' => (int) ($statsRewardLog['recruiters'] ?? 0), 'text' => null, 'hint' => $statsGroupHint(__('app.raf.reward_log.stats.hints.recruiters'))],
+    ['key' => 'recruiters', 'label' => __('app.raf.reward_log.stats.recruiters'), 'value' => (int) ($statsRewardLog['recruiters'] ?? 0), 'text' => null, 'hint' => $statsGroupHint(__('app.raf.reward_log.stats.hints.recruiters_short')), 'hint_full' => $statsGroupHint(__('app.raf.reward_log.stats.hints.recruiters'))],
     ['key' => 'recruits', 'label' => __('app.raf.reward_log.stats.recruits'), 'value' => (int) ($statsRewardLog['recruits'] ?? 0), 'text' => null, 'hint' => $statsGroupHint(__('app.raf.reward_log.stats.hints.recruits'))],
     ['key' => 'default_rewards', 'label' => __('app.raf.reward_log.stats.default_rewards'), 'value' => (int) ($statsRewardLog['default_rewards'] ?? 0), 'text' => null, 'hint' => $statsGroupHint(__('app.raf.reward_log.stats.hints.default_rewards'))],
     [
@@ -104,7 +104,7 @@ $rewardLogCards = [
               <?= (int) $rewardLogCard['value'] ?>
             </strong>
           <?php endif; ?>
-          <span class="raf-stat-card__hint"><?= htmlspecialchars($rewardLogCard['hint']) ?></span>
+          <span class="raf-stat-card__hint"><?= htmlspecialchars($rewardLogCard['hint']) ?><?php if (!empty($rewardLogCard['hint_full'])): ?><span class="panel-hint" title="<?= htmlspecialchars((string) $rewardLogCard['hint_full']) ?>">i</span><?php endif; ?></span>
           <span class="raf-stat-card__action"><?= htmlspecialchars(__('app.raf.stats.card_open')) ?></span>
         </button>
       <?php endforeach; ?>

@@ -2,6 +2,7 @@
 return array (
   'page_title' => 'Aegis 反作弊',
   'intro' => '按服务器查看作弊轨迹、事件明细，并通过 SOAP 执行 Aegis 手工处置命令。',
+  'intro_short' => '查看作弊轨迹与事件，并执行 Aegis 手工处置。',
   'actions' => 
   array (
     'refresh_all' => '刷新全部',

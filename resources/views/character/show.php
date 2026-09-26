@@ -16,16 +16,10 @@ $characterShowCapabilities = is_array($__pageCapabilities ?? null)
     'boost_codes' => $__can('boost.codes'),
   ];
 
-/**
- * 是否把物品/任务 ID 深链到对应管理页。目标页同样以 content.view 为门槛，
- * 因此无权限时只渲染纯文本，避免给出必然被拒的链接。
- */
+/** 是否把物品/任务 ID 深链到对应管理页：目标页同样以 content.view 为门槛，无权限时只渲染纯文本，避免给出必然被拒的链接 */
 $canEditContent = (bool) ($characterShowCapabilities['content_view'] ?? $__can('content.view'));
 
-/**
- * 游戏对象 ID → 文本映射：由 CharacterController::resolveDetailNames() 从
- * world 库 / 客户端 DBC 解析得到，取不到时回退显示原始 ID。
- */
+/** 游戏对象 ID → 文本映射：由 CharacterController::resolveDetailNames() 从 world 库 / 客户端 DBC 解析，取不到时回退显示原始 ID */
 $gameNames = is_array($game_names ?? null) ? $game_names : [];
 $gameName = static function (string $type, int $id) use ($gameNames): ?string {
   $name = $gameNames[$type][$id] ?? null;
@@ -38,8 +32,7 @@ $gameNameCell = static function (string $type, int $id, string $class = '') use 
   $name = $gameName($type, $id);
   $classAttr = $class !== '' ? ' class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '"' : '';
 
-  // 内容 ID 直接深链到物品/任务管理页的编辑入口；目标页自行校验 content.view。
-  // 纯 GET 拼接，不产生任何额外查询，因此不会影响详情页性能。
+  // 内容 ID 直接深链到物品/任务管理页的编辑入口（目标页自行校验 content.view）；纯 GET 拼接，无额外查询
   $url = $canEditContent ? \Acme\Panel\Support\ContentLink::url($type, $id) : null;
   $title = '';
   if ($url !== null && \Acme\Panel\Support\ContentLink::supports($type)) {
@@ -219,7 +212,7 @@ $reputationStandingLabel = static function (int $standing): string {
                     <button class="btn btn-sm warn" type="submit"><?= htmlspecialchars(__('app.character.actions.boost_submit')) ?></button>
                   </div>
                   <div class="char-action-hint">
-                    <?= htmlspecialchars(__('app.character.actions.boost_hint')) ?>
+                    <?= htmlspecialchars(__('app.character.actions.boost_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character.actions.boost_hint')) ?>">i</span>
                   </div>
                 </form>
               <?php endif; ?>

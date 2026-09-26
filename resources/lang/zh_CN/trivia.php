@@ -7,6 +7,7 @@
 return [
     'page_title' => '聊天答题',
     'intro' => '管理世界聊天答题活动：实时状态与开/停控制、出题节奏、作答频道、题库、奖励预设与答对排行。改完点在库数据即时生效，无需重启服务器。',
+    'intro_short' => '查看运行状态与控制答题，管理题库、奖励预设和答对排行。',
     'scope_note' => '当前服务器：:server ｜ 数据表位于 :database 库（由 TriviaReward.lua 自动建立）',
 
     'nav' => [
@@ -129,6 +130,7 @@ return [
     'fields' => [
         'enabled' => '答题系统开关（系统总开关）',
         'enabled_hint' => '总开关：管"系统在不在线"（作答收不收、单题能不能跑）。关掉它整个系统停摆；打开它也不会自动出题——自动出题由下面的「暂停自动出题」单独控制。这里的开关和「运行状态」页的按钮都会写入数据库，重启后保持；启用了定时计划时，计划优先。',
+        'enabled_hint_short' => '总开关：关掉后整个系统停止，它不控制自动出题。',
         'paused' => '暂停自动出题（默认勾选：服务器重启后不会自动出题，需手动恢复或等定时计划）',
         'interval_seconds' => '出题间隔（秒）',
         'answer_seconds' => '作答时间（秒）',
@@ -136,6 +138,7 @@ return [
         'first_delay_seconds' => '启动后首题延迟（秒）',
         'min_players_online' => '最少在线人数',
         'min_players_hint' => '在线人数少于「最少在线人数」时不会出题（每「人数不足重试间隔」秒重试一次）。想在没有玩家时也自动出题（例如本机测试），把它设为 0。',
+        'min_players_hint_short' => '在线人数不足时不出题；设为 0 可无人也出题。',
         'idle_retry_seconds' => '人数不足重试间隔（秒）',
         'resume_delay_seconds' => '恢复/开启后多少秒出下一题',
         'debug_log' => '调试日志（每题开始/结束写 ALE 日志）',
@@ -143,12 +146,14 @@ return [
         'schedule_enabled' => '启用定时启停（按下面的时间段自动开关）',
         'schedule_windows' => '每天的时间段',
         'schedule_windows_hint' => '多段用分号或逗号分隔：08:00-09:00；不带星期前缀 = 每天；1=周一 … 7=周日，可写 1-5 或 6,7；跨夜写 22:00-02:00。到点自动开启，离开时间段自动结束当前题并停止出题。',
+        'schedule_windows_hint_short' => '到点自动开启，离开时间段自动结束。',
         'answer_hint' => '作答提示（留空 = 按已开启的频道自动生成）',
         'answer_hint_placeholder' => '在综合频道输入 A / B / C / D 作答，第一个答对的发奖励！',
         'allow_loose_letter' => '允许 A. / A) / A、 这类写法',
         'ignore_gms' => '开着 GM 标签的账号不参与答题',
         'gm_rank_exempt' => 'GM 等级 ≥ 该值时不参与（0 = 不限制）',
         'gm_rank_exempt_hint' => '注意：上面「.trivia 指令所需 GM 等级」管的是能不能用管理指令，这里管的是能不能参加答题。',
+        'gm_rank_exempt_hint_short' => '这里管能不能参加答题，不影响管理指令。',
         'broadcast_prefix' => '普通播报前缀（可带颜色代码）',
         'win_prefix' => '中奖/公布答案前缀（可带颜色代码）',
         'prefix_hint' => '颜色代码形如 |cff00ff00绿色|r、|cffffd200金色|r；前缀末尾建议留一个空格。',
@@ -214,12 +219,15 @@ return [
         'stats' => '启用 :enabled ｜ 停用 :disabled ｜ 自带奖励 :reward',
         'labels_hint' => '留空表示跟随上面的全局标号；填 甲,乙,丙,丁 可让这道题单独用中文标号。',
         'answer_hint' => '选择第几个选项是正确答案（必须落在已填写的选项范围内）。',
+        'answer_hint_short' => '填第几个选项算答对，不能超出已填的选项。',
         'reward_hint' => '奖励预设与下面的额外物品/金钱会一起发放；都不填就用默认预设。',
+        'reward_hint_short' => '预设与额外物品/金钱一起发放，都不填才用默认预设。',
     ],
 
     'import' => [
         'title' => '题库模板导入 / 导出',
         'hint' => '支持 CSV / TSV / JSON；表头可选（写了就按列名认列，中英文表头都能识别）。答案可以写 1-4、A-D、甲-丁 或选项原文；以 # 开头的行会被忽略，方便从 Excel 直接复制粘贴。Excel 另存为 ANSI/GBK 或「Unicode 文本」(UTF-16) 也能识别，会自动转成 UTF-8。题库存在 ac_eluna.trivia_reward_questions，导入后立即生效。',
+        'hint_short' => '支持 CSV / TSV / JSON；表头可选，导入后立即生效。',
         'placeholder' => "题干,选项A,选项B,选项C,选项D,答案,标号,奖励预设,奖励物品,金钱,启用\n巫妖王的本名是谁？,阿尔萨斯·米奈希尔,耐奥祖,克尔苏加德,伊利丹·怒风,1,,cloth5,,0,1",
         'download_template' => '下载模板',
         'export' => '导出题库',
@@ -238,6 +246,7 @@ return [
         'usage' => '被 :count 道题引用',
         'not_used' => '未被引用',
         'name_hint' => '预设名是题目引用它的键，改名不会自动更新已引用的题目。',
+        'name_hint_short' => '改名不会自动更新已引用它的题目。',
     ],
 
     'winners' => [

@@ -4,6 +4,7 @@ return array (
   array (
     'page_title' => '安装向导 - Acore GM Panel',
     'intro' => '按照向导完成环境检测、数据库配置和管理员创建，即可开始使用面板。',
+    'intro_short' => '按向导完成检测、配置与管理员创建。',
     'step_titles' => 
     array (
       1 => '环境检测',
@@ -23,6 +24,7 @@ return array (
   array (
     'title' => '步骤 1 · 环境检测',
     'hint' => '请确认服务器满足运行要求，全部通过后即可选择向导语言。',
+    'hint_short' => '全部通过后才能选择语言并继续。',
     'pill' => '环境',
     'checks' => 
     array (
@@ -75,6 +77,7 @@ return array (
       array (
         'title' => '共享 Auth 数据库',
         'hint' => '一服多区模式下先验证 Auth 库，系统会读取 realmlist 自动生成后续配置组。',
+        'hint_short' => '先验证 Auth 库，再自动生成各区服配置。',
         'pill' => 'Auth',
       ),
       'realm_groups' => 
@@ -91,18 +94,21 @@ return array (
         'title' => '单服务器',
         'badge' => '默认',
         'desc' => '维护一组完整服务器配置，适合单服部署。',
+        'desc_short' => '只维护一组服务器配置。',
       ),
       'multi' => 
       array (
         'title' => '一服多区',
         'badge' => '共享 Auth',
         'desc' => '先连接共享 Auth 数据库，再根据 realmlist 自动生成每个区服的数据库与 SOAP 配置。',
+        'desc_short' => '共享 Auth 库，自动为每个区服生成配置。',
       ),
       'multi_full' => 
       array (
         'title' => '多服多区',
         'badge' => '完全独立',
         'desc' => '每个服务器分组都维护独立的 Auth、Characters、World 与 SOAP 配置。',
+        'desc_short' => '每个服务器分组各自独立配置。',
       ),
     ),
     'fields' => 
@@ -166,6 +172,7 @@ return array (
     'footer' => 
     array (
       'hint' => '这些设置会直接用于下一步连接测试，安装完成后仍可继续调整。',
+      'hint_short' => '保存后会立刻用于下一步连接测试。',
       'submit' => '保存并继续',
       'back' => '返回环境检测',
     ),

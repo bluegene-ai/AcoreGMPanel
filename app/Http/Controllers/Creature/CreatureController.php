@@ -2,21 +2,6 @@
 /**
  * File: app/Http/Controllers/Creature/CreatureController.php
  * Purpose: Defines class CreatureController for the app/Http/Controllers/Creature module.
- * Classes:
- *   - CreatureController
- * Functions:
- *   - __construct()
- *   - index()
- *   - editPage()
- *   - buildCancelQuery()
- *   - apiCreate()
- *   - apiDelete()
- *   - apiSave()
- *   - apiExecSql()
- *   - apiFetchRow()
- *   - apiAddModel()
- *   - apiEditModel()
- *   - apiDeleteModel()
  */
 
 namespace Acme\Panel\Http\Controllers\Creature;

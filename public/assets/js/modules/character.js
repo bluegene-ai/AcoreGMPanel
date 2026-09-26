@@ -19,14 +19,11 @@
   }
 
   /**
-   * All DOM wiring lives here so it can run only once the parsed document
-   * exists. panel.js injects this page module from an immediately-invoked
-   * body script, so top-level DOM queries would otherwise run mid-parse and
-   * silently bind nothing (empty tab list, dead inventory panel).
+   * DOM 绑定集中在这里，确保解析完文档后才执行：本模块由 body 内联脚本注入，
+   * 顶层查询会在解析中途跑并静默绑不上任何东西（空 Tab 列表、失效的物品面板）。
    */
   function setup(){
-    // 游戏对象名称由服务端解析（CharacterController::resolveDetailNames），
-    // 这里不再做异步补名；仅保留存档旧页面残留节点的兜底逻辑
+    // 名称由服务端解析（CharacterController::resolveDetailNames）；这里只做旧页面残留节点的兜底
     const legacyNfuwowNodes = document.querySelectorAll('.js-nfuwow');
     if(legacyNfuwowNodes.length){
       legacyNfuwowNodes.forEach(el => {

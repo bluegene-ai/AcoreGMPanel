@@ -2,17 +2,6 @@
 /**
  * File: app/Core/Request.php
  * Purpose: Defines class Request for the app/Core module.
- * Classes:
- *   - Request
- * Functions:
- *   - capture()
- *   - input()
- *   - int()
- *   - float()
- *   - bool()
- *   - all()
- *   - ip()
- *   - expectsJsonPayload()
  */
 
 declare(strict_types=1);

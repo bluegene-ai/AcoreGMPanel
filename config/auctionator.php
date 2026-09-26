@@ -12,45 +12,45 @@
  */
 
 return [
-    // 多区（多个 realm 共用一套 auth）：每个区各自跑一份 worldserver 与一份 mod-auctionator，
-    // 模块的选项文件、日志、以及 mod_auctionator_* 数据表都在该区自己的目录 / 库里面。
-    // 绑定关系由 server_overrides 描述（键 = config/generated/servers.php 的 server 索引）；
-    // 这里的顶层值既是默认值，也是新区服漏配时的兜底。
-    //
-    // 各区真实路径属于**部署信息**，请写在 config/generated/auctionator.php 里
-    // （该文件不入库，git pull 不会覆盖）。例：
-    //   return ['server_root' => 'D:\\AzerothCore\\release\\realm-a',
-    //           'supported_server_ids' => [0],
-    //           'server_overrides' => [0 => ['server_root' => 'D:\\AzerothCore\\release\\realm-a']]];
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     // 留空 = 没有可用路径，页面会明确提示"conf 不存在"，直到按区配上为止。
     'server_root' => '',
     'conf_file' => 'configs/modules/mod_auctionator.conf',
     'log_file' => 'logs/auctionator.log',
 
-    // 白名单：写在这里的区**直接算已部署**，跳过下面的自动探测（部署信息明确时更快、更省一次查询）。
-    // 不在名单里的区不再一律判"未部署"——面板会去查该区 world 库里有没有模块自己的表
+    
+    
     // （mod_auctionator_disabled_items）：装了就能管，没装 / 库连不上才退化成只读 + 说明。
     // 留空 = 只靠自动探测（推荐：模块装到哪个区，哪个区就能管）。
     'supported_server_ids' => [],
 
-    // 黑名单：明确**不**在面板里管的区（优先于白名单与自动探测），例如只开放给内部测试、
+    
     // 不希望运维从面板改动的区。留空 = 不排除任何区。
     'unsupported_server_ids' => [],
 
-    // 每个区一条 server_root（该区 worldserver 根目录，conf/log 相对它解析）。
+    
     // 留空 = 所有区共用顶层的 server_root。
     'server_overrides' => [],
 
-    // How many lines of logs/auctionator.log the dashboard shows.
+    
     'log_tail_lines' => 40,
 
-    // Table row limits for the item policy tab (the panel renders them as-is).
+    
     'disabled_items_limit' => 300,
     'itemclass_limit' => 300,
     'gm_list_limit' => 300,
 
-    // GM command constraints, mirrored from AuctionatorCommands.cpp (MinListingHours /
-    // MaxListingHours / 200 items per ".auctionator add").
+    
+    
     'add_max_items' => 200,
     'listing_hours_min' => 1,
     'listing_hours_max' => 720,
@@ -58,20 +58,8 @@ return [
     'max_per_cycle_max' => 1000,
     'price_max_copper' => 4294967295,
 
-    /**
-     * Every config key the panel is allowed to write, grouped for the settings form.
-     *
-     * type   : bool | int | float | string
-     * label  : app.auctionator.fields.<label>
-     * group  : app.auctionator.groups.<group>
-     * min/max: accepted range (the module clamps these too; the panel must never write
-     *          something the module would silently change, because the file would then
-     *          disagree with what the server actually uses).
-     * default: what the module falls back to when the key is absent from the file. The form
-     *          shows this instead of an empty field, so a conf written before the key existed
-     *          does not display a value the server is not using. Only needed where the
-     *          module's built-in default is not the type's zero value.
-     */
+    
+
     'fields' => [
         'Auctionator.Enabled' => ['group' => 'master', 'type' => 'bool', 'label' => 'enabled'],
         'Auctionator.Seller.BidOnly' => ['group' => 'master', 'type' => 'bool', 'label' => 'bid_only'],
@@ -117,10 +105,10 @@ return [
         'Auctionator.MarketData.ImportSource' => ['group' => 'market', 'type' => 'string', 'label' => 'import_source'],
         'Auctionator.MarketData.ImportIntervalMinutes' => ['group' => 'market', 'type' => 'int', 'label' => 'import_interval_minutes', 'min' => 5, 'max' => 10080],
         'Auctionator.MarketData.ImportMaxRows' => ['group' => 'market', 'type' => 'int', 'label' => 'import_max_rows', 'min' => 1, 'max' => 1000000],
-        // Sampling this realm's own auction house. 0 = only when the GM asks (the button / command).
+        
         'Auctionator.MarketData.ScanIntervalMinutes' => ['group' => 'market', 'type' => 'int', 'label' => 'scan_interval_minutes', 'min' => 0, 'max' => 10080, 'default' => 0],
-        // The module's built-in default is 1 ("leave the bot's own listings out"), so an older
-        // conf that lacks the key must not be shown as "off".
+        
+        
         'Auctionator.MarketData.ScanExcludeSelf' => ['group' => 'market', 'type' => 'bool', 'label' => 'scan_exclude_self', 'default' => 1],
         'Auctionator.MarketData.RetentionDays' => ['group' => 'market', 'type' => 'int', 'label' => 'retention_days', 'min' => 1, 'max' => 3650],
 
@@ -139,8 +127,8 @@ return [
         'Auctionator.Multipliers.Bidder.Legendary' => ['group' => 'multipliers_bidder', 'type' => 'float', 'label' => 'multiplier_legendary', 'min' => 0, 'max' => 1000],
     ],
 
-    // Read-only keys worth showing next to the editable ones (the module has no config
-    // entry for them, they are listed so the dashboard is self-explanatory).
+    
+    
     'notes' => [
         'listing_hours' => 12,
     ],

@@ -204,8 +204,7 @@ class CharacterController extends Controller
                 'boost' => 'boost.apply',
                 'boost_templates' => 'boost.templates',
                 'boost_codes' => 'boost.codes',
-                // Lets the inventory / quest lists deep-link into the item and
-                // quest editors; the target pages enforce the same capability.
+                // lets the inventory / quest lists deep-link into the item and quest editors; those pages enforce the same capability
                 'content_view' => 'content.view',
             ],
         ]);
@@ -392,10 +391,8 @@ class CharacterController extends Controller
     }
 
     /**
-     * 角色详情页需要用到的全部 ID → 文本映射。
-     *
-     * 这里一次性解析（缓存命中后只是读 JSON），页面首屏直接显示名称，
-     * 不再依赖外部网站或前端异步补名。
+     * 角色详情页需要用到的全部 ID → 文本映射：一次性解析（缓存命中后只是读 JSON），
+     * 页面首屏直接显示名称，不依赖外部网站或前端异步补名。
      */
     private function resolveDetailNames(array $skills, array $spells, array $reps, array $quests, array $auras, array $achievements, array $cooldowns = []): array
     {
@@ -840,7 +837,6 @@ class CharacterController extends Controller
             $payload = date('Y-m-d H:i:s').' ['.$action.'|'.$stage.'] '.json_encode($context, JSON_UNESCAPED_SLASHES);
             LogPath::appendLine('character_actions.log', $payload, true, 0775);
         } catch(\Throwable $e){
-            // swallow
         }
     }
 }

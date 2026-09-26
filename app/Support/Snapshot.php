@@ -2,10 +2,6 @@
 /**
  * File: app/Support/Snapshot.php
  * Purpose: Defines class Snapshot for the app/Support module.
- * Classes:
- *   - Snapshot
- * Functions:
- *   - buildInsert()
  */
 
 namespace Acme\Panel\Support;

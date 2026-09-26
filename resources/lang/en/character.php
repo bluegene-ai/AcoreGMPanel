@@ -263,6 +263,7 @@ return [
         'boost_target_level_placeholder' => 'Target level (required without template)',
         'boost_submit' => 'Boost',
         'boost_hint' => 'With a template: send template rewards. Without a template: only set the level (no items or gold).',
+        'boost_hint_short' => 'Rewards are sent only when a template is picked.',
         'boost_manage_templates' => 'Manage templates',
         'boost_manage_codes' => 'Generate redeem codes',
         'boost_success' => 'Boost commands executed',

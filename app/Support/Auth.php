@@ -2,12 +2,6 @@
 /**
  * File: app/Support/Auth.php
  * Purpose: Defines class Auth for the app/Support module.
- * Classes:
- *   - Auth
- * Functions:
- *   - check()
- *   - attempt()
- *   - logout()
  */
 
 namespace Acme\Panel\Support;

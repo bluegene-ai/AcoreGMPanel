@@ -20,7 +20,9 @@ final class PageHeaderData
             ?? self::normalizeString($data['title'] ?? null)
             ?? self::normalizeString(($data['__pageMeta']['title'] ?? null));
         $header['intro'] = self::normalizeString($header['intro'] ?? null);
+        $header['intro_hint'] = self::normalizeString($header['intro_hint'] ?? null);
         $header['note'] = self::normalizeString($header['note'] ?? null);
+        $header['note_hint'] = self::normalizeString($header['note_hint'] ?? null);
         $header['actions'] = self::normalizeActions($header['actions'] ?? []);
 
         return $header;
@@ -36,7 +38,8 @@ final class PageHeaderData
                 'title' => Lang::get('app.auth.page_title'),
             ],
             'aegis.index' => [
-                'intro' => Lang::get('app.aegis.intro'),
+                'intro' => Lang::get('app.aegis.intro_short'),
+                'intro_hint' => Lang::get('app.aegis.intro'),
             ],
             'soap.index' => [
                 'intro' => Lang::get('app.soap.intro'),
@@ -45,13 +48,15 @@ final class PageHeaderData
                 'intro' => Lang::get('app.logs.intro'),
             ],
             'supervisor.index' => [
-                'intro' => Lang::get('app.supervisor.intro'),
+                'intro' => Lang::get('app.supervisor.intro_short'),
+                'intro_hint' => Lang::get('app.supervisor.intro'),
             ],
             'item_inventory.index' => [
                 'intro' => Lang::get('app.item_inventory.character.chars.subtitle'),
             ],
             'smartai.index' => [
-                'intro' => Lang::get('app.smartai.intro'),
+                'intro' => Lang::get('app.smartai.intro_short'),
+                'intro_hint' => Lang::get('app.smartai.intro'),
             ],
             'character.show' => [
                 'actions' => [

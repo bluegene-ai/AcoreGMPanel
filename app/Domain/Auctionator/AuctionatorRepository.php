@@ -3,16 +3,8 @@
  * File: app/Domain/Auctionator/AuctionatorRepository.php
  * Purpose: Read the mod-auctionator state and edit its three policy tables.
  *
- * Tables involved (see the module's conf for the semantics):
- *   world      mod_auctionator_itemclass_config (class, subclass, bonding, max_count, stack_count)
- *   world      mod_auctionator_disabled_items   (item)
- *   world      mod_auctionator_gm_list          (item, price, stack, hours, house, owner, enabled)
- *   world      mod_auctionator_item_class       (class, subclass, name)  [labels only]
- *   characters mod_auctionator_market_price     (entry, scan_datetime, average_price, count, ...)
- *   characters auctionhouse / item_instance / mail                       [dashboard counters]
- *
- * Classes:
- *   - AuctionatorRepository
+ * world: mod_auctionator_itemclass_config / _disabled_items / _gm_list / _item_class (labels only);
+ * characters: mod_auctionator_market_price + auctionhouse/item_instance/mail for the dashboard counters.
  */
 
 declare(strict_types=1);
@@ -25,23 +17,17 @@ use Throwable;
 
 final class AuctionatorRepository extends MultiServerRepository
 {
-    /** @var string[] */
     private array $warnings = [];
 
-    /** @return string[] */
     public function warnings(): array
     {
         return $this->warnings;
     }
 
-    // ------------------------------------------------------------------ dashboard reads
 
     /**
      * Bot/player listing counters for the dashboard.
-     *
-     * @return array{ok: bool, total: int, bot: int, player: int, bid_only: int, with_buyout: int,
-     *               distinct_items: int, min_id: int, max_id: int, min_expire: int, max_expire: int,
-     *               by_house: array<int, int>, bot_mail: int}
+     * @return array{ok: bool, total: int, bot: int, player: int, bid_only: int, with_buyout: int, distinct_items: int, min_id: int, max_id: int, min_expire: int, max_expire: int, by_house: array<int, int>, bot_mail: int}
      */
     public function listingStats(int $botGuid): array
     {
@@ -97,8 +83,7 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * @return array{ok: bool, error: string, rows: int, distinct_items: int, fresh_items: int,
-     *               newest: string, oldest: string, sources: array<string, int>}
+     * @return array{ok: bool, error: string, rows: int, distinct_items: int, fresh_items: int, newest: string, oldest: string, sources: array<string, int>}
      */
     public function marketStats(int $maxAgeDays): array
     {
@@ -158,19 +143,15 @@ final class AuctionatorRepository extends MultiServerRepository
         return $stats;
     }
 
-    // ------------------------------------------------------------------ policy reads
 
     /**
-     * @return array{disabled: array<int, array<string, mixed>>, itemclass: array<int, array<string, mixed>>,
-     *               itemclass_by_class: array<int, array<string, mixed>>,
-     *               gm_list: array<int, array<string, mixed>>, tables: array<string, bool>}
+     * @return array{disabled: array<int, array<string, mixed>>, itemclass: array<int, array<string, mixed>>, itemclass_by_class: array<int, array<string, mixed>>, gm_list: array<int, array<string, mixed>>, tables: array<string, bool>}
      */
     public function policyRows(int $limit, int $disabledLimit, int $itemclassLimit, int $gmListLimit, int $disabledFrom = 0): array
     {
         $world = $this->world();
 
-        // The blacklist can hold thousands of rows, so it is paged by item id instead of
-        // being dumped in one go (`disabled_from` comes from the page query string).
+        // the blacklist can hold thousands of rows: page it by item id (`disabled_from` comes from the query string)
         $disabledRows = $this->tryAll(
             'SELECT item FROM mod_auctionator_disabled_items WHERE item >= :from ORDER BY item ASC LIMIT ' . max(1, $disabledLimit),
             [':from' => max(0, $disabledFrom)],
@@ -245,9 +226,8 @@ final class AuctionatorRepository extends MultiServerRepository
         return [
             'disabled' => $disabled,
             'itemclass' => $itemclass,
-            // The same rows, grouped per item class and merged with the module's own class label
-            // list, so the page can offer one "list / do not list this whole type" control per
-            // class - including the classes that have no row yet and are therefore not listed.
+            // the same rows grouped per class and merged with the module's class labels, so the page can offer
+            // one "list / do not list this whole type" control per class - including classes with no row yet
             'itemclass_by_class' => $this->itemclassByClass($itemclass, $classNames['class']),
             'gm_list' => $gmList,
             'quality' => $this->qualityRows(),
@@ -257,11 +237,10 @@ final class AuctionatorRepository extends MultiServerRepository
                 'disabled_items' => $this->hasTable('mod_auctionator_disabled_items', $world) === true,
                 'itemclass_config' => $this->hasTable('mod_auctionator_itemclass_config', $world) === true,
                 'gm_list' => $this->hasTable('mod_auctionator_gm_list', $world) === true,
-                // The mode/bid columns arrive with the 2026_09_24_00 SQL update. A realm
-                // whose world database still predates it must be told so instead of being
-                // shown an empty list, because the SELECT above silently returns no rows.
+                // the mode/bid columns arrive with the 2026_09_24_00 SQL update: a world database that still predates
+                // it must be told so instead of being shown an empty list (the SELECT silently returns no rows)
                 'gm_list_mode' => $this->hasColumn('mod_auctionator_gm_list', 'mode', $world) === true,
-                // Same idea for the per-quality gate (2026_09_24_01).
+                // same idea for the per-quality gate (2026_09_24_01)
                 'quality_config' => $this->hasTable('mod_auctionator_quality_config', $world) === true,
                 'market_price' => $this->hasTable('mod_auctionator_market_price', $this->characters()) === true,
             ],
@@ -269,12 +248,9 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * Group the itemclass_config rows by item class, padded with every class the module has a
-     * label for. `listed` counts the subclasses whose quota is above 0; a class with 0 rows is
-     * not in the seller's whitelist at all, which is a different state from "quota 0".
-     *
-     * @param array<int, array<string, mixed>> $itemclass
-     * @param array<int, string> $classLabels
+     * Group the itemclass_config rows by item class, padded with every class the module has a label for.
+     * `listed` counts the subclasses whose quota is above 0; a class with 0 rows is not in the seller's
+     * whitelist at all, which is a different state from "quota 0".
      * @return array<int, array<string, mixed>>
      */
     private function itemclassByClass(array $itemclass, array $classLabels): array
@@ -315,13 +291,10 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * The automatic seller's per-quality gate, plus how many item_template rows hang off each
-     * quality so the switch is not a blind toggle.
-     *
-     * A quality with no row is *allowed*: that is the module's documented default (its query only
-     * rejects a quality whose row says enabled = 0), so an unconfigured quality is reported as
-     * enabled rather than as "missing".
-     *
+     * The automatic seller's per-quality gate, plus how many item_template rows hang off each quality so
+     * the switch is not a blind toggle.
+     * A quality with no row is *allowed* (the module's documented default: its query only rejects a row
+     * that says enabled = 0), so an unconfigured quality is reported as enabled rather than "missing".
      * @return array<int, array{quality: int, enabled: int, items: int, configured: bool}>
      */
     public function qualityRows(): array
@@ -338,8 +311,7 @@ final class AuctionatorRepository extends MultiServerRepository
             $configured[(int) $row['quality']] = (int) $row['enabled'];
         }
 
-        // item_template.quality is 0..7 (poor .. heirloom); anything beyond that has no row in
-        // the shipped data, so the range is fixed rather than taken from the counts.
+        // item_template.quality is 0..7 (poor .. heirloom); the range is fixed rather than taken from the counts
         $rows = [];
         for ($quality = 0; $quality <= 7; $quality++) {
             $rows[] = [
@@ -365,14 +337,11 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * Apply one quota to a whole item class: 0 means "never list this type", anything above 0
-     * brings the type (back) into the seller's whitelist.
-     *
-     * The whitelist is a plain INNER JOIN on mod_auctionator_itemclass_config, so a class with no
-     * row is simply never listed. Enabling therefore has to *create* the missing rows: every
-     * subclass the module has a label for is inserted with stack_count = 0, which the seller reads
-     * as "use the item's own max stack", and bonding = 0 (no extra constraint).
-     *
+     * Apply one quota to a whole item class: 0 means "never list this type", anything above 0 brings the
+     * type (back) into the seller's whitelist.
+     * The whitelist is a plain INNER JOIN on mod_auctionator_itemclass_config, so a class with no row is
+     * never listed; enabling therefore *creates* the missing rows (every subclass the module has a label
+     * for, with stack_count = 0 = "use the item's own max stack" and bonding = 0 = no extra constraint).
      * @return array{updated: int, inserted: int}
      */
     public function saveItemclassQuotaForClass(int $class, int $maxCount): array
@@ -398,10 +367,7 @@ final class AuctionatorRepository extends MultiServerRepository
         return ['updated' => $updated, 'inserted' => $inserted];
     }
 
-    /**
-     * @param int[] $entries
-     * @return array<int, string>
-     */
+    /** @param int[] $entries @return array<int, string> entry => name */
     public function itemNames(array $entries): array
     {
         $entries = array_values(array_unique(array_filter(array_map('intval', $entries), static fn (int $id): bool => $id > 0)));
@@ -426,7 +392,6 @@ final class AuctionatorRepository extends MultiServerRepository
 
     /**
      * Item class/subclass labels from the module's own lookup table (mod_auctionator_item_class).
-     *
      * @return array{class: array<int, string>, subclass: array<string, string>}
      */
     public function classNames(): array
@@ -449,7 +414,6 @@ final class AuctionatorRepository extends MultiServerRepository
         return ['class' => $classes, 'subclass' => $subclasses];
     }
 
-    // ------------------------------------------------------------------ policy writes
 
     public function addDisabledItem(int $item): bool
     {
@@ -493,12 +457,10 @@ final class AuctionatorRepository extends MultiServerRepository
 
     /**
      * Upsert one curated GM listing row.
-     *
-     * `mode` decides what the two prices mean (see the module's gm_list SQL):
-     *   legacy - follow the realm-wide Auctionator.Seller.BidOnly switch (price is the
-     *            unit buyout, or the unit start bid when that switch is on)
-     *   buyout - one fixed price: `price` is the unit buyout, the start bid is pinned to it
-     *   bid    - auction: `bid` is the unit start bid, `price` the optional unit buyout
+     * `mode` decides what the two prices mean (see the module's gm_list SQL): legacy - follow the realm-wide
+     * Auctionator.Seller.BidOnly switch (price = unit buyout, or unit start bid when the switch is on);
+     * buyout - one fixed price, the start bid is pinned to `price`; bid - auction, `bid` is the unit start
+     * bid and `price` the optional unit buyout.
      */
     public function saveGmListRow(
         int $item,
@@ -550,7 +512,6 @@ final class AuctionatorRepository extends MultiServerRepository
 
     /**
      * Row counts of the three policy tables (the page shows them next to the limited lists).
-     *
      * @return array{disabled: int, itemclass: int, gm_list: int, gm_list_enabled: int}
      */
     private function policyTotals(PDO $world): array
@@ -577,9 +538,7 @@ final class AuctionatorRepository extends MultiServerRepository
         return $totals;
     }
 
-    /**
-     * Item existence check for the GM add command (".auctionator add" aborts on unknown ids).
-     */
+    /** Item existence check for the GM add command (".auctionator add" aborts on unknown ids). */
     public function itemExists(int $item): bool
     {
         $row = $this->tryOne('SELECT entry, name FROM item_template WHERE entry = :entry', [':entry' => $item], $this->world());
@@ -587,13 +546,10 @@ final class AuctionatorRepository extends MultiServerRepository
         return $row !== null;
     }
 
-    // ------------------------------------------------------------------ helpers
 
     /**
-     * 本区**到底装没装** mod-auctionator：以模块自己的表（world 库 mod_auctionator_disabled_items）
-     * 为唯一证据。多区面板里这是"能不能管这个区的机器人"的判据，比手写白名单可靠——
-     * 装了模块的区自动就能管，没装的区也不会被误判成"页面故障"。
-     *
+     * 本区**到底装没装** mod-auctionator：以模块自己的表（world 库 mod_auctionator_disabled_items）为唯一证据。
+     * 装了模块的区自动就能管，没装的区也不会被误判成"页面故障"，比手写白名单可靠。
      * @return array{deployed: bool, reason: string} reason ∈ deployed|not_deployed|db_unreachable
      */
     public function deploymentProbe(): array
@@ -630,8 +586,8 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * Does this column exist? Used to keep a realm whose world database still predates a
-     * module SQL update readable instead of letting the SELECT fail silently.
+     * Does this column exist? Lets a realm whose world database still predates a module SQL update stay
+     * readable instead of failing silently.
      */
     private function hasColumn(string $table, string $column, PDO $pdo): ?bool
     {
@@ -651,10 +607,7 @@ final class AuctionatorRepository extends MultiServerRepository
         }
     }
 
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>|null
-     */
+    /** @param array<string, mixed> $params @return array<string, mixed>|null null when the statement fails */
     private function tryOne(string $sql, array $params, PDO $pdo): ?array
     {
         try {
@@ -670,10 +623,7 @@ final class AuctionatorRepository extends MultiServerRepository
         }
     }
 
-    /**
-     * @param array<int|string, mixed> $params
-     * @return array<int, array<string, mixed>>
-     */
+    /** @param array<int|string, mixed> $params @return array<int, array<string, mixed>> empty on failure */
     private function tryAll(string $sql, array $params, PDO $pdo): array
     {
         try {

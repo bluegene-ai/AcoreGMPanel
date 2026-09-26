@@ -76,7 +76,8 @@ class RafController extends Controller
             'module' => 'raf',
             'capabilities' => $this->listCapabilities(),
             'header' => [
-                'intro' => __('app.raf.intro'),
+                'intro' => __('app.raf.intro_short'),
+                'intro_hint' => __('app.raf.intro'),
                 'note' => __('app.raf.scope_note', [
                     'server' => (string) ($defaults['server_name'] ?? ''),
                     'realm' => (string) ($defaults['realm_id'] ?? 0),
@@ -88,9 +89,7 @@ class RafController extends Controller
         ]);
     }
 
-    /**
-     * 顶部统计卡是否处于"筛选后"状态，决定卡片下方的说明文案。
-     */
+    /** 顶部统计卡是否处于"筛选后"状态，决定卡片下方的说明文案。 */
     private function listHasQuery(array $filters): bool
     {
         return trim((string) ($filters['search'] ?? '')) !== ''
@@ -98,9 +97,7 @@ class RafController extends Controller
             || (string) ($filters['status'] ?? 'all') !== 'all';
     }
 
-    /**
-     * 绑定列表区块：统计与分页分开兜底，统计失败不牵连已经取到的列表。
-     */
+    /** 绑定列表区块：统计与分页分开兜底，统计失败不牵连已经取到的列表。 */
     private function buildListViewData(array $state): array
     {
         $pager = new Paginator([], 0, $state['page'], $state['limit']);
@@ -138,9 +135,7 @@ class RafController extends Controller
         ]);
     }
 
-    /**
-     * 奖励发放记录区块：表缺失只影响该区块，绑定列表保持可用。
-     */
+    /** 奖励发放记录区块：表缺失只影响该区块，绑定列表保持可用。 */
     private function buildRewardLogViewData(array $state): array
     {
         $schemaStatus = $this->repo()->schemaStatus();
@@ -175,9 +170,7 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 把奖励记录状态拼成区块部分视图所需的数据。
-     */
+    /** 把奖励记录状态拼成区块部分视图所需的数据。 */
     private function rewardLogSectionView(array $rewardLog): array
     {
         return [
@@ -198,9 +191,7 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 绑定列表区块的 AJAX 刷新：返回可直接替换的 HTML 片段 + 最新统计。
-     */
+    /** 绑定列表区块的 AJAX 刷新：返回可直接替换的 HTML 片段 + 最新统计。 */
     public function apiBindings(Request $request): Response
     {
         $this->requireListCapability();
@@ -220,9 +211,7 @@ class RafController extends Controller
         ]);
     }
 
-    /**
-     * 奖励发放记录区块的 AJAX 刷新。
-     */
+    /** 奖励发放记录区块的 AJAX 刷新。 */
     public function apiRewardLogs(Request $request): Response
     {
         $this->requireListCapability();
@@ -246,9 +235,7 @@ class RafController extends Controller
         ]);
     }
 
-    /**
-     * 统计卡片下钻：把卡片背后的明细渲染成弹窗内容。
-     */
+    /** 统计卡片下钻：把卡片背后的明细渲染成弹窗内容。 */
     public function apiCard(Request $request): Response
     {
         $this->requireListCapability();
@@ -461,9 +448,7 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 统计卡的 label/hint/filters 在控制器内解析，前后端文案与口径保持一致。
-     */
+    /** 统计卡的 label/hint/filters 在控制器内解析，前后端文案与口径保持一致。 */
     private function bindingCards(array $stats): array
     {
         $threshold = (int) Config::get('raf.permanent_block_threshold', 5);
@@ -494,8 +479,7 @@ class RafController extends Controller
                 'label' => __('app.raf.stats.inactive'),
                 'hint' => __('app.raf.stats.hints.inactive', ['threshold' => (string) $threshold]),
                 'value' => (int) ($stats['inactive'] ?? 0),
-                // status=inactive 已自带"同 IP 次数 <= threshold"，不能再叠加 ip_abuse_max，
-                // 否则同一个值会绑定到两个不同的命名占位符（原生预处理会直接报错）
+                // status=inactive 已自带"同 IP 次数 <= threshold"，再叠加 ip_abuse_max 会让同一个值绑定到两个命名占位符（原生预处理直接报错）
                 'filters' => ['status' => 'inactive'],
                 'link' => ['status' => 'inactive'],
             ],
@@ -561,10 +545,8 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 前端统计卡刷新载荷：时间型卡片必须带 value_text，
-     * 否则浏览器会按本地时区重新格式化时间戳，与面板时区不一致。
-     */
+    // 前端统计卡刷新载荷：时间型卡片必须带 value_text，否则浏览器会按本地时区重新格式化时间戳，
+    // 与面板时区不一致
     private function rewardLogStatPayload(array $stats): array
     {
         $latest = (int) ($stats['latest_granted_at'] ?? 0);
@@ -587,9 +569,7 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 渲染不含布局的 HTML 片段，供 AJAX 直接替换。
-     */
+    /** 渲染不含布局的 HTML 片段，供 AJAX 直接替换。 */
     private function partial(string $view, array $data): string
     {
         return View::make($view, $data);
@@ -871,9 +851,7 @@ class RafController extends Controller
         ];
     }
 
-    /**
-     * 把日期输入转换为当天的起止时间戳（按面板时区）
-     */
+    /** 把日期输入转换为当天的起止时间戳（按面板时区） */
     private function rewardLogDateBoundary(string $value, bool $endOfDay): int
     {
         $value = trim($value);

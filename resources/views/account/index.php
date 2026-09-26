@@ -241,8 +241,7 @@
         <td class="ip-location" data-ip="<?= htmlspecialchars($lastIp) ?>">-</td>
         <td class="account-table__actions-cell">
           <?php
-            // 归组规则与 account.js 的 rowActionBarHtml 完全一致：
-            // 行内只平铺"角色"，其余低频/危险操作收进"更多"菜单，避免每行挤 9 个按钮
+            // 归组规则与 account.js 的 rowActionBarHtml 一致：行内只平铺"角色"，其余收进"更多"菜单
             $accountMenuActions = [];
             if($__accountCapabilities['gm'])        { $accountMenuActions[] = ['action' => 'gm',     'class' => 'btn-sm btn warn',            'label' => __('app.account.actions.gm')]; }
             if($__accountCapabilities['ban'])       { $accountMenuActions[] = ['action' => 'ban',    'class' => 'btn-sm btn danger',          'label' => __('app.account.actions.ban')]; }

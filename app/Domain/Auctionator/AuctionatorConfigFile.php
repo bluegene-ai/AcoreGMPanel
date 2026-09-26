@@ -3,22 +3,10 @@
  * File: app/Domain/Auctionator/AuctionatorConfigFile.php
  * Purpose: Read and rewrite the worldserver's `configs/modules/mod_auctionator.conf`.
  *
- * The module reads its configuration once, while the Auctionator singleton is constructed,
- * so every save here only takes effect after the worldserver is restarted. The file is
- * comment-heavy (it is the module's own documentation), therefore the writer never
- * regenerates it: it replaces the value on the matching `Key = value` line and leaves
- * every comment, blank line and unknown key untouched.
- *
- * Classes:
- *   - AuctionatorConfigFile
- * Functions:
- *   - __construct()
- *   - path()
- *   - exists()
- *   - read()
- *   - typedValues()
- *   - formatValue()
- *   - write()
+ * The module reads its configuration once, while the Auctionator singleton is constructed, so every
+ * save here only takes effect after that realm's worldserver is restarted. The file is comment-heavy
+ * (it is the module's own documentation), therefore the writer never regenerates it: it replaces the
+ * value on the matching `Key = value` line and leaves every comment, blank line and unknown key alone.
  */
 
 declare(strict_types=1);
@@ -48,7 +36,6 @@ final class AuctionatorConfigFile
 
     /**
      * Parse the file into raw string values.
-     *
      * @return array{ok: bool, values: array<string, string>, error: string}
      */
     public function read(): array
@@ -65,9 +52,7 @@ final class AuctionatorConfigFile
         return ['ok' => true, 'values' => self::parse($contents), 'error' => ''];
     }
 
-    /**
-     * @return array<string, string> key => raw value (without quotes)
-     */
+    /** @return array<string, string> key => raw value (without quotes) */
     public static function parse(string $contents): array
     {
         $values = [];
@@ -89,7 +74,6 @@ final class AuctionatorConfigFile
 
     /**
      * Cast the raw values to the types declared in the field map.
-     *
      * @param array<string, array<string, mixed>> $fields
      * @return array<string, mixed>
      */
@@ -119,8 +103,7 @@ final class AuctionatorConfigFile
 
     /**
      * Write the given typed values, one `Key = value` line each.
-     *
-     * @param array<string, mixed>                $values key => typed value
+     * @param array<string, mixed> $values key => typed value
      * @param array<string, array<string, mixed>> $fields field specification (for the type)
      * @return array{ok: bool, changed: array<string, array{from: string, to: string}>, appended: string[], error: string, backup: string}
      */
@@ -141,9 +124,8 @@ final class AuctionatorConfigFile
             return $result;
         }
 
-        // Line ending used for *appended* lines only: every existing line keeps its own
-        // ending, because the replacements below run on the raw bytes instead of on a
-        // split/join round trip (that normalised a mixed-ending file to CRLF once).
+        // the line ending applies to *appended* lines only: existing lines keep their own ending, because the
+        // replacements run on the raw bytes instead of a split/join round trip (which normalised mixed endings)
         $newline = preg_match('/\r\n|\n|\r/', $contents, $ending) === 1 ? $ending[0] : "\n";
         $working = $contents;
 
@@ -238,8 +220,8 @@ final class AuctionatorConfigFile
     }
 
     /**
-     * Matches exactly one `Key = value` line, capturing the prefix, the raw value, the
-     * trailing whitespace and the line ending so a replacement can keep all three.
+     * Matches exactly one `Key = value` line, capturing the prefix, the raw value, the trailing whitespace
+     * and the line ending so a replacement can keep all three.
      */
     private static function linePattern(string $key): string
     {

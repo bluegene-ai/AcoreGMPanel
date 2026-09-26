@@ -2,11 +2,6 @@
 /**
  * File: app/Core/Url.php
  * Purpose: Defines class Url for the app/Core module.
- * Classes:
- *   - Url
- * Functions:
- *   - to()
- *   - asset()
  */
 
 namespace Acme\Panel\Core;

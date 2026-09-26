@@ -6,7 +6,9 @@ return [
         'apply' => [
             'title' => '执行直升',
             'note' => '当前服务器 realm_id=:realm。填角色名或 GUID 定位角色，再选模板或直接指定目标等级。',
+            'note_short' => '当前服务器 realm_id=:realm。填角色名或 GUID 指定角色。',
             'hint' => '直升会先调整角色等级，再按模板发放物品与金币；模板比手动等级更安全，建议优先使用。',
+            'hint_short' => '模板比手动指定等级更安全，建议优先使用。',
         ],
         'fields' => [
             'character_name' => '角色名',

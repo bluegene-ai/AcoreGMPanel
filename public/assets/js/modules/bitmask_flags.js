@@ -1,20 +1,6 @@
 /**
  * File: public/assets/js/modules/bitmask_flags.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - escapeHtml()
- *   - initBitmaskFlags()
- *   - groupFor()
- *   - ensureNodes()
- *   - namesFor()
- *   - updateLabel()
- *   - refreshCurrent()
- *   - buildOptions()
- *   - buildDynamic()
- *   - openMask()
- *   - closeMask()
- *   - wireDynamic()
  */
 
 const panelLocale = typeof window !== 'undefined' ? (window.Panel || {}) : {};

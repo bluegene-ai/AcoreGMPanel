@@ -1,19 +1,10 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/ItemInventoryLog.php
- * Purpose: Single append-only action log for the unified item/inventory module,
- *          replacing the two duplicate log writers that used to live inside
- *          BagQueryRepository and ItemOwnershipRepository.
+ * Purpose: Single append-only action log for the unified item/inventory module.
  *
- * Writes to storage/logs/item_inventory_actions.log, which the Logs module
- * exposes through config/logs.php.
- *
- * Classes:
- *   - ItemInventoryLog
- * Functions:
- *   - action()
- *   - logFile()
- *   - currentUser()
+ * Writes to storage/logs/item_inventory_actions.log, which the Logs module exposes through
+ * config/logs.php.
  */
 
 declare(strict_types=1);
@@ -28,9 +19,6 @@ final class ItemInventoryLog
 {
     public const FILE = 'item_inventory_actions.log';
 
-    /**
-     * @param array<string,mixed> $context
-     */
     public static function action(string $event, array $context = []): void
     {
         try {

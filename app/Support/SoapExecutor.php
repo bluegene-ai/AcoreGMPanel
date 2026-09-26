@@ -2,15 +2,6 @@
 /**
  * File: app/Support/SoapExecutor.php
  * Purpose: Defines class SoapExecutor for the app/Support module.
- * Classes:
- *   - SoapExecutor
- * Functions:
- *   - __construct()
- *   - execute()
- *   - classifyException()
- *   - mapFaultMessage()
- *   - result()
- *   - audit()
  */
 
 namespace Acme\Panel\Support;
@@ -66,10 +57,8 @@ class SoapExecutor
 
         $attempt=0; $lastError=null; $faultMsg=null; $output='';
 
-        // worldserver 没启动时，SoapClient::__doRequest() 会发出 "connect() failed" 之类的
-        // PHP warning；面板的 ErrorHandler 会把任何 warning 转成错误页直接 echo 出来，
-        // 结果就是页面中间插一段异常堆栈。SOAP 不通是预期内的情况（下面会优雅返回失败），
-        // 所以这里临时把 warning 静音，调用结束再恢复原来的错误处理器。
+        // worldserver 没启动时 SoapClient 会发 "connect() failed" 之类的 PHP warning，而面板的 ErrorHandler 会把
+        // warning 直接 echo 成错误页；SOAP 不通是预期内情况，所以这里临时静音、调用结束恢复原错误处理器。
         set_error_handler(static function (): bool {
             return true;
         }, E_WARNING | E_NOTICE | E_USER_WARNING | E_USER_NOTICE | E_DEPRECATED);

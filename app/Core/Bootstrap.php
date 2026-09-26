@@ -2,11 +2,6 @@
 /**
  * File: app/Core/Bootstrap.php
  * Purpose: Defines class Bootstrap for the app/Core module.
- * Classes:
- *   - Bootstrap
- * Functions:
- *   - atomicWrite()
- *   - run()
  */
 
 declare(strict_types=1);
@@ -286,8 +281,7 @@ class Bootstrap
             }
         }
 
-        // Global server switch via query param (used by the server switch dropdown).
-        // Only allow switching for authenticated panel sessions.
+        // global server switch via ?server= (the header dropdown); only for authenticated panel sessions
         if (isset($_GET['server']) && $_GET['server'] !== '') {
             $rawServer = $_GET['server'];
 

@@ -2,16 +2,6 @@
 /**
  * File: app/Http/Controllers/MassMail/MassMailController.php
  * Purpose: Defines class MassMailController for the app/Http/Controllers/MassMail module.
- * Classes:
- *   - MassMailController
- * Functions:
- *   - __construct()
- *   - index()
- *   - apiAnnounce()
- *   - apiSend()
- *   - apiLogs()
- *   - apiItems()
- *   - apiPreviewTargets()
  */
 
 namespace Acme\Panel\Http\Controllers\MassMail;
@@ -118,9 +108,7 @@ class MassMailController extends Controller
     public function apiLogs(Request $request): Response
     { $this->requireLogsCapability(); $this->switchServerAndRefresh($request, function (): void { $this->refreshService(); }); $limit=(int)$request->input('limit',30); $rows=$this->svc->recentLogs($limit); return $this->json(['success'=>true,'logs'=>$rows]); }
 
-    /**
-     * 物品名解析：只读，供发送界面的物品编辑器即时显示名称。
-     */
+    /** 物品名解析：只读，供发送界面的物品编辑器即时显示名称。 */
     public function apiItems(Request $request): Response
     {
         $this->requireSendCapability();
@@ -148,9 +136,7 @@ class MassMailController extends Controller
         return $this->json(['success' => true, 'names' => $names]);
     }
 
-    /**
-     * 收件人预览：返回数量、上限与少量样本，避免把整份名单回传浏览器。
-     */
+    /** 收件人预览：返回数量、上限与少量样本，避免把整份名单回传浏览器。 */
     public function apiPreviewTargets(Request $request): Response
     {
         $this->requireSendCapability();

@@ -86,19 +86,22 @@ $modeCards = [
         'value' => 'single',
     'title' => $cardsData['single']['title'] ?? __('app.setup.mode.cards.single.title'),
     'badge' => $cardsData['single']['badge'] ?? __('app.setup.mode.cards.single.badge'),
-    'desc' => $cardsData['single']['desc'] ?? __('app.setup.mode.cards.single.desc'),
+    'desc' => $cardsData['single']['desc_short'] ?? __('app.setup.mode.cards.single.desc_short'),
+    'desc_hint' => $cardsData['single']['desc'] ?? __('app.setup.mode.cards.single.desc'),
     ],
     'multi' => [
         'value' => 'multi',
     'title' => $cardsData['multi']['title'] ?? __('app.setup.mode.cards.multi.title'),
     'badge' => $cardsData['multi']['badge'] ?? __('app.setup.mode.cards.multi.badge'),
-    'desc' => $cardsData['multi']['desc'] ?? __('app.setup.mode.cards.multi.desc'),
+    'desc' => $cardsData['multi']['desc_short'] ?? __('app.setup.mode.cards.multi.desc_short'),
+    'desc_hint' => $cardsData['multi']['desc'] ?? __('app.setup.mode.cards.multi.desc'),
     ],
     'multi-full' => [
         'value' => 'multi-full',
     'title' => $cardsData['multi_full']['title'] ?? __('app.setup.mode.cards.multi_full.title'),
     'badge' => $cardsData['multi_full']['badge'] ?? __('app.setup.mode.cards.multi_full.badge'),
-    'desc' => $cardsData['multi_full']['desc'] ?? __('app.setup.mode.cards.multi_full.desc'),
+    'desc' => $cardsData['multi_full']['desc_short'] ?? __('app.setup.mode.cards.multi_full.desc_short'),
+    'desc_hint' => $cardsData['multi_full']['desc'] ?? __('app.setup.mode.cards.multi_full.desc'),
     ],
 ];
 
@@ -168,7 +171,7 @@ $jsLocale = [
             <?= htmlspecialchars($card['title']) ?>
             <span class="mode-card__badge"><?= htmlspecialchars($card['badge']) ?></span>
           </div>
-          <p class="mode-card__desc"><?= htmlspecialchars($card['desc']) ?></p>
+          <p class="mode-card__desc"><?= htmlspecialchars($card['desc']) ?><span class="panel-hint" title="<?= htmlspecialchars((string) $card['desc_hint']) ?>">i</span></p>
         </label>
       <?php endforeach; ?>
     </div>
@@ -193,7 +196,7 @@ $jsLocale = [
     <div class="setup-section__header">
       <div>
         <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['auth']['title'] ?? __('app.setup.mode.section.auth.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?></p>
+        <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.mode.section.auth.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?>">i</span></p>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['auth']['pill'] ?? __('app.setup.mode.section.auth.pill'))) ?></span>
     </div>
@@ -237,7 +240,7 @@ $jsLocale = [
   </section>
 
   <footer class="setup-footer">
-    <div class="setup-disclaimer"><?= htmlspecialchars((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?></div>
+    <div class="setup-disclaimer"><?= htmlspecialchars(__('app.setup.mode.footer.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?>">i</span></div>
     <div class="setup-actions">
       <button class="btn primary" type="submit"><?= htmlspecialchars((string)($footer['submit'] ?? __('app.setup.mode.footer.submit'))) ?></button>
       <a href="<?= url('/setup?step=1') ?>" class="btn secondary"><?= htmlspecialchars((string)($footer['back'] ?? __('app.setup.mode.footer.back'))) ?></a>

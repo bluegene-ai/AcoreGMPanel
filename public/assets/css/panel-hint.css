@@ -1,0 +1,22 @@
+/* 全局：ⓘ 悬浮提示标记（长说明放 title，页面上只留一个图标） */
+.panel-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(210, 182, 137, .45);
+  color: #d2b689;
+  font-size: 11px;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.panel-hint:hover {
+  border-color: rgba(220, 168, 82, .85);
+  color: #ffe1ab;
+}

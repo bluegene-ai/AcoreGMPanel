@@ -1,48 +1,6 @@
 /**
  * File: public/assets/js/modules/mail.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - translateStatus()
- *   - mailNotify()
- *   - apiPost()
- *   - escapeHtml()
- *   - truncate()
- *   - formatExpire()
- *   - formatStatus()
- *   - formatMoney()
- *   - selectedIds()
- *   - updateBulkState()
- *   - buildPayload()
- *   - fetchList()
- *   - renderTable()
- *   - updateTotal()
- *   - renderPagination()
- *   - enhanceInitialPagination()
- *   - bindSorting()
- *   - applySortIndicators()
- *   - refreshMailLogs()
- *   - bindFilters()
- *   - markReadOne()
- *   - deleteOne()
- *   - bulkMark()
- *   - bulkDelete()
- *   - clearDetail()
- *   - renderMailDetail()
- *   - renderMailItems()
- *   - openDetail()
- *   - loadStats()
- *   - bindToolbar()
- *   - bindTableDelegates()
- *   - resolveModal()
- *   - openModal()
- *   - hideModal()
- *   - hideAllModals()
- *   - init()
- *   - qs()
- *   - qsa()
- *   - nowSeconds()
- *   - addLink()
  */
 
 (function(){
@@ -58,12 +16,8 @@
   const basePath = (window.Panel?.base || window.APP_BASE || '').replace(/\/$/, '');
 
   /**
-   * Absolute URL for a panel-relative path, base path included.
-   *
-   * Never build a plain href from a root-relative literal: on a sub-path
-   * install (/agmp) the browser resolves "/character/view" against the web
-   * root and 404s. Prefer Panel.absoluteUrl() and fall back to the base
-   * captured above.
+   * panel 相对路径 → 含基路径的绝对 URL。别用根相对字面量拼 href（子路径部署会 404）；
+   * 优先用 Panel.absoluteUrl()，没有时回退到上面捕获的基路径。
    */
   const absoluteUrl = (typeof window.Panel?.absoluteUrl === 'function')
     ? (path) => window.Panel.absoluteUrl(path)

@@ -15,23 +15,17 @@ use Throwable;
 
 class BossRepository extends MultiServerRepository
 {
-    /**
-     * config 表的原始列清单，loadConfig / loadConfigStorageRow 共用。
-     */
+    // config 表的原始列清单，loadConfig / loadConfigStorageRow 共用。
+
     private const CONFIG_COLUMNS = [
         'state_key', 'boss_entry', 'boss_name', 'boss_level',
         'boss_scale_scaled', 'boss_health_multiplier_scaled',
         'boss_auras_text', 'ally_level',
         'ally_health_multiplier_scaled', 'respawn_time_minutes',
         'minion_count_min', 'minion_count_max', 'skill_preset',
-        'skill_difficulty', 'guaranteed_reward_enabled',
-        'guaranteed_reward_notify', 'max_random_reward_players',
-        'class_reward_chance', 'formula_reward_chance',
-        'mount_reward_chance', 'random_reward_mode', 'participation_range',
+        'skill_difficulty', 'random_reward_mode', 'participation_range',
         'damage_weight', 'healing_weight', 'threat_weight',
-        'presence_weight', 'kill_weight', 'guaranteed_item_id',
-        'guaranteed_item_count', 'gold_min_copper', 'gold_max_copper',
-        'reward_items_text', 'reward_formulas_text', 'reward_mounts_text',
+        'presence_weight', 'kill_weight',
         'spawn_points_text', 'updated_at',
     ];
 
@@ -60,7 +54,7 @@ class BossRepository extends MultiServerRepository
         'schedule_state', 'schedule_window', 'schedule_next_change_at',
     ];
 
-    /** @var array<string,bool> information_schema 列探测缓存（键：表.列） */
+    
     private array $columnAvailability = [];
 
     public function __construct(?int $serverId = null)
@@ -82,9 +76,8 @@ class BossRepository extends MultiServerRepository
         $this->decimalScale = max(1, (int) Config::get('boss.decimal_scale', 100));
     }
 
-    /**
-     * 当前区服是否部署了 boss.lua（config/boss.php supported_server_ids）。
-     */
+    // 当前区服是否部署了 boss.lua（config/boss.php supported_server_ids）。
+
     public function serverSupported(?int $serverId = null): bool
     {
         $supported = Config::get('boss.supported_server_ids', []);
@@ -116,9 +109,8 @@ class BossRepository extends MultiServerRepository
         ];
     }
 
-    /**
-     * 当前区服显示名，用于 :server 占位替换；取不到时退回区服索引。
-     */
+    // 当前区服显示名，用于 :server 占位替换；取不到时退回区服索引。
+
     private function serverName(): string
     {
         try {
@@ -134,9 +126,8 @@ class BossRepository extends MultiServerRepository
         return (string) $this->serverId;
     }
 
-    /**
-     * 取当前区服的 ac_eluna / state_key 覆盖项，没有配置时返回空数组。
-     */
+    // 取当前区服的 ac_eluna / state_key 覆盖项，没有配置时返回空数组。
+
     private function serverOverride(int $serverId): array
     {
         $overrides = Config::get('boss.server_overrides', []);
@@ -154,7 +145,7 @@ class BossRepository extends MultiServerRepository
         try {
             return $this->buildDashboard($eventLimit, $contributorLimit);
         } catch (Throwable $exception) {
-            // public/index.php 没有全局异常兜底：DB/配置异常时降级为警告 + 默认值。
+            
             $this->logWarning('dashboard_degraded', $exception);
 
             $warnings = [];
@@ -227,7 +218,7 @@ class BossRepository extends MultiServerRepository
         if (!$this->tableExists($this->configTable))
             throw new \RuntimeException('boss_config_storage_missing');
 
-        // 语义：缺失字段保留数据库现值，只有显式提交的字段才被覆盖。
+        
         $currentRow = $this->loadConfigStorageRow($this->configTable) ?? [];
         $defaults = $this->defaultConfigStorage();
 
@@ -241,9 +232,8 @@ class BossRepository extends MultiServerRepository
         return $this->normalizeConfigRow($normalized, $defaults);
     }
 
-    /**
-     * 读取 config 表当前行的原始列值；表不存在或行缺失时返回 null。
-     */
+    // 读取 config 表当前行的原始列值；表不存在或行缺失时返回 null。
+
     private function loadConfigStorageRow(string $table): ?array
     {
         if (!$this->tableExists($table))
@@ -302,9 +292,8 @@ class BossRepository extends MultiServerRepository
         }
     }
 
-    /**
-     * 运行态要读的列：基础列永远读，定时启停三列按「本区库里是否真的有这一列」决定。
-     */
+    // 运行态要读的列：基础列永远读，定时启停三列按「本区库里是否真的有这一列」决定。
+
     private function runtimeColumns(): array
     {
         $columns = self::RUNTIME_BASE_COLUMNS;
@@ -318,10 +307,8 @@ class BossRepository extends MultiServerRepository
         return $columns;
     }
 
-    /**
-     * information_schema 列探测（带缓存）。探测失败按「不存在」处理并记 warning：
-     * 缺列只应导致少读几项，不应把整个页面打崩。
-     */
+    // information_schema 列探测（带缓存）。探测失败按「不存在」处理并记 warning：
+
     private function columnExists(string $table, string $column): bool
     {
         $cacheKey = $table . '.' . $column;
@@ -419,17 +406,15 @@ class BossRepository extends MultiServerRepository
         return $schema;
     }
 
-    /**
-     * 扩展配置表是否已由 boss.lua 创建；没有就没法保存（只能看默认值）。
-     */
+    // 扩展配置表是否已由 boss.lua 创建；没有就没法保存（只能看默认值）。
+
     public function extConfigAvailable(): bool
     {
         return $this->tableExists($this->extTable);
     }
 
-    /**
-     * 读取扩展配置：表/行缺失或读取异常时回退到内置默认值并记一条 warning。
-     */
+    // 读取扩展配置：表/行缺失或读取异常时回退到内置默认值并记一条 warning。
+
     private function loadExtConfig(array &$warnings): array
     {
         $defaults = $this->defaultExtStorage();
@@ -455,12 +440,8 @@ class BossRepository extends MultiServerRepository
         }
     }
 
-    /**
-     * 保存扩展配置。语义与主表一致：只覆盖显式提交的字段，其余保留数据库现值。
-     *
-     * 用 INSERT ... ON DUPLICATE KEY UPDATE（而不是 REPLACE INTO）：REPLACE 会先删行，
-     * 脚本新增的列会被重置为建表默认值。
-     */
+    // 保存扩展配置。语义与主表一致：只覆盖显式提交的字段，其余保留数据库现值。
+
     public function saveExtConfig(array $config): array
     {
         if (!$this->tableExists($this->extTable))
@@ -546,9 +527,8 @@ class BossRepository extends MultiServerRepository
         $stmt->execute();
     }
 
-    /**
-     * 扩展配置的类型归一（整数/开关转 int，其余转 string），键序与 schema 一致。
-     */
+    // 扩展配置的类型归一（整数/开关转 int，其余转 string），键序与 schema 一致。
+
     private function normalizeExtRow(array $row, array $defaults): array
     {
         $resolved = array_replace($defaults, $row);
@@ -566,9 +546,8 @@ class BossRepository extends MultiServerRepository
         return $normalized;
     }
 
-    /**
-     * 出厂默认值：先按 schema 给零值兜底，再用 config/boss.php 的 ext_defaults 覆盖。
-     */
+    // 出厂默认值：先按 schema 给零值兜底，再用 config/boss.php 的 ext_defaults 覆盖。
+
     private function defaultExtStorage(): array
     {
         $defaults = [];
@@ -746,12 +725,8 @@ class BossRepository extends MultiServerRepository
 
         try {
             $stmt = $this->characters()->prepare(
-                'SELECT '
-                . 'id, boss_guid, boss_entry, boss_name, player_guid, '
-                . 'player_name, account_id, damage_done, healing_done, '
-                . 'threat_samples, presence_samples, contribution_score, '
-                . 'was_killer, rewarded_random, guaranteed_reward, created_at '
-                . 'FROM ' . $this->table('boss_activity_contributors')
+                'SELECT ' . implode(', ', $this->contributorColumns())
+                . ' FROM ' . $this->table('boss_activity_contributors')
                 . ' WHERE state_key = :state_key'
                 . ' ORDER BY id DESC LIMIT :limit'
             );
@@ -786,11 +761,247 @@ class BossRepository extends MultiServerRepository
             $row['guaranteed_reward'] = (int) (
                 $row['guaranteed_reward'] ?? 0
             );
+            
+            $row['reward_pools_mask'] = (int) ($row['reward_pools_mask'] ?? 0);
             $row['created_at'] = (int) ($row['created_at'] ?? 0);
+            $row['reward_pools'] = $this->decodeRewardPoolMask($row['reward_pools_mask']);
         }
         unset($row);
 
         return $rows;
+    }
+
+    /**
+     * 把 6 个奖池的中奖位图展开成 [1, 3, 5] 这样的奖池序号列表（给视图渲染徽章用）。
+     *
+     * @return array<int,int>
+     */
+    private function decodeRewardPoolMask(int $mask): array
+    {
+        $pools = [];
+        for ($index = 1; $index <= 6; $index++) {
+            if (($mask & (1 << ($index - 1))) !== 0) {
+                $pools[] = $index;
+            }
+        }
+
+        return $pools;
+    }
+
+    /**
+     * 贡献表要读的列：reward_pools_mask 是新加的（6 个独立奖池的中奖位图），
+     * 老脚本还没升级时库里没有这一列 —— 探测后再拼 SQL，缺列只少读一项，不让整条查询失败。
+     *
+     * @return string[]
+     */
+    private function contributorColumns(): array
+    {
+        $columns = [
+            'id', 'boss_guid', 'boss_entry', 'boss_name', 'player_guid',
+            'player_name', 'account_id', 'damage_done', 'healing_done',
+            'threat_samples', 'presence_samples', 'contribution_score',
+            'was_killer', 'rewarded_random', 'guaranteed_reward', 'created_at',
+        ];
+
+        if ($this->columnExists('boss_activity_contributors', 'reward_pools_mask')) {
+            $columns[] = 'reward_pools_mask';
+        }
+
+        return $columns;
+    }
+
+    /**
+     * 物品 ID → 物品名称（奖品预览用）。
+     *
+     * 先走 GameNameResolver（world 库 + 按区/语言的磁盘缓存），查不到的（自定义物品、
+     * 本地化表缺失等）再补一次 world 库 item_template；两边都查不到时回落到 "#ID"。
+     *
+     * @param array<int,int|string> $itemIds
+     * @return array<int,string> id => 显示名
+     */
+    public function itemNames(array $itemIds): array
+    {
+        $ids = [];
+        foreach ($itemIds as $itemId) {
+            $itemId = (int) $itemId;
+            if ($itemId > 0) {
+                $ids[$itemId] = true;
+            }
+        }
+        $ids = array_keys($ids);
+        if ($ids === []) {
+            return [];
+        }
+
+        try {
+            $names = \Acme\Panel\Support\GameNameResolver::resolveMany('item', $ids);
+        } catch (Throwable $exception) {
+            $names = [];
+        }
+
+        $missing = array_values(array_filter(
+            $ids,
+            static fn (int $id): bool => !isset($names[$id])
+        ));
+
+        if ($missing !== []) {
+            try {
+                $placeholders = implode(',', array_fill(0, count($missing), '?'));
+                $stmt = $this->world()->prepare(
+                    'SELECT entry, name FROM item_template WHERE entry IN (' . $placeholders . ')'
+                );
+                $stmt->execute($missing);
+                foreach (($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+                    $names[(int) $row['entry']] = (string) $row['name'];
+                }
+            } catch (Throwable $exception) {
+                $this->logWarning('item_names_unavailable', $exception);
+            }
+        }
+
+        $resolved = [];
+        foreach ($ids as $id) {
+            $name = trim((string) ($names[$id] ?? ''));
+            $resolved[$id] = $name !== '' ? $name : '#' . $id;
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * 最近一次击杀的参战名单（奖池模拟用）：取最新 boss_guid 的贡献快照，
+     * 再从角色库补职业与等级（"只发该玩家能用的奖品"要用职业判定）。
+     *
+     * @return array<int,array<string,mixed>> [guid, name, class_id, level, damage, healing, threat, presence, is_killer, score]
+     */
+    public function latestKillRoster(int $limit = 40): array
+    {
+        $limit = max(1, min(200, $limit));
+
+        try {
+            $stmt = $this->characters()->prepare(
+                'SELECT boss_guid FROM ' . $this->table('boss_activity_contributors')
+                . ' WHERE state_key = :state_key AND boss_guid > 0'
+                . ' ORDER BY id DESC LIMIT 1'
+            );
+            $stmt->execute([':state_key' => $this->runtimeKey]);
+            $bossGuid = (int) ($stmt->fetchColumn() ?: 0);
+            if ($bossGuid <= 0) {
+                return [];
+            }
+
+            $stmt = $this->characters()->prepare(
+                'SELECT player_guid, player_name, damage_done, healing_done, threat_samples, presence_samples,'
+                . ' was_killer, contribution_score FROM ' . $this->table('boss_activity_contributors')
+                . ' WHERE state_key = :state_key AND boss_guid = :boss_guid'
+                . ' ORDER BY contribution_score DESC, id ASC LIMIT ' . $limit
+            );
+            $stmt->execute([':state_key' => $this->runtimeKey, ':boss_guid' => $bossGuid]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $exception) {
+            $this->logWarning('latest_kill_roster_unavailable', $exception);
+
+            return [];
+        }
+
+        if ($rows === []) {
+            return [];
+        }
+
+        // 职业 / 等级：贡献快照里没有，从角色库补（查不到时职业 0 = 未知，只影响"能不能用"的判定）
+        $classByGuid = [];
+        $guids = [];
+        foreach ($rows as $row) {
+            $guid = (int) ($row['player_guid'] ?? 0);
+            if ($guid > 0) {
+                $guids[$guid] = true;
+            }
+        }
+
+        if ($guids !== []) {
+            try {
+                $guidList = array_keys($guids);
+                $placeholders = implode(',', array_fill(0, count($guidList), '?'));
+                $stmt = $this->characters()->prepare(
+                    'SELECT guid, class, level FROM characters WHERE guid IN (' . $placeholders . ')'
+                );
+                $stmt->execute($guidList);
+                foreach (($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+                    $classByGuid[(int) $row['guid']] = [
+                        'class_id' => (int) ($row['class'] ?? 0),
+                        'level' => (int) ($row['level'] ?? 80),
+                    ];
+                }
+            } catch (Throwable $exception) {
+                $this->logWarning('latest_kill_roster_classes_unavailable', $exception);
+            }
+        }
+
+        $roster = [];
+        foreach ($rows as $row) {
+            $guid = (int) ($row['player_guid'] ?? 0);
+            $roster[] = [
+                'guid' => $guid,
+                'name' => (string) ($row['player_name'] ?? ''),
+                'class_id' => (int) ($classByGuid[$guid]['class_id'] ?? 0),
+                'level' => (int) ($classByGuid[$guid]['level'] ?? 80),
+                'damage' => (int) ($row['damage_done'] ?? 0),
+                'healing' => (int) ($row['healing_done'] ?? 0),
+                'threat' => (int) ($row['threat_samples'] ?? 0),
+                'presence' => (int) ($row['presence_samples'] ?? 0),
+                'is_killer' => !empty($row['was_killer']),
+                'score' => (float) ($row['contribution_score'] ?? 0),
+            ];
+        }
+
+        return $roster;
+    }
+
+    /**
+     * 物品的职业/等级限制（world 库 item_template）：给「职业过滤映射」的自动补全用。
+     * AllowableClass = -1 / 0 表示核心不限制职业（这类物品才需要 GM 手工决定该给谁）。
+     *
+     * @param array<int,int|string> $itemIds
+     * @return array<int,array{name:string,allowable_class:int,required_level:int}>
+     */
+    public function itemClassRestrictions(array $itemIds): array
+    {
+        $ids = [];
+        foreach ($itemIds as $itemId) {
+            $itemId = (int) $itemId;
+            if ($itemId > 0) {
+                $ids[$itemId] = true;
+            }
+        }
+        $ids = array_keys($ids);
+        if ($ids === []) {
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmt = $this->world()->prepare(
+                'SELECT entry, name, AllowableClass, RequiredLevel FROM item_template'
+                . ' WHERE entry IN (' . $placeholders . ')'
+            );
+            $stmt->execute($ids);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $exception) {
+            $this->logWarning('item_class_restrictions_unavailable', $exception);
+
+            return [];
+        }
+
+        $restrictions = [];
+        foreach ($rows as $row) {
+            $restrictions[(int) $row['entry']] = [
+                'name' => (string) ($row['name'] ?? ''),
+                'allowable_class' => (int) ($row['AllowableClass'] ?? -1),
+                'required_level' => (int) ($row['RequiredLevel'] ?? 0),
+            ];
+        }
+
+        return $restrictions;
     }
 
     private function decodePayload(string $value): ?array
@@ -899,14 +1110,9 @@ class BossRepository extends MultiServerRepository
             . 'boss_scale_scaled, boss_health_multiplier_scaled, '
             . 'boss_auras_text, ally_level, ally_health_multiplier_scaled, '
             . 'respawn_time_minutes, minion_count_min, minion_count_max, '
-            . 'skill_preset, skill_difficulty, guaranteed_reward_enabled, '
-            . 'guaranteed_reward_notify, max_random_reward_players, '
-            . 'class_reward_chance, formula_reward_chance, '
-            . 'mount_reward_chance, random_reward_mode, participation_range, '
+            . 'skill_preset, skill_difficulty, random_reward_mode, participation_range, '
             . 'damage_weight, healing_weight, threat_weight, '
-            . 'presence_weight, kill_weight, guaranteed_item_id, '
-            . 'guaranteed_item_count, gold_min_copper, gold_max_copper, '
-            . 'reward_items_text, reward_formulas_text, reward_mounts_text, '
+            . 'presence_weight, kill_weight, '
             . 'spawn_points_text, '
             . 'updated_at'
             . ') VALUES ('
@@ -914,14 +1120,9 @@ class BossRepository extends MultiServerRepository
             . ':boss_scale_scaled, :boss_health_multiplier_scaled, '
             . ':boss_auras_text, :ally_level, :ally_health_multiplier_scaled, '
             . ':respawn_time_minutes, :minion_count_min, :minion_count_max, '
-            . ':skill_preset, :skill_difficulty, :guaranteed_reward_enabled, '
-            . ':guaranteed_reward_notify, :max_random_reward_players, '
-            . ':class_reward_chance, :formula_reward_chance, '
-            . ':mount_reward_chance, :random_reward_mode, :participation_range, '
+            . ':skill_preset, :skill_difficulty, :random_reward_mode, :participation_range, '
             . ':damage_weight, :healing_weight, :threat_weight, '
-            . ':presence_weight, :kill_weight, :guaranteed_item_id, '
-            . ':guaranteed_item_count, :gold_min_copper, :gold_max_copper, '
-            . ':reward_items_text, :reward_formulas_text, :reward_mounts_text, '
+            . ':presence_weight, :kill_weight, '
             . ':spawn_points_text, '
             . ':updated_at'
             . ')'
@@ -947,12 +1148,6 @@ class BossRepository extends MultiServerRepository
         $stmt->bindValue(':minion_count_max', (int) ($config['minion_count_max'] ?? 2), PDO::PARAM_INT);
         $stmt->bindValue(':skill_preset', (string) ($config['skill_preset'] ?? 'storm_siege'), PDO::PARAM_STR);
         $stmt->bindValue(':skill_difficulty', (string) ($config['skill_difficulty'] ?? 'standard'), PDO::PARAM_STR);
-        $stmt->bindValue(':guaranteed_reward_enabled', (int) ($config['guaranteed_reward_enabled'] ?? 1), PDO::PARAM_INT);
-        $stmt->bindValue(':guaranteed_reward_notify', (int) ($config['guaranteed_reward_notify'] ?? 1), PDO::PARAM_INT);
-        $stmt->bindValue(':max_random_reward_players', (int) ($config['max_random_reward_players'] ?? 3), PDO::PARAM_INT);
-        $stmt->bindValue(':class_reward_chance', (int) ($config['class_reward_chance'] ?? 60), PDO::PARAM_INT);
-        $stmt->bindValue(':formula_reward_chance', (int) ($config['formula_reward_chance'] ?? 10), PDO::PARAM_INT);
-        $stmt->bindValue(':mount_reward_chance', (int) ($config['mount_reward_chance'] ?? 15), PDO::PARAM_INT);
         $stmt->bindValue(':random_reward_mode', (string) ($config['random_reward_mode'] ?? 'weighted'), PDO::PARAM_STR);
         $stmt->bindValue(':participation_range', (int) ($config['participation_range'] ?? 80), PDO::PARAM_INT);
         $stmt->bindValue(':damage_weight', (int) ($config['damage_weight'] ?? 100), PDO::PARAM_INT);
@@ -960,13 +1155,6 @@ class BossRepository extends MultiServerRepository
         $stmt->bindValue(':threat_weight', (int) ($config['threat_weight'] ?? 35), PDO::PARAM_INT);
         $stmt->bindValue(':presence_weight', (int) ($config['presence_weight'] ?? 10), PDO::PARAM_INT);
         $stmt->bindValue(':kill_weight', (int) ($config['kill_weight'] ?? 3), PDO::PARAM_INT);
-        $stmt->bindValue(':guaranteed_item_id', (int) ($config['guaranteed_item_id'] ?? 40753), PDO::PARAM_INT);
-        $stmt->bindValue(':guaranteed_item_count', (int) ($config['guaranteed_item_count'] ?? 2), PDO::PARAM_INT);
-        $stmt->bindValue(':gold_min_copper', (int) ($config['gold_min_copper'] ?? 30000), PDO::PARAM_INT);
-        $stmt->bindValue(':gold_max_copper', (int) ($config['gold_max_copper'] ?? 50000), PDO::PARAM_INT);
-        $stmt->bindValue(':reward_items_text', (string) ($config['reward_items_text'] ?? ''), PDO::PARAM_STR);
-        $stmt->bindValue(':reward_formulas_text', (string) ($config['reward_formulas_text'] ?? ''), PDO::PARAM_STR);
-        $stmt->bindValue(':reward_mounts_text', (string) ($config['reward_mounts_text'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':spawn_points_text', (string) ($config['spawn_points_text'] ?? ''), PDO::PARAM_STR);
         $stmt->bindValue(':updated_at', (int) ($config['updated_at'] ?? time()), PDO::PARAM_INT);
     }
@@ -992,7 +1180,7 @@ class BossRepository extends MultiServerRepository
             'last_engage_at' => (int) ($row['last_engage_at'] ?? 0),
             'last_death_at' => (int) ($row['last_death_at'] ?? 0),
             'last_reset_at' => (int) ($row['last_reset_at'] ?? 0),
-            // 定时启停运行态：老脚本/老表读不到这三列时为空（页面显示"未上报"）
+            
             'schedule_state' => (string) ($row['schedule_state'] ?? ''),
             'schedule_window' => (string) ($row['schedule_window'] ?? ''),
             'schedule_next_change_at' => (int) ($row['schedule_next_change_at'] ?? 0),
@@ -1019,12 +1207,6 @@ class BossRepository extends MultiServerRepository
             'minion_count_max' => (int) ($resolved['minion_count_max'] ?? 2),
             'skill_preset' => (string) ($resolved['skill_preset'] ?? ''),
             'skill_difficulty' => (string) ($resolved['skill_difficulty'] ?? ''),
-            'guaranteed_reward_enabled' => (int) ($resolved['guaranteed_reward_enabled'] ?? 1),
-            'guaranteed_reward_notify' => (int) ($resolved['guaranteed_reward_notify'] ?? 1),
-            'max_random_reward_players' => (int) ($resolved['max_random_reward_players'] ?? 3),
-            'class_reward_chance' => (int) ($resolved['class_reward_chance'] ?? 60),
-            'formula_reward_chance' => (int) ($resolved['formula_reward_chance'] ?? 10),
-            'mount_reward_chance' => (int) ($resolved['mount_reward_chance'] ?? 15),
             'random_reward_mode' => (string) ($resolved['random_reward_mode'] ?? 'weighted'),
             'participation_range' => (int) ($resolved['participation_range'] ?? 80),
             'damage_weight' => (int) ($resolved['damage_weight'] ?? 100),
@@ -1032,13 +1214,6 @@ class BossRepository extends MultiServerRepository
             'threat_weight' => (int) ($resolved['threat_weight'] ?? 35),
             'presence_weight' => (int) ($resolved['presence_weight'] ?? 10),
             'kill_weight' => (int) ($resolved['kill_weight'] ?? 3),
-            'guaranteed_item_id' => (int) ($resolved['guaranteed_item_id'] ?? 40753),
-            'guaranteed_item_count' => (int) ($resolved['guaranteed_item_count'] ?? 2),
-            'gold_min_copper' => (int) ($resolved['gold_min_copper'] ?? 30000),
-            'gold_max_copper' => (int) ($resolved['gold_max_copper'] ?? 50000),
-            'reward_items_text' => (string) ($resolved['reward_items_text'] ?? ''),
-            'reward_formulas_text' => (string) ($resolved['reward_formulas_text'] ?? ''),
-            'reward_mounts_text' => (string) ($resolved['reward_mounts_text'] ?? ''),
             'spawn_points_text' => (string) ($resolved['spawn_points_text'] ?? ''),
             'updated_at' => (int) ($resolved['updated_at'] ?? 0),
         ];
@@ -1092,12 +1267,6 @@ class BossRepository extends MultiServerRepository
             'minion_count_max' => 2,
             'skill_preset' => (string) Config::get('boss.preset_values.0', 'storm_siege'),
             'skill_difficulty' => (string) Config::get('boss.difficulty_values.1', 'standard'),
-            'guaranteed_reward_enabled' => 1,
-            'guaranteed_reward_notify' => 1,
-            'max_random_reward_players' => 3,
-            'class_reward_chance' => 60,
-            'formula_reward_chance' => 10,
-            'mount_reward_chance' => 15,
             'random_reward_mode' => 'weighted',
             'participation_range' => 80,
             'damage_weight' => 100,
@@ -1105,13 +1274,6 @@ class BossRepository extends MultiServerRepository
             'threat_weight' => 35,
             'presence_weight' => 10,
             'kill_weight' => 3,
-            'guaranteed_item_id' => 40753,
-            'guaranteed_item_count' => 2,
-            'gold_min_copper' => 30000,
-            'gold_max_copper' => 50000,
-            'reward_items_text' => '38082,41600,51809,34067',
-            'reward_formulas_text' => '45059,44491',
-            'reward_mounts_text' => '32768,30480,13335,37719,49282,49290,19872,33977,33809,37828,43963,54068,33183,33189,35513,43964,19902,43963,46109,50250,49286,30609,54860,37012',
             'spawn_points_text' => (string) Config::get('boss.defaults.spawn_points_text', ''),
             'updated_at' => 0,
         ];

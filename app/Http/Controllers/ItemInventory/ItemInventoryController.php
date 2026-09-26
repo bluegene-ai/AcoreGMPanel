@@ -1,17 +1,9 @@
 <?php
 /**
  * File: app/Http/Controllers/ItemInventory/ItemInventoryController.php
- * Purpose: Single controller for the unified item/inventory module. Serves both
- *          search axes and every read/write endpoint:
- *
- *            character axis → searchCharacters / apiCharacters / apiCharacterItems
- *            item axis      → apiSearchItems / apiOwnership
- *            mutations      → apiReduce / apiBulk
- *
- * Replaces BagQueryController and ItemOwnershipController.
- *
- * Classes:
- *   - ItemInventoryController
+ * Purpose: Single controller for the unified item/inventory module: both search axes and every
+ * read/write endpoint - character axis (searchCharacters / apiCharacters / apiCharacterItems),
+ * item axis (apiSearchItems / apiOwnership), mutations (apiReduce / apiBulk).
  */
 
 declare(strict_types=1);
@@ -66,9 +58,6 @@ class ItemInventoryController extends Controller
         $this->mutations = null;
     }
 
-    /* ------------------------------------------------------------------ *
-     * Page
-     * ------------------------------------------------------------------ */
 
     public function index(Request $request): Response
     {
@@ -83,16 +72,15 @@ class ItemInventoryController extends Controller
             'capabilities' => [
                 'view' => 'inventory.view',
                 'manage' => 'inventory.manage',
-                // Lets item ids deep-link into the item editor. The editor itself
-                // enforces content.view; this only decides whether to offer a link.
+                // lets item ids deep-link into the item editor; the editor itself enforces content.view, this only decides whether to offer a link
                 'content_view' => 'content.view',
             ],
         ]);
     }
 
     /**
-     * Describes what the operator was asking for before being sent here, so the
-     * page can restore the right mode and even auto-run the search.
+     * Describes what the operator was asking for before being sent here, so the page can restore the
+     * right mode and even auto-run the search.
      */
     private function resolvePrefill(Request $request): array
     {
@@ -100,7 +88,7 @@ class ItemInventoryController extends Controller
         $mode = (string) $request->input('mode', '');
         $entry = max(0, (int) $request->input('entry', 0));
 
-        // Legacy ?name= (BagQuery) and legacy ?keyword= (ItemOwnership) both work.
+        // legacy ?name= and legacy ?keyword= both work
         $legacyName = trim((string) $request->input('name', ''));
         $legacyKeyword = trim((string) $request->input('keyword', ''));
 
@@ -128,7 +116,7 @@ class ItemInventoryController extends Controller
         ];
     }
 
-    /** /bag-query was the original URL of the character axis. */
+    /** /bag-query was the character axis URL. */
     public function legacyRedirect(Request $request): Response
     {
         $query = $_GET;
@@ -141,7 +129,7 @@ class ItemInventoryController extends Controller
         return Response::redirect($target, 301);
     }
 
-    /** /bag was the character axis page. */
+    /** /bag was the character axis page URL. */
     public function legacyBagRedirect(Request $request): Response
     {
         $target = '/item-inventory?mode=character';
@@ -164,7 +152,7 @@ class ItemInventoryController extends Controller
         return Response::redirect($this->appendServer($request, $target), 301);
     }
 
-    /** /item-ownership was the item axis page. */
+    /** /item-ownership was the item axis page URL. */
     public function legacyOwnershipRedirect(Request $request): Response
     {
         $target = '/item-inventory?mode=item';
@@ -193,9 +181,6 @@ class ItemInventoryController extends Controller
         return $target;
     }
 
-    /* ------------------------------------------------------------------ *
-     * Character axis
-     * ------------------------------------------------------------------ */
 
     public function apiCharacters(Request $request): Response
     {
@@ -247,9 +232,6 @@ class ItemInventoryController extends Controller
         ]);
     }
 
-    /* ------------------------------------------------------------------ *
-     * Item axis
-     * ------------------------------------------------------------------ */
 
     public function apiSearchItems(Request $request): Response
     {
@@ -305,9 +287,6 @@ class ItemInventoryController extends Controller
         ]);
     }
 
-    /* ------------------------------------------------------------------ *
-     * Mutations
-     * ------------------------------------------------------------------ */
 
     public function apiReduce(Request $request): Response
     {

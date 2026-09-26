@@ -1,36 +1,14 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/LocationResolver.php
- * Purpose: Translates raw (bag, slot) coordinates from character_inventory into
- *          human readable inventory locations, and answers slot-allocation
- *          questions (is this a container? which slots are free?).
+ * Purpose: Translates raw (bag, slot) coordinates from character_inventory into human readable
+ * inventory locations, and answers slot-allocation questions (is this a container? which slots free?).
  *
- * ACDB coordinate contract (unchanged, no schema migration required):
- *   bag = 0              the item sits directly in a character slot
- *                          slot  0..18   equipped
- *                          slot 19..22   backpack bag slot (a bag container, or a bag-shaped item)
- *                          slot 23..38   backpack content
- *                          slot 39..66   bank content
- *                          slot 67..73   bank bag slot (a bag container)
- *                          slot 86..117  keyring content
- *                          slot 118..135 currency content
- *   bag = <item guid>    the item sits inside that container; `slot` is
- *                        container-relative, so the displayed inner slot is slot+1.
- *
- * Classes:
- *   - LocationResolver
- * Functions:
- *   - resolve()
- *   - duplicateOf()
- *   - isBagSlot()
- *   - isBankBagSlot()
- *   - backpackSlotRange()
- *   - bankBagSlotRange()
- *   - isContainerBag()
- *   - emptyLocation()
- *   - equipmentCodes()
- *   - slotGroups()
- *   - label()
+ * ACDB coordinate contract (no schema migration required): bag = 0 means the item sits directly in a
+ * character slot - 0..18 equipped, 19..22 backpack bag slot, 23..38 backpack content, 39..66 bank
+ * content, 67..73 bank bag slot, 86..117 keyring content, 118..135 currency content. bag = <item guid>
+ * means the item sits inside that container and `slot` is container-relative, so the displayed inner
+ * slot is slot + 1.
  */
 
 declare(strict_types=1);
@@ -80,9 +58,8 @@ final class LocationResolver
 
     /**
      * Resolve one inventory coordinate into a normalized location payload.
-     *
-     * @param array{bag:int,slot:int,item:int}|null $containerRow character_inventory row of the
-     *                                                           container itself (bag !== 0), when known.
+     * @param array{bag:int,slot:int,item:int}|null $containerRow character_inventory row of the container
+     *        itself (bag !== 0), when known
      * @return array{code:string,label:string,area:string,inner_slot:?int,container:?array}
      */
     public function resolve(int $bag, int $slot, ?array $containerRow = null): array
@@ -93,9 +70,8 @@ final class LocationResolver
     }
 
     /**
-     * A copy of a location payload carrying only the container branch, used when
-     * reporting an item that lives inside a container.
-     *
+     * A copy of a location payload carrying only the container branch, used when reporting an item that
+     * lives inside a container.
      * @param array{bag:int,slot:int,item:int}|null $containerRow
      * @return array{slot:int,location_code:string,location_label:string,location_area:string,name:?string}
      */
@@ -229,7 +205,6 @@ final class LocationResolver
 
     /**
      * Container slot coordinates that can hold new instances on expansion.
-     *
      * @return array{0:int,1:int}
      */
     public function bagSlotRange(int $bag): array
@@ -259,7 +234,6 @@ final class LocationResolver
         return str_starts_with($code, 'bank.') ? 'bank' : 'inventory';
     }
 
-    /** @return array<int,string> */
     public static function equipmentCodes(): array
     {
         return self::EQUIPMENT_SLOTS;

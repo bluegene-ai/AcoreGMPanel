@@ -2,29 +2,6 @@
 /**
  * File: app/Domain/Creature/CreatureRepository.php
  * Purpose: Defines class CreatureRepository for the app/Domain/Creature module.
- * Classes:
- *   - CreatureRepository
- * Functions:
- *   - __construct()
- *   - validColumns()
- *   - search()
- *   - find()
- *   - create()
- *   - delete()
- *   - updatePartial()
- *   - modelTable()
- *   - getModels()
- *   - addModel()
- *   - editModel()
- *   - deleteModel()
- *   - normalizeModelProb()
- *   - fetchRowDiag()
- *   - execLimitedSql()
- *   - shortVal()
- *   - logsDir()
- *   - appendDeletedLog()
- *   - appendSqlLog()
- *   - currentUser()
  */
 
 namespace Acme\Panel\Domain\Creature;

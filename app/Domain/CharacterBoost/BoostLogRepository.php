@@ -1,12 +1,8 @@
 <?php
 /**
  * File: app/Domain/CharacterBoost/BoostLogRepository.php
- * Purpose: 直升历史的读写（自带表结构，不再借用群发日志表）。
- *
- * 历史实现把直升记录写进群发的 panel_massmail_log（action='boost'），
- * 导致直升模块与群发模块互相耦合。现在直升拥有独立的 panel_boost_log 表：
- *   - 建表与迁移在本仓储内自愈（首次使用自动创建）；
- *   - 旧库里如果还留有 action='boost' 的行，会一次性搬过来，搬完打标记。
+ * Purpose: 直升历史的读写（自带 panel_boost_log 表结构）。
+ * 建表与迁移在本仓储内自愈（首次使用自动创建）；旧库里 action='boost' 的群发行会一次性搬过来，搬完打标记。
  */
 
 declare(strict_types=1);
@@ -26,7 +22,6 @@ class BoostLogRepository extends MultiServerRepository
 
     /**
      * 最近直升记录（按时间倒序）。
-     *
      * @return array<int, array<string, mixed>>
      */
     public function recent(int $limit = 20): array
@@ -56,7 +51,6 @@ class BoostLogRepository extends MultiServerRepository
 
     /**
      * 写入一条直升记录。
-     *
      * @param array{subject:string,items:?string,quantity:?int,amount:?int,success:bool,recipients:?string,errors:array<int,string>} $entry
      */
     public function record(array $entry): bool
@@ -93,9 +87,6 @@ class BoostLogRepository extends MultiServerRepository
         }
     }
 
-    // ------------------------------------------------------------------
-    // 表结构
-    // ------------------------------------------------------------------
 
     private function tableName(): string
     {
@@ -103,8 +94,7 @@ class BoostLogRepository extends MultiServerRepository
     }
 
     /**
-     * 标识符必须用反引号包裹。
-     * PDO::quote() 给的是单引号（字符串字面量），用在表名上会直接 1064 语法错误。
+     * 标识符必须用反引号包裹：PDO::quote() 给的是单引号（字符串字面量），用在表名上会直接 1064 语法错误。
      */
     private function quoteIdentifier(string $identifier): string
     {
@@ -150,9 +140,7 @@ class BoostLogRepository extends MultiServerRepository
 
     /**
      * 把旧版本写在群发日志表里的直升记录搬过来。
-     *
-     * 幂等实现：先数新表里已有多少行，只补搬"旧表行数 - 新表已搬行数"之后的部分。
-     * 不额外建标记表，也就不需要往 auth 库塞新表。
+     * 幂等：只补搬"旧表行数 - 新表已搬行数"之后的部分，不额外建标记表。
      */
     private function migrateLegacyRows(): void
     {

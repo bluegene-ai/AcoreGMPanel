@@ -7,6 +7,7 @@
 return [
     'page_title' => 'Chat Trivia',
     'intro' => 'Manage the world chat trivia event: live state and controls, question pacing, answer channels, question bank, reward presets and the leaderboard. Changes are applied to the running server immediately.',
+    'intro_short' => 'Check status and control the quiz, manage questions, rewards and the leaderboard.',
     'scope_note' => 'Server: :server | Tables live in the :database database (created by TriviaReward.lua)',
 
     'nav' => [
@@ -129,6 +130,7 @@ return [
     'fields' => [
         'enabled' => 'Trivia system (master switch)',
         'enabled_hint' => 'Master switch: whether the system is online at all (answers accepted, single questions can run). Turning it off stops everything; turning it on still will NOT ask questions automatically — automatic questions are controlled solely by "Pause automatic questions" below. Both this switch and the Runtime status buttons persist to the database across restarts. An active schedule takes precedence.',
+        'enabled_hint_short' => 'Master switch: off stops everything; it does not control automatic questions.',
         'paused' => 'Pause automatic questions (checked by default: no questions after a server restart until you resume manually or a schedule opens it)',
         'interval_seconds' => 'Interval between questions (s)',
         'answer_seconds' => 'Answer window (s)',
@@ -136,6 +138,7 @@ return [
         'first_delay_seconds' => 'First question delay after start (s)',
         'min_players_online' => 'Minimum players online',
         'min_players_hint' => 'No question is asked while fewer players are online; the script retries every "retry interval". Set this to 0 to ask questions even with nobody online (useful for local testing).',
+        'min_players_hint_short' => 'No question while too few players are online; set 0 to ask anyway.',
         'idle_retry_seconds' => 'Retry interval when too few players (s)',
         'resume_delay_seconds' => 'Seconds until the next question after resume/enable',
         'debug_log' => 'Debug logging (question start/end written to the ALE log)',
@@ -143,12 +146,14 @@ return [
         'schedule_enabled' => 'Enable scheduled start/stop (uses the windows below)',
         'schedule_windows' => 'Daily time windows',
         'schedule_windows_hint' => 'Separate windows with a semicolon or comma: 08:00-09:00. No weekday prefix = every day; 1=Mon ... 7=Sun, e.g. 1-5 or 6,7; overnight windows are written 22:00-02:00. The system starts when a window opens and stops (ending the running question) when it closes.',
+        'schedule_windows_hint_short' => 'Opens automatically on schedule, ends when the window closes.',
         'answer_hint' => 'Answer hint (empty = generated from the enabled channels)',
         'answer_hint_placeholder' => 'Type A / B / C / D in the general channel to answer; first correct answer wins!',
         'allow_loose_letter' => 'Allow "A." / "A)" / "A、" style answers',
         'ignore_gms' => 'Accounts with the GM tag do not take part',
         'gm_rank_exempt' => 'GM rank >= this value does not take part (0 = no limit)',
         'gm_rank_exempt_hint' => 'Note: the ".trivia command GM rank" above controls who may run admin commands; this one controls who may play.',
+        'gm_rank_exempt_hint_short' => 'This one controls who may play, not who may run commands.',
         'broadcast_prefix' => 'Normal broadcast prefix (colour codes allowed)',
         'win_prefix' => 'Winner/answer prefix (colour codes allowed)',
         'prefix_hint' => 'Colour codes look like |cff00ff00green|r or |cffffd200gold|r; keep a trailing space in the prefix.',
@@ -214,12 +219,15 @@ return [
         'stats' => 'enabled :enabled | disabled :disabled | with reward :reward',
         'labels_hint' => 'Empty means it follows the global labels above.',
         'answer_hint' => 'Pick which of the filled options is correct.',
+        'answer_hint_short' => 'Pick which filled option is correct.',
         'reward_hint' => 'The preset and the extra items/money are granted together; leaving both empty uses the default preset.',
+        'reward_hint_short' => 'Preset and extras are granted together; empty uses the default.',
     ],
 
     'import' => [
         'title' => 'Question template import / export',
         'hint' => 'CSV / TSV / JSON supported. The header row is optional (when present, columns are matched by name). Answers may be 1-4, A-D, or the option text. Lines starting with # are ignored, so pasting from Excel works as-is. A file saved by Excel as ANSI/GBK or as "Unicode text" (UTF-16) is detected and converted to UTF-8 automatically. Questions live in ac_eluna.trivia_reward_questions and take effect immediately.',
+        'hint_short' => 'CSV / TSV / JSON; header row optional, applied immediately.',
         'placeholder' => "question,option1,option2,option3,option4,answer,labels,reward_preset,reward_items,reward_money,enabled",
         'download_template' => 'Download template',
         'export' => 'Export bank',
@@ -238,6 +246,7 @@ return [
         'usage' => 'Used by :count questions',
         'not_used' => 'Not referenced',
         'name_hint' => 'The name is the key questions reference; renaming does not rewrite existing questions.',
+        'name_hint_short' => 'Renaming does not update questions that already use it.',
     ],
 
     'winners' => [

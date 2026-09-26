@@ -2,6 +2,7 @@
 return array (
   'page_title' => 'SmartAI 向导',
   'intro' => '根据 AzerothCore Smart Scripts 规范构建事件、动作与目标，快速生成可直接执行的 SQL。',
+  'intro_short' => '按 Smart Scripts 规范组合事件、动作与目标，生成 SQL。',
   'sidebar' => 
   array (
     'nav_title' => '步骤导航',
@@ -20,26 +21,31 @@ return array (
   array (
     'title' => '基础信息',
     'description' => '设置脚本作用对象与通用字段，例如 entry、概率、阶段等。',
+    'description_short' => '脚本作用对象与通用字段。',
   ),
   'segment' => 
   array (
     'add' => '添加事件段',
     'hint' => '每个事件段包含独立的事件、动作与目标，可按顺序依次执行。',
+    'hint_short' => '每段可独立配置并按顺序执行。',
   ),
   'event' => 
   array (
     'title' => '选择事件 (Event)',
     'description' => '事件定义何时触发脚本。选择类型后填写参数，所有参数含义基于 Wiki 说明。',
+    'description_short' => '决定脚本何时触发。',
   ),
   'action' => 
   array (
     'title' => '配置动作 (Action)',
     'description' => '动作会在事件触发时执行，可组合施法、对话、召唤等行为。',
+    'description_short' => '事件触发后执行的行为。',
   ),
   'target' => 
   array (
     'title' => '目标与预览',
     'description' => '确定动作的目标并生成 SQL。可直接复制或下载到脚本工具中执行。',
+    'description_short' => '指定动作目标并生成 SQL。',
   ),
   'preview' => 
   array (

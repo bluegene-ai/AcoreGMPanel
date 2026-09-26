@@ -2,27 +2,6 @@
 /**
  * File: app/Domain/MassMail/MassMailService.php
  * Purpose: Defines class MassMailService for the app/Domain/MassMail module.
- * Classes:
- *   - MassMailService
- * Functions:
- *   - __construct()
- *   - resolveTargets()
- *   - previewTargets()
- *   - sendAnnounce()
- *   - sendBulk()
- *   - recentLogs()
- *   - getOnline()
- *   - parseCustom()
- *   - ensureLogTable()
- *   - logAnnounce()
- *   - logBulk()
- *   - resolveItemNames()
- *   - resolveItemName()
- *   - loadItemCache()
- *   - persistItemCache()
- *   - appendActionLog()
- *   - migrateAddServerIdColumn()
- *   - validateItemExists()
  */
 
 namespace Acme\Panel\Domain\MassMail;
@@ -78,7 +57,6 @@ class MassMailService
 
     /**
      * 目标预览：给界面用的计数 + 少量样本，避免把几千个名字全丢回浏览器。
-     *
      * @return array{type:string,count:int,limit:int,truncated:bool,sample:string[]}
      */
     public function previewTargets(string $type, ?string $customList, int $sampleSize = 20): array
@@ -347,8 +325,7 @@ class MassMailService
         $itemName = null;
         $itemsDisplay = $items ? mb_substr($items, 0, 800) : null;
 
-        // 解析全部物品名，并把带名称的摘要写回 items 字段：
-        // 日志列表里直接显示"霜之哀伤 ×1"，不再是一行裸 ID
+        // 解析全部物品名并把带名称的摘要写回 items 字段：日志列表直接显示"霜之哀伤 ×1"，不再是一行裸 ID
         if($items){
             $parsed = $this->parseItems($items);
             if($parsed !== []){
@@ -362,7 +339,7 @@ class MassMailService
                 }
                 $itemsDisplay = mb_substr(implode('、', $described), 0, 800);
 
-                // 兼容历史"单物品"列
+                // 兼容旧的单物品列
                 $itemId = (int)$parsed[0]['id'];
                 $qty = (int)$parsed[0]['qty'];
                 $itemName = $names[$itemId] ?? null;
@@ -377,11 +354,7 @@ class MassMailService
     }
 
     /**
-     * 批量解析物品名（world 库 item_template / locales_item，缺失时回退客户端 DBC）。
-     *
-     * 早期的实现是去 db.nfuwow.com 抓 <title>，该站在服务器网络下不可达，
-     * 结果日志里的 item_name 一直是 NULL；这里改为完全本地解析。
-     *
+     * 批量解析物品名（world 库 item_template / locales_item，缺失时回退客户端 DBC），不依赖外部站点。
      * @param int[] $itemIds
      * @return array<int, string> id => 名称
      */

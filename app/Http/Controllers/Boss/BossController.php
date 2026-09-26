@@ -10,7 +10,9 @@ use Acme\Panel\Core\Lang;
 use Acme\Panel\Core\Request;
 use Acme\Panel\Core\Response;
 use Acme\Panel\Domain\Boss\BossRepository;
+use Acme\Panel\Domain\Boss\BossConfigTransferService;
 use Acme\Panel\Domain\Boss\BossTierOptions;
+use Acme\Panel\Domain\Boss\RewardPoolSimulator;
 use Acme\Panel\Domain\Support\ScheduleWindows;
 use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\ServerContext;
@@ -99,6 +101,7 @@ class BossController extends Controller
             ],
             'header' => [
                 'intro' => __('app.boss.intro'),
+                'intro_hint' => __('app.boss.intro_hint'),
                 'note' => __('app.boss.scope_note', [
                     'server' => (string) ($server['name'] ?? ''),
                     'database' => (string) $dataSource['database'] . ' (state_key=' . (string) $dataSource['runtime_key'] . ')',
@@ -204,7 +207,7 @@ class BossController extends Controller
             )
         );
 
-        // 难度档位：只接受 config/boss.php tiers 里的 entry，不在列表内回落到 default_tier_entry。
+        
         $submittedEntry = trim((string) $request->input('boss_entry', ''));
         $resolvedEntry = BossTierOptions::resolveEntry($submittedEntry);
         $entryFallback = $submittedEntry !== '' && (int) $submittedEntry !== $resolvedEntry;
@@ -287,36 +290,6 @@ class BossController extends Controller
                 (array) Config::get('boss.difficulty_values', []),
                 (string) ($defaults['skill_difficulty'] ?? 'standard')
             ),
-            'guaranteed_reward_enabled' => $this->normalizedBoolFlag($request, 'guaranteed_reward_enabled') ? 1 : 0,
-            'guaranteed_reward_notify' => $this->normalizedBoolFlag($request, 'guaranteed_reward_notify') ? 1 : 0,
-            'max_random_reward_players' => $this->boundedInt(
-                $request,
-                'max_random_reward_players',
-                (int) ($defaults['max_random_reward_players'] ?? 3),
-                0,
-                100
-            ),
-            'class_reward_chance' => $this->boundedInt(
-                $request,
-                'class_reward_chance',
-                (int) ($defaults['class_reward_chance'] ?? 60),
-                0,
-                100
-            ),
-            'formula_reward_chance' => $this->boundedInt(
-                $request,
-                'formula_reward_chance',
-                (int) ($defaults['formula_reward_chance'] ?? 10),
-                0,
-                100
-            ),
-            'mount_reward_chance' => $this->boundedInt(
-                $request,
-                'mount_reward_chance',
-                (int) ($defaults['mount_reward_chance'] ?? 15),
-                0,
-                100
-            ),
             'random_reward_mode' => $this->normalizedEnum(
                 $request,
                 'random_reward_mode',
@@ -365,55 +338,6 @@ class BossController extends Controller
                 0,
                 10000
             ),
-            'guaranteed_item_id' => $this->boundedInt(
-                $request,
-                'guaranteed_item_id',
-                (int) ($defaults['guaranteed_item_id'] ?? 40753),
-                0,
-                2000000
-            ),
-            'guaranteed_item_count' => $this->boundedInt(
-                $request,
-                'guaranteed_item_count',
-                (int) ($defaults['guaranteed_item_count'] ?? 2),
-                0,
-                10000
-            ),
-            'gold_min_copper' => $this->boundedInt(
-                $request,
-                'gold_min_copper',
-                (int) ($defaults['gold_min_copper'] ?? 30000),
-                0,
-                2000000000
-            ),
-            'gold_max_copper' => $this->boundedInt(
-                $request,
-                'gold_max_copper',
-                (int) ($defaults['gold_max_copper'] ?? 50000),
-                0,
-                2000000000
-            ),
-            'reward_items_text' => $this->normalizedIntegerListString(
-                $this->normalizedString(
-                    $request,
-                    'reward_items_text',
-                    (string) ($defaults['reward_items_text'] ?? '')
-                )
-            ),
-            'reward_formulas_text' => $this->normalizedIntegerListString(
-                $this->normalizedString(
-                    $request,
-                    'reward_formulas_text',
-                    (string) ($defaults['reward_formulas_text'] ?? '')
-                )
-            ),
-            'reward_mounts_text' => $this->normalizedIntegerListString(
-                $this->normalizedString(
-                    $request,
-                    'reward_mounts_text',
-                    (string) ($defaults['reward_mounts_text'] ?? '')
-                )
-            ),
             'spawn_points_text' => $this->normalizedSpawnPointsText(
                 $this->normalizedString(
                     $request,
@@ -425,10 +349,6 @@ class BossController extends Controller
 
         if ($config['minion_count_max'] < $config['minion_count_min']) {
             $config['minion_count_max'] = $config['minion_count_min'];
-        }
-
-        if ($config['gold_max_copper'] < $config['gold_min_copper']) {
-            $config['gold_max_copper'] = $config['gold_min_copper'];
         }
 
         // 未提交 = 不改（见 onlySubmittedFields 的说明：面板表单总是提交全部字段）
@@ -503,21 +423,61 @@ class BossController extends Controller
         ], $reloadResult['success'] ? 200 : 422);
     }
 
-    /**
-     * 扩展配置（ac_eluna.boss_activity_config_ext）的表单数据：
-     * 当前值 + 字段 schema + 二级 Tab 分组；schema 与保存校验共用一份定义。
-     */
+    // 扩展配置（ac_eluna.boss_activity_config_ext）的表单数据：
+
     private function extViewData(array $dashboard): array
     {
         $config = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
+        $mainConfig = is_array($dashboard['config'] ?? null) ? $dashboard['config'] : [];
         $scheduleEnabled = ((int) ($config['activity_schedule_enabled'] ?? 0)) === 1;
+
+        
+        $defaults = (array) Config::get('boss.ext_defaults', []);
+        $changed = [];
+        foreach ($defaults as $column => $defaultValue) {
+            if (!array_key_exists($column, $config)) {
+                continue;
+            }
+            $current = $config[$column];
+            $normalizedDefault = is_bool($defaultValue) ? ($defaultValue ? 1 : 0) : $defaultValue;
+            if (is_scalar($current) && is_scalar($normalizedDefault)) {
+                if ((string) $current !== (string) $normalizedDefault) {
+                    $changed[$column] = true;
+                }
+                continue;
+            }
+            if ($current != $normalizedDefault) {
+                $changed[$column] = true;
+            }
+        }
 
         return [
             'config' => $config,
             'tabs' => (array) Config::get('boss.ext_tabs', []),
             'fields' => (array) Config::get('boss.ext_fields', []),
             'available' => $this->repo()->extConfigAvailable(),
-            // 定时启停：面板侧展示用（解析出的时间段清单；真正到点开关在 Lua 的 tick 里）
+            
+            'presets' => $this->presetOptions(),
+            
+            'item_names' => $this->extItemNames(is_array($config) ? $config : []),
+            
+            'defaults' => $defaults,
+            'changed' => $changed,
+            
+            
+            'reward_params' => [
+                'values' => [
+                    'random_reward_mode' => (string) ($mainConfig['random_reward_mode'] ?? 'weighted'),
+                    'participation_range' => (int) ($mainConfig['participation_range'] ?? 80),
+                    'damage_weight' => (int) ($mainConfig['damage_weight'] ?? 100),
+                    'healing_weight' => (int) ($mainConfig['healing_weight'] ?? 80),
+                    'threat_weight' => (int) ($mainConfig['threat_weight'] ?? 35),
+                    'presence_weight' => (int) ($mainConfig['presence_weight'] ?? 10),
+                    'kill_weight' => (int) ($mainConfig['kill_weight'] ?? 3),
+                ],
+                'modes' => $this->randomModeOptions(),
+            ],
+            
             'schedule' => [
                 'enabled' => $scheduleEnabled,
                 'clear_on_close' => ((int) ($config['activity_schedule_clear_on_close'] ?? 0)) === 1,
@@ -526,11 +486,8 @@ class BossController extends Controller
         ];
     }
 
-    /**
-     * 扩展配置校验失败时的返回文案：
-     * 只有带 USER_FACING_ERROR_PREFIX 的异常（时间段写错这类可自助修正的输入问题）
-     * 才把原文回给面板，其余一律用统一提示。
-     */
+    // 扩展配置校验失败时的返回文案：
+
     private function extPayloadErrorMessage(Throwable $exception): string
     {
         $message = (string) $exception->getMessage();
@@ -634,6 +591,345 @@ class BossController extends Controller
     }
 
     /**
+     * 跨区复制扩展配置（可选连主表配置一起复制）。
+     *
+     * 多区部署时最烦的是"每个区手改一遍"：这里把**本区**（源）的配置写到目标区，
+     * 只写请求里点名的分组（面板的 upsert 语义：未提交的列保持目标区现值），
+     * 写完切到目标区发一次 .boss config reload，再切回本区。
+     */
+    public function apiExtConfigCopy(Request $request): Response
+    {
+        $this->requireActionCapability();
+        $this->maybeSwitchServer($request);
+
+        $servers = ServerContext::list();
+        $currentId = ServerContext::currentId();
+        $targetId = $this->boundedInt($request, 'target_server', -1, -1, 1000000);
+
+        if ($targetId < 0 || !isset($servers[$targetId]) || $targetId === $currentId) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.copy_target_invalid'),
+            ], 422);
+        }
+
+        
+        $rawGroups = $request->input('groups', []);
+        $groups = [];
+        if (is_array($rawGroups)) {
+            foreach ($rawGroups as $group) {
+                $group = trim((string) $group);
+                if ($group !== '') {
+                    $groups[] = $group;
+                }
+            }
+        } elseif (is_string($rawGroups) && trim($rawGroups) !== '') {
+            foreach (preg_split('/[\s,;]+/', $rawGroups) ?: [] as $group) {
+                $group = trim((string) $group);
+                if ($group !== '') {
+                    $groups[] = $group;
+                }
+            }
+        }
+
+        $includeMain = $this->normalizedBoolFlag($request, 'include_main_config');
+
+        
+        $targetRepo = null;
+        ServerContext::set($targetId);
+        try {
+            $targetRepo = new BossRepository();
+        } finally {
+            ServerContext::set($currentId);
+        }
+
+        $service = new BossConfigTransferService($this->repo(), $targetRepo);
+        try {
+            $result = $service->copyExt($groups, $includeMain);
+        } catch (Throwable $exception) {
+            $result = [
+                'ok' => false,
+                'ext_columns' => 0,
+                'main_columns' => 0,
+                'skipped' => [],
+                'warnings' => [$exception->getMessage()],
+            ];
+        }
+
+        
+        $reloadResult = ['success' => false, 'message' => '', 'output' => '', 'execution' => []];
+        if (!empty($result['ok'])) {
+            ServerContext::set($targetId);
+            try {
+                $reloadResult = $this->runBossCommand('.boss config reload');
+            } catch (Throwable $exception) {
+                $reloadResult['message'] = $exception->getMessage();
+            } finally {
+                ServerContext::set($currentId);
+            }
+        }
+
+        Audit::log('boss', 'copy_ext_config', 'boss_activity_config_ext', [
+            'server_id' => $currentId,
+            'target_server_id' => $targetId,
+            'groups' => $groups,
+            'include_main_config' => $includeMain,
+            'ext_columns' => (int) ($result['ext_columns'] ?? 0),
+            'main_columns' => (int) ($result['main_columns'] ?? 0),
+            'ok' => !empty($result['ok']),
+        ]);
+
+        $targetName = trim((string) ($servers[$targetId]['name'] ?? ''));
+        $success = !empty($result['ok']) && !empty($reloadResult['success']);
+
+        return $this->json([
+            'success' => $success,
+            'message' => $success
+                ? Lang::get('app.boss.feedback.ext_copied', [
+                    'server' => $targetName !== '' ? $targetName : (string) $targetId,
+                    'columns' => (string) ((int) ($result['ext_columns'] ?? 0) + (int) ($result['main_columns'] ?? 0)),
+                ])
+                : Lang::get('app.boss.errors.copy_failed'),
+            'payload' => [
+                'result' => $result,
+                'reload' => $reloadResult,
+                'target_server_id' => $targetId,
+                'target_server_name' => $targetName,
+            ],
+        ], $success ? 200 : 422);
+    }
+
+    // 奖池模拟：用当前配置 + 最近一次击杀的真实参战名单，按与 boss.lua 相同的算法跑 N 轮，
+
+    public function apiRewardSimulate(Request $request): Response
+    {
+        $this->requireDashboardCapability();
+        $this->maybeSwitchServer($request);
+
+        $rounds = $this->boundedInt(
+            $request,
+            'rounds',
+            (int) Config::get('boss.simulate_rounds', 400),
+            1,
+            5000
+        );
+        $seed = $this->boundedInt($request, 'seed', random_int(1, 1000000), 1, 2000000000);
+
+        $dashboard = $this->repo()->dashboard(0, 0);
+        $extConfig = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
+        $mainConfig = is_array($dashboard['config'] ?? null) ? $dashboard['config'] : [];
+
+        // 参战名单：请求里可以带（GM 手填/测试），否则用最近一次击杀的真实快照
+        $roster = $this->repo()->latestKillRoster(40);
+        $rosterSource = 'latest_kill';
+        $participantsRequest = $request->input('participants');
+        if (is_string($participantsRequest) && trim($participantsRequest) !== '') {
+            $decoded = json_decode($participantsRequest, true);
+            if (is_array($decoded) && $decoded !== []) {
+                $roster = $decoded;
+                $rosterSource = 'request';
+            }
+        }
+
+        $participants = [];
+        foreach ($roster as $member) {
+            if (!is_array($member)) {
+                continue;
+            }
+            $participants[] = [
+                'guid' => (int) ($member['guid'] ?? 0),
+                'name' => (string) ($member['name'] ?? ''),
+                'class_id' => (int) ($member['class_id'] ?? $member['classId'] ?? 0),
+                'level' => (int) ($member['level'] ?? 80),
+                'damage' => (int) ($member['damage'] ?? $member['damage_done'] ?? 0),
+                'healing' => (int) ($member['healing'] ?? $member['healing_done'] ?? 0),
+                'threat' => (int) ($member['threat'] ?? $member['threat_samples'] ?? 0),
+                'presence' => (int) ($member['presence'] ?? $member['presence_samples'] ?? 0),
+                'is_killer' => !empty($member['is_killer']) || !empty($member['was_killer']),
+            ];
+        }
+
+        $simulator = new RewardPoolSimulator();
+        try {
+            $report = $simulator->simulate(
+                $extConfig,
+                $participants,
+                $this->parseClassItemMap((string) ($extConfig['class_reward_items_text'] ?? '')),
+                [
+                    'damage' => (int) ($mainConfig['damage_weight'] ?? 100),
+                    'healing' => (int) ($mainConfig['healing_weight'] ?? 80),
+                    'threat' => (int) ($mainConfig['threat_weight'] ?? 35),
+                    'presence' => (int) ($mainConfig['presence_weight'] ?? 10),
+                    'kill' => (int) ($mainConfig['kill_weight'] ?? 3),
+                    'mode' => (string) ($mainConfig['random_reward_mode'] ?? 'weighted'),
+                ],
+                $rounds,
+                $seed
+            );
+        } catch (Throwable $exception) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.simulate_failed', ['message' => $exception->getMessage()]),
+            ], 422);
+        }
+
+        $report['participants_source'] = $rosterSource;
+        $report['seed'] = $seed;
+
+        return $this->json([
+            'success' => true,
+            'message' => Lang::get('app.boss.feedback.simulated', ['rounds' => (string) $rounds]),
+            'payload' => ['report' => $report],
+        ]);
+    }
+
+    // 「职业过滤映射」自动补全：按当前 6 个奖池里的物品，把核心已经限制好职业的
+
+    public function apiClassMapAutofill(Request $request): Response
+    {
+        $this->requireActionCapability();
+        $this->maybeSwitchServer($request);
+
+        $dashboard = $this->repo()->dashboard(0, 0);
+        $extConfig = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
+        $existingMap = $this->parseClassItemMap((string) ($extConfig['class_reward_items_text'] ?? ''));
+
+        
+        $itemIds = [];
+        for ($index = 1; $index <= 6; $index++) {
+            foreach (preg_split('/[\s,;]+/', (string) ($extConfig['reward_pool_' . $index . '_items_text'] ?? '')) ?: [] as $token) {
+                $itemId = (int) trim((string) $token);
+                if ($itemId > 0) {
+                    $itemIds[$itemId] = true;
+                }
+            }
+        }
+        $itemIds = array_keys($itemIds);
+        if ($itemIds === []) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.errors.class_map_no_items'),
+            ], 422);
+        }
+
+        $restrictions = $this->repo()->itemClassRestrictions($itemIds);
+
+        
+        $mappedClasses = [];
+        foreach ($existingMap as $classId => $items) {
+            foreach ($items as $itemId) {
+                $mappedClasses[$itemId][] = (int) $classId;
+            }
+        }
+
+        $classBitToId = [1 => 1, 2 => 2, 4 => 3, 8 => 4, 16 => 5, 32 => 6, 64 => 7, 128 => 8, 256 => 9, 1024 => 11];
+        $classOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11];
+        $allClassCount = count($classOrder);
+        $merged = $existingMap;
+        $fromCore = [];
+        $needsManual = [];
+        $unknownItems = [];
+
+        foreach ($itemIds as $itemId) {
+            if (!empty($mappedClasses[$itemId])) {
+                continue; // 手工填过 → 保持不动
+            }
+
+            $row = $restrictions[$itemId] ?? null;
+            if ($row === null) {
+                $unknownItems[] = $itemId;
+                continue;
+            }
+
+            $mask = (int) $row['allowable_class'];
+            $classes = [];
+            if ($mask !== -1 && $mask !== 0) {
+                foreach ($classBitToId as $bit => $classId) {
+                    if (($mask & $bit) !== 0) {
+                        $classes[] = $classId;
+                    }
+                }
+            }
+
+            
+            
+            if ($classes === [] || count($classes) >= $allClassCount) {
+                $needsManual[] = ['id' => $itemId, 'name' => (string) $row['name']];
+                continue;
+            }
+
+            foreach ($classes as $classId) {
+                $merged[$classId] = $merged[$classId] ?? [];
+                if (!in_array($itemId, $merged[$classId], true)) {
+                    $merged[$classId][] = $itemId;
+                }
+            }
+            $fromCore[] = ['id' => $itemId, 'name' => (string) $row['name'], 'classes' => $classes];
+        }
+
+        // 生成文本：固定职业顺序 + 每个职业内按物品ID升序（diff 友好）
+        $lines = [];
+        foreach ($classOrder as $classId) {
+            $items = $merged[$classId] ?? [];
+            if ($items === []) {
+                continue;
+            }
+            $items = array_values(array_unique(array_map('intval', $items)));
+            sort($items);
+            $lines[] = $classId . '=' . implode(',', $items);
+        }
+
+        return $this->json([
+            'success' => true,
+            'message' => Lang::get('app.boss.feedback.class_map_filled', [
+                'core' => (string) count($fromCore),
+                'manual' => (string) count($needsManual),
+            ]),
+            'payload' => [
+                'text' => implode("\n", $lines),
+                'report' => [
+                    'from_core' => $fromCore,
+                    'kept_manual' => array_keys(array_filter($mappedClasses, static fn (array $classes): bool => $classes !== [])),
+                    'needs_manual' => $needsManual,
+                    'unknown_items' => $unknownItems,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * ext 里的「职业奖励池」映射（class_reward_items_text）：
+     * 每行 "职业ID=物品ID,物品ID" → [classId => [itemId, ...]]，与 boss.lua 的解析保持一致。
+     */
+    private function parseClassItemMap(string $text): array
+    {
+        $map = [];
+        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
+            $line = trim((string) $line);
+            if ($line === '' || !str_contains($line, '=')) {
+                continue;
+            }
+
+            [$classId, $itemList] = explode('=', $line, 2);
+            $classId = (int) trim($classId);
+            if ($classId <= 0) {
+                continue;
+            }
+
+            $items = $map[$classId] ?? [];
+            foreach (preg_split('/[\s,;]+/', $itemList) ?: [] as $itemId) {
+                $itemId = (int) trim((string) $itemId);
+                if ($itemId > 0 && !in_array($itemId, $items, true)) {
+                    $items[] = $itemId;
+                }
+            }
+            $map[$classId] = $items;
+        }
+
+        return $map;
+    }
+
+    /**
      * 按 schema 归一化扩展配置表单：逐字段按 kind 处理，只保留能安全落库的值。
      *
      * 「未提交 = 不改」是这里的硬规则：面板表单（含开关的 hidden 0）永远提交全部字段，
@@ -652,7 +948,7 @@ class BossController extends Controller
 
             $kind = (string) ($spec['kind'] ?? 'text');
 
-            // 时间段字段除了归一化，还要在保存前校验（非法写法直接 422，附上看不懂的那一段）
+            
             if ($kind === 'schedule_windows') {
                 $payload[$name] = $this->normalizedScheduleWindows(
                     (string) $request->input($name, ''),
@@ -663,6 +959,33 @@ class BossController extends Controller
 
             if ($kind === 'bool') {
                 $payload[$name] = $this->normalizedBoolFlag($request, $name) ? 1 : 0;
+                continue;
+            }
+
+            
+            if ($kind === 'preset_multi') {
+                $payload[$name] = $this->normalizedPresetPool(
+                    $request->input($name),
+                    (int) ($spec['maxlength'] ?? 255)
+                );
+                continue;
+            }
+
+            
+            if ($kind === 'enum') {
+                $enumOptions = [];
+                foreach ((array) ($spec['options'] ?? []) as $option) {
+                    $option = trim((string) $option);
+                    if ($option !== '') {
+                        $enumOptions[] = $option;
+                    }
+                }
+
+                $payload[$name] = $this->normalizedEnumValue(
+                    (string) $request->input($name, ''),
+                    $enumOptions,
+                    $enumOptions[0] ?? ''
+                );
                 continue;
             }
 
@@ -689,12 +1012,16 @@ class BossController extends Controller
                 case 'intlist':
                     $value = $this->normalizedIntegerListString($text);
                     break;
+                case 'itemlist':
+                    
+                    $value = $this->normalizedIntegerListString($text, (int) ($spec['max_items'] ?? 300));
+                    break;
                 default:
                     $value = $this->limitedSingleLine($text, (int) ($spec['maxlength'] ?? 255));
             }
 
-            // 提交了空值也不改（列表/映射类字段：Lua 侧空值会回退到脚本默认值，
-            // 写空只会让两边显示不一致）
+            
+            
             if (!empty($spec['keep_default_when_empty']) && $value === '') {
                 continue;
             }
@@ -754,9 +1081,8 @@ class BossController extends Controller
         return implode("\n", $lines);
     }
 
-    /**
-     * "键=值" 多行（技能名/连招名 → 喊话）：丢掉没有 =、键或值为空、键重复的行。
-     */
+    // "键=值" 多行（技能名/连招名 → 喊话）：丢掉没有 =、键或值为空、键重复的行。
+
     private function normalizedKeyedLines(string $value, int $limit = 200): string
     {
         $lines = [];
@@ -784,9 +1110,8 @@ class BossController extends Controller
         return implode("\n", $lines);
     }
 
-    /**
-     * "职业ID=物品ID,物品ID" 多行：键取正整数，值走整数列表归一。
-     */
+    // "职业ID=物品ID,物品ID" 多行：键取正整数，值走整数列表归一。
+
     private function normalizedKeyedIntegerLists(string $value, int $limit = 100): string
     {
         $lines = [];
@@ -833,12 +1158,8 @@ class BossController extends Controller
         return substr($value, 0, $maxLength);
     }
 
-    /**
-     * 「定时启停」时间段：面板侧先校验并归一化（写库的是规范写法，Lua 只负责执行）。
-     *
-     * 非法片段（例如 "25:00-26:00" 或写错星期）直接拒绝保存，并把看不懂的那一段回给用户 ——
-     * 交给 Lua 只会变成"静默不生效"，用户完全不知道为什么到点没开。
-     */
+    // 「定时启停」时间段：面板侧先校验并归一化（写库的是规范写法，Lua 只负责执行）。
+
     private function normalizedScheduleWindows(string $value, int $maxLength = 255): string
     {
         try {
@@ -850,7 +1171,7 @@ class BossController extends Controller
             ));
         }
 
-        // 不截断：时间段是有语义的，砍一半只会变成"到点不生效"这种最难查的问题
+        
         if ($maxLength > 0 && mb_strlen($normalized) > $maxLength) {
             throw new RuntimeException(self::USER_FACING_ERROR_PREFIX . Lang::get(
                 'app.boss.errors.schedule_too_long',
@@ -882,9 +1203,8 @@ class BossController extends Controller
         ]);
     }
 
-    /**
-     * 难度档位 payload：每档的倍率与当前倍率下的预估血量，供视图与前端即时换算。
-     */
+    // 难度档位 payload：每档的倍率与当前倍率下的预估血量，供视图与前端即时换算。
+
     private function tierPayload(array $config): array
     {
         $currentScaled = $this->resolveCurrentHealthMultiplierScaled($config);
@@ -915,9 +1235,8 @@ class BossController extends Controller
         ];
     }
 
-    /**
-     * 当前生效的血量倍率（缩放值）：以数据库现值为准，缺失时回落到默认值。
-     */
+    // 当前生效的血量倍率（缩放值）：以数据库现值为准，缺失时回落到默认值。
+
     private function resolveCurrentHealthMultiplierScaled(array $config): int
     {
         $display = $config['boss_health_multiplier'] ?? null;
@@ -1037,7 +1356,7 @@ class BossController extends Controller
         return max($minScaled, min($maxScaled, $scaled));
     }
 
-    private function normalizedIntegerListString(string $value): string
+    private function normalizedIntegerListString(string $value, int $limit = 0): string
     {
         preg_match_all('/\d+/', $value, $matches);
         $seen = [];
@@ -1049,9 +1368,103 @@ class BossController extends Controller
             }
 
             $seen[$numericValue] = (string) $numericValue;
+
+            if ($limit > 0 && count($seen) >= $limit) {
+                break;
+            }
         }
 
         return implode(',', array_values($seen));
+    }
+
+    /**
+     * 枚举字段归一：只接受 $allowed 里列出的取值，其它一律回落到第一个合法值。
+     *
+     * @param string[] $allowed
+     */
+    private function normalizedEnumValue(string $value, array $allowed, string $fallback): string
+    {
+        $value = trim($value);
+        if ($allowed === []) {
+            return $value;
+        }
+
+        return in_array($value, $allowed, true) ? $value : $fallback;
+    }
+
+    /**
+     * 奖池奖品（kind=itemlist）的 ID → 物品名 映射：把本区所有 itemlist 字段里的 ID 收集起来
+     * 一次性解析，供视图在输入框下面显示"这件奖品是什么"。
+     *
+     * @param array<string,mixed> $extConfig
+     * @return array<int,string> itemId => 物品名（查不到 = "#ID"）
+     */
+    private function extItemNames(array $extConfig): array
+    {
+        $ids = [];
+
+        foreach ($this->repo()->extFieldSchema() as $name => $spec) {
+            if ((string) ($spec['kind'] ?? 'text') !== 'itemlist') {
+                continue;
+            }
+
+            foreach (preg_split('/[\s,;]+/', (string) ($extConfig[$name] ?? '')) ?: [] as $token) {
+                $itemId = (int) trim((string) $token);
+                if ($itemId > 0) {
+                    $ids[$itemId] = true;
+                }
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->repo()->itemNames(array_keys($ids));
+    }
+
+    /**
+     * 「技能池随机」的随机池（kind=preset_multi）：接受预设 key 的数组（表单复选框 name[]）
+     * 或逗号/空格分隔的字符串，只保留 boss.preset_values 里存在的 key，
+     * 输出按 preset_values 的顺序归一（去重）。
+     *
+     * 空串是**合法值**（Lua 侧语义 = 使用全部预设），所以这里不能套用其它字段
+     * "空 = 不改"的规则；池子列宽有限，超长直接拒绝保存而不是悄悄截断。
+     */
+    private function normalizedPresetPool($value, int $maxLength = 255): string
+    {
+        $raw = is_array($value) ? $value : (preg_split('/[\s,;]+/', (string) $value) ?: []);
+        $submitted = [];
+
+        foreach ($raw as $token) {
+            $token = strtolower(trim((string) $token));
+            if ($token !== '') {
+                $submitted[$token] = true;
+            }
+        }
+
+        $chosen = [];
+        foreach ((array) Config::get('boss.preset_values', []) as $preset) {
+            $preset = trim((string) $preset);
+            if ($preset === '') {
+                continue;
+            }
+
+            if (isset($submitted[strtolower($preset)])) {
+                $chosen[] = $preset;
+            }
+        }
+
+        $text = implode(',', $chosen);
+
+        if ($maxLength > 0 && strlen($text) > $maxLength) {
+            throw new RuntimeException(self::USER_FACING_ERROR_PREFIX . Lang::get(
+                'app.boss.errors.preset_pool_too_long',
+                ['max' => (string) $maxLength, 'length' => (string) strlen($text)]
+            ));
+        }
+
+        return $text;
     }
 
     private function trimmedName(string $value): string

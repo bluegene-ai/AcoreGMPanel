@@ -148,9 +148,8 @@
 }
 
 /*
- * 必须显式写 [hidden] 规则：浏览器默认的 [hidden]{display:none} 在 UA 样式表里，
- * 会被上面这条 .tv-form{display:block} 覆盖，结果是「新增/编辑」表单一开始就整块展开，
- * 页面被撑长一倍多，页面上永远挂着一个空的编辑表单。
+ * 必须显式写 [hidden] 规则：UA 样式表的 [hidden]{display:none} 会被上面 .tv-form{display:block} 覆盖，
+ * 结果是「新增/编辑」表单一开始就整块展开、页面上永远挂着一个空的编辑表单。
  */
 .tv-form[hidden] {
   display: none;
@@ -458,9 +457,7 @@
 }
 
 /* ---------------- Tab 分页 ----------------
- * 5 块内容（运行状态 / 题库 / 奖励预设 / 答对排行 / 设置）竖着堆在一页要滚很久，
- * 这里改成分页；只用 display 切换，表单与表格仍常驻 DOM，JS 逻辑不受影响。
- */
+ * 5 块内容竖堆一页要滚很久；只用 display 切换，表单与表格仍常驻 DOM，JS 逻辑不受影响。 */
 .tv-tabs-wrap {
   margin: 0 0 16px;
   border-bottom: 1px solid var(--border-color, #2a3040);

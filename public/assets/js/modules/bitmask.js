@@ -1,13 +1,6 @@
 /**
  * File: public/assets/js/modules/bitmask.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - buildPanel()
- *   - positionPanel()
- *   - close()
- *   - toggleBit()
- *   - applyBits()
  */
 
 (function(){

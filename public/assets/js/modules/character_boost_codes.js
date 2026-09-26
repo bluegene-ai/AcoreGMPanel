@@ -1,17 +1,6 @@
 /**
  * File: public/assets/js/modules/character_boost_codes.js
  * Purpose: 直升兑换码生成与管理的交互。
- * Functions:
- *   - translate()
- *   - showFlash()
- *   - postJson()
- *   - renderRows()
- *   - applyRowFilter()
- *   - updatePager()
- *   - updateStats()
- *   - refreshManage()
- *   - bindGenerate()
- *   - bindManage()
  */
 
 (function(){

@@ -1,36 +1,6 @@
 /**
  * File: public/assets/js/modules/creature.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - translate()
- *   - creatureNotify()
- *   - resolveModal()
- *   - openModal()
- *   - hideModal()
- *   - hideAllModals()
- *   - refreshCreatureLogs()
- *   - collectChanges()
- *   - buildDiffSql()
- *   - updateDiffSqlPreview()
- *   - renderExecStructured()
- *   - performExecSql()
- *   - verify()
- *   - initNav()
- *   - initCompact()
- *   - apply()
- *   - dirtyGuard()
- *   - initBitmask()
- *   - ensureModal()
- *   - filterBits()
- *   - openForInput()
- *   - commitBits()
- *   - observeSections()
- *   - qs()
- *   - qsa()
- *   - apiGet()
- *   - apiPost()
- *   - buildVal()
- *   - setActive()
  */
 
 (function(){

@@ -2,9 +2,7 @@
 /**
  * 绑定列表区块（可被 AJAX 整块替换）。
  *
- * 需要的变量由 RafController::buildListViewData() 提供：
- * $pager、$search、$recruiter_guid、$status、$sort、$dir、$limit、
- * $current_server、$rafCapabilities、$rafDefaults、$raf_stats。
+ * 变量由 RafController::buildListViewData() 提供（含 $pager、筛选/排序参数、$rafCapabilities 等）。
  */
 
 $bindingSectionSearch = trim((string) ($search ?? ''));

@@ -1,22 +1,8 @@
 /**
  * File: public/assets/js/modules/supervisor.js
- * Purpose: Live state + start/stop/restart controls for acore_supervisor.exe.
- *          One supervisor per realm: the switcher at the top selects which instance this page
- *          talks to (?instance=<id> on every API call).
- * Functions:
- *   - boot()
- *   - withInstance()
- *   - updateInstanceUrl()
- *   - setActiveInstance()
- *   - renderInstances()
- *   - switchInstance()
- *   - refreshStatus()
- *   - renderState()
- *   - renderService()
- *   - sendCommand()
- *   - awaitCommand()
- *   - showResult()
- *   - formatDuration()
+ * Purpose: acore_supervisor.exe 的实时状态与启停/重启控制。
+ *
+ * 每个区一个 supervisor：页面顶部的切换器决定本页跟哪个实例通信（每次 API 调用带 ?instance=<id>）。
  */
 
 const svQs = (sel, ctx = document) => ctx.querySelector(sel);
@@ -66,7 +52,7 @@ function boot(){
   const logUrl = config.logUrl || '/supervisor/api/log';
   const commandUrl = config.commandUrl || '/supervisor/api/command';
 
-  // ---- which supervisor instance this page talks to (one acore_supervisor.exe per realm) --------
+  // ---- 本页跟哪个 supervisor 实例通信（每个区一个 acore_supervisor.exe） ----
   let currentInstance = String(config.instance || '');
 
   function withInstance(url, params){
@@ -129,10 +115,8 @@ function boot(){
     updateInstanceUrl(id);
     clearResult();
     showResult(t('messages.switching', 'loading :instance…').replace(':instance', id), 'info');
-    // The notice must not outlive the switch that raised it. Nothing else ever clears the result
-    // box, so a successful switch used to leave "loading <instance>…" on screen for good - the 5 s
-    // auto-refresh does not touch the box either, which makes the page look permanently stuck.
-    // Only clear on success: on failure refreshStatus has just put its own error in the same box.
+    // 切换提示不能比这次切换活得更久：结果框没有别处会清空，成功切换后 "loading <instance>…"
+    // 会一直留在屏幕上（5 秒自动刷新也不碰它）。只在成功时清空：失败时 refreshStatus 刚写入自己的错误。
     if(await refreshStatus(true)) clearResult();
   }
 
@@ -158,9 +142,8 @@ function boot(){
   }
 
   /**
-   * The heartbeat cell explains itself: effective timeout, the configured one when the supervisor
-   * raised it (1.1.2: max(configured, RecordUpdateTimeDiffInterval + 120s)) and the observed
-   * cadence. Must stay in sync with $heartbeatNote() in views/supervisor/index.php.
+   * 心跳单元格：有效超时、配置值（supervisor 提高过时取 max(configured, RecordUpdateTimeDiffInterval+120s)）
+   * 与实测节奏。必须与 views/supervisor/index.php 的 $heartbeatNote() 保持同步。
    */
   function heartbeatNote(service, t){
     const effective = Number(service.heartbeat_timeout_seconds) || 0;
@@ -192,8 +175,7 @@ function boot(){
     setText(node, 'pid', service.pid > 0 ? service.pid : '--');
     setText(node, 'uptime', formatDuration(service.uptime_seconds));
 
-    // write the CELLS OF THE CELL, never the whole cell: the age, the limit and the explanation are
-    // separate spans in the server-rendered markup and a whole-cell overwrite dropped them
+    // 只写单元格里的各个 span，绝不整格覆写：age/上限/说明是服务端渲染的独立 span
     const heartbeatAge = Number(service.heartbeat_age_seconds);
     setText(node, 'heartbeat_age', heartbeatAge >= 0
       ? t('fields.heartbeat_ago', 'heartbeat :seconds s ago').replace(':seconds', heartbeatAge)
@@ -223,8 +205,7 @@ function boot(){
     setText(node, 'memory', `${Math.round(Number(service.working_set_mb) || 0)} MB`);
     setText(node, 'last_event', service.last_event || '');
 
-    // a service this supervisor does not run must never offer controls - not even on a page that was
-    // rendered while it still was enabled (its ini can be edited under a running page)
+    // 本 supervisor 不跑的服务一律不给控制：即使页面渲染时它还是启用的（ini 可能已被改）
     const actions = svQs('.sv-card__actions', node);
     if(actions) actions.hidden = service.enabled === false;
 
@@ -293,10 +274,8 @@ function boot(){
   }
 
   /**
-   * Reads the state and renders it. Returns true only when the state really was read and drawn,
-   * so a caller that is showing a transient notice (switchInstance) can tell "my notice is still
-   * the current message" from "an error replaced it" - clearing the box after a failed refresh
-   * would hide the reason the refresh failed.
+   * 读取状态并渲染。只有真的读到并画出来才返回 true，这样正在显示临时提示的调用方
+   * （switchInstance）能区分"我的提示还在"与"已被错误替换"——失败后清空会盖掉失败原因。
    */
   async function refreshStatus(withLog){
     try{

@@ -2,15 +2,9 @@
 /**
  * File: resources/views/components/inventory_items_panel.php
  * Purpose: Shared item-instance panel for the unified item/inventory module.
- *          Included by the standalone page (character axis) and by the
- *          character detail "inventory" tab.
  *
- * Expects (all optional):
- *   $iiItemsTitle        string  panel heading
- *   $iiItemsSubtitle     string  initial subtitle when no character is selected
- *   $iiShowSelect        bool    render the per-row "locate owner" action
- *   $iiShowDelete        bool    render the per-row delete action
- *   $iiEmbedded          bool    hide the character subtitle (embedded mode)
+ * 可选入参：$iiItemsTitle 面板标题 / $iiItemsSubtitle 未选角色时的副标题 /
+ *           $iiShowSelect 行内"定位持有者" / $iiShowDelete 行内删除 / $iiEmbedded 嵌入模式（隐藏角色副标题）。
  */
 
 $iiItemsTitle = $iiItemsTitle ?? __('app.item_inventory.items.title');
@@ -21,15 +15,12 @@ $iiEmbedded = $iiEmbedded ?? false;
 $iiColumnCount = $iiShowSelect ? 7 : 6;
 $iiShowOwners = $iiShowSelect;
 
-// Item names deep-link into the item editor, exactly like quest ids do on this
-// same page. Pure GET, no extra queries. Gated on content.view so we never offer
-// a link the target screen would reject.
+// 物品名深链到物品编辑器（与本页的任务 ID 一致）：纯 GET、无额外查询，
+// 并以 content.view 为门槛，避免给出目标页会拒绝的链接。
 $iiCanEditContent = (bool) ($__can('content.view') ?? false);
 
-// Tells the client module what this particular panel instance can do. This is
-// required, not cosmetic: the panel is embedded in the character detail page,
-// where the item-axis markup (owner table, search forms) does not exist, so DOM
-// sniffing alone cannot decide which columns to render.
+// 告诉前端模块这个面板实例能做什么：这是必需的，不是装饰 —— 面板嵌入角色详情页时
+// 物品轴向的标记（持有者表、搜索表单）并不存在，只靠 DOM 探测无法决定渲染哪些列。
 $iiPanelConfig = [
     'embedded' => (bool) $iiEmbedded,
     'showDelete' => (bool) $iiShowDelete,

@@ -2,10 +2,6 @@
 /**
  * File: app/Http/Controllers/RealmController.php
  * Purpose: Defines class RealmController for the app/Http/Controllers module.
- * Classes:
- *   - RealmController
- * Functions:
- *   - select()
  */
 
 namespace Acme\Panel\Http\Controllers;

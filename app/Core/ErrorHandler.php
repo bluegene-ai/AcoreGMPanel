@@ -2,12 +2,6 @@
 /**
  * File: app/Core/ErrorHandler.php
  * Purpose: Defines class ErrorHandler for the app/Core module.
- * Classes:
- *   - ErrorHandler
- * Functions:
- *   - register()
- *   - handleException()
- *   - handleError()
  */
 
 namespace Acme\Panel\Core;
@@ -37,7 +31,6 @@ class ErrorHandler
                 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             \Acme\Panel\Support\LogPath::appendLine('error.log', $line, true, 0775);
         } catch (\Throwable $ignore) {
-            // swallow
         }
 
         http_response_code(500);

@@ -8,33 +8,33 @@ return [
     'event_limit' => 18,
     'contributor_limit' => 18,
 
-    // 多区（多个 realm 共用一套 auth）：每个区各自跑一份 worldserver 与一份 boss.lua，
-    // 活动 Boss 的配置 / 运行态 / 事件 / 贡献都按区独立。绑定关系由 server_overrides
-    // 描述（键 = config/generated/servers.php 里的 server 索引）。
-    //
-    // 这个列表 = **已经部署了 boss.lua 的区**；不在列表内的区服：
-    // - dashboard 追加 critical warning（"本区未部署"）
-    // - apiAction / apiConfigSave 直接返回 422，不发 SOAP 命令
+    
+    
+    
+    
+    
+    
+    
     // 留空 = 所有已配置区都支持。
-    //
-    // 具体区的索引 / 库名属于**部署信息**，请写在 config/generated/boss.php 里
-    // （该文件不入库，git pull 不会覆盖）。例：
-    //   return ['supported_server_ids' => [0, 1],
-    //           'server_overrides' => [0 => ['custom_db_name' => '<realm_a_db>']]];
+    
+    
+    
+    
+    
     'supported_server_ids' => [],
 
-    // 每个区一条：**runtime_key 就是该区 boss.lua §2 的 key**（BOSS_RUNTIME_KEY /
+    
     // BOSS_CONFIG_KEY，两行必须相同）。多区共用同一个库，靠这个 key 分租四张表：
-    //   boss_activity_config / _ext / _runtime  → 主键就是 state_key
-    //   boss_activity_events / _contributors    → state_key 列（老库由 boss.lua 自动补列+索引）
+    
+    
     // 所以 custom_db_name 通常各区都一样（共用库），真正必须**每区不同**的是 runtime_key；
-    // 两个区用同一个 key 就是共用同一份配置/运行态/事件。
+    
     // 留空 = 所有区共用顶层的 custom_db_name / runtime_key（单区部署就是这样）。
     'server_overrides' => [],
 
-    // 难度档位（= ac_eluna.boss_activity_config.boss_entry）。
-    // 190090–190093 是部署到各区 world 库里的活动 Boss 专用模板，AIName 为空、
-    // 无 smart_scripts、无掉落；实际强度由模板的 HealthModifier/DamageModifier 决定。
+    
+    
+    
     'tiers' => [
         190090 => [
             'key' => 'entry',
@@ -58,7 +58,7 @@ return [
         ],
     ],
 
-    // creature_classlevelstats(level=83, class=1).basehp2
+    
     'tier_base_hp' => 13945,
 
     'default_tier_entry' => 190090,
@@ -90,12 +90,7 @@ return [
         'minion_count_max' => 2,
         'skill_preset' => 'storm_siege',
         'skill_difficulty' => 'standard',
-        'guaranteed_reward_enabled' => 1,
-        'guaranteed_reward_notify' => 1,
-        'max_random_reward_players' => 3,
-        'class_reward_chance' => 60,
-        'formula_reward_chance' => 10,
-        'mount_reward_chance' => 15,
+        
         'random_reward_mode' => 'weighted',
         'participation_range' => 80,
         'damage_weight' => 100,
@@ -103,13 +98,6 @@ return [
         'threat_weight' => 35,
         'presence_weight' => 10,
         'kill_weight' => 3,
-        'guaranteed_item_id' => 40753,
-        'guaranteed_item_count' => 2,
-        'gold_min_copper' => 30000,
-        'gold_max_copper' => 50000,
-        'reward_items_text' => '38082,41600,51809,34067',
-        'reward_formulas_text' => '45059,44491',
-        'reward_mounts_text' => '32768,30480,13335,37719,49282,49290,19872,33977,33809,37828,43963,54068,33183,33189,35513,43964,19902,43963,46109,50250,49286,30609,54860,37012',
         'spawn_points_text' => "571,4353.573,-4411.8877,151.3909\n"
             . "571,1246.5499,-4311.5073,144.944\n"
             . "571,8093.9595,2827.9702,553.28033\n"
@@ -119,23 +107,26 @@ return [
             . "571,8355.781,-44.54596,815.31604",
     ],
 
-    // 二级 Tab → 字段组（组名与 boss.lua §3 配置区的分组一致）
+    
     'ext_tabs' => [
         'yells' => ['yells'],
         'taunts' => ['taunts'],
-        'ai' => ['ai', 'phase'],
+        'ai' => ['ai', 'phase', 'class_ai'],
         'patrol' => ['patrol', 'minion'],
-        'support' => ['helper', 'class', 'tier'],
+        'support' => ['helper', 'tier'],
+        'skill_random' => ['skill_random'],
+        'reward_pools' => ['class_reward', 'reward_pool_1', 'reward_pool_2', 'reward_pool_3', 'reward_pool_4', 'reward_pool_5', 'reward_pool_6'],
         'schedule' => ['schedule'],
     ],
 
     // 扩展配置字段 schema（= boss.lua §3 BOSS_CONFIG_SCHEMA_EXT 的镜像，列名与**顺序**必须一致）
-    // kind: text 单行 / lines 多行逐条 / keyedlines 多行"键=值" / keyedintlist 多行"键=ID,ID"
+    
     //       intlist 逗号分隔 ID / int 整数（min/max 边界与 Lua 描述表一致）/ bool 开关
-    //       schedule_windows 每天时间段（写法见 Domain\Support\ScheduleWindows，面板侧先校验再落库）
+    
     'ext_fields' => [
         'yells' => [
-            ['name' => 'boss_spawn_yell', 'kind' => 'text', 'maxlength' => 255, 'hint' => true],
+            // hint_visible = 提示留在页面上（格式/留空语义这类必须当场看到）；其余一律收进 ⓘ 悬浮提示
+            ['name' => 'boss_spawn_yell', 'kind' => 'text', 'maxlength' => 255, 'hint' => true, 'hint_visible' => true],
             ['name' => 'boss_enter_combat_yell', 'kind' => 'text', 'maxlength' => 255],
             ['name' => 'ally_spawn_yell', 'kind' => 'text', 'maxlength' => 255],
             ['name' => 'boss_respawn_yell', 'kind' => 'text', 'maxlength' => 255],
@@ -144,17 +135,17 @@ return [
         'taunts' => [
             ['name' => 'taunt_cooldown_seconds', 'kind' => 'int', 'min' => 1, 'max' => 3600, 'hint' => true],
             ['name' => 'random_taunt_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
-            ['name' => 'taunt_phase2_yells_text', 'kind' => 'lines', 'rows' => 4, 'hint' => true],
+            ['name' => 'taunt_phase2_yells_text', 'kind' => 'lines', 'rows' => 4, 'hint' => true, 'hint_visible' => true],
             ['name' => 'taunt_phase3_yells_text', 'kind' => 'lines', 'rows' => 4],
             ['name' => 'taunt_critical_hp_yells_text', 'kind' => 'lines', 'rows' => 3],
-            ['name' => 'taunt_skill_cast_yells_text', 'kind' => 'keyedlines', 'rows' => 6, 'hint' => true],
+            ['name' => 'taunt_skill_cast_yells_text', 'kind' => 'keyedlines', 'rows' => 6, 'hint' => true, 'hint_visible' => true],
             ['name' => 'taunt_target_switch_yells_text', 'kind' => 'lines', 'rows' => 4],
             ['name' => 'taunt_interrupt_yells_text', 'kind' => 'lines', 'rows' => 4],
             ['name' => 'taunt_kill_yells_text', 'kind' => 'lines', 'rows' => 4],
             ['name' => 'taunt_low_hp_yells_text', 'kind' => 'lines', 'rows' => 4],
             ['name' => 'taunt_healer_kill_yells_text', 'kind' => 'lines', 'rows' => 3],
             ['name' => 'taunt_summon_minion_yells_text', 'kind' => 'lines', 'rows' => 3],
-            ['name' => 'taunt_combo_yells_text', 'kind' => 'keyedlines', 'rows' => 6, 'hint' => true],
+            ['name' => 'taunt_combo_yells_text', 'kind' => 'keyedlines', 'rows' => 6, 'hint' => true, 'hint_visible' => true],
             ['name' => 'taunt_long_combat_yells_text', 'kind' => 'lines', 'rows' => 3],
         ],
         'ai' => [
@@ -186,25 +177,87 @@ return [
             ['name' => 'minion_target_range', 'kind' => 'int', 'min' => 1, 'max' => 200],
         ],
         'helper' => [
-            ['name' => 'helper_entries_text', 'kind' => 'intlist', 'keep_default_when_empty' => true, 'hint' => true],
-            ['name' => 'ally_helper_entry', 'kind' => 'int', 'min' => 1, 'max' => 2000000, 'hint' => true],
+            ['name' => 'helper_entries_text', 'kind' => 'intlist', 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+            ['name' => 'ally_helper_entry', 'kind' => 'int', 'min' => 1, 'max' => 2000000, 'hint' => true, 'hint_visible' => true],
         ],
-        'class' => [
+        
+        'class_ai' => [
             ['name' => 'class_types_text', 'kind' => 'keyedlines', 'rows' => 4, 'keep_default_when_empty' => true, 'hint' => true],
-            ['name' => 'class_reward_items_text', 'kind' => 'keyedintlist', 'rows' => 6, 'keep_default_when_empty' => true, 'hint' => true],
+        ],
+        
+        'class_reward' => [
+            ['name' => 'class_reward_items_text', 'kind' => 'keyedintlist', 'rows' => 8, 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
         ],
         'tier' => [
-            ['name' => 'managed_tier_entries_text', 'kind' => 'intlist', 'keep_default_when_empty' => true, 'hint' => true],
+            ['name' => 'managed_tier_entries_text', 'kind' => 'intlist', 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+        ],
+        
+        // 字段顺序必须与 boss.lua BOSS_CONFIG_SCHEMA_EXT 一致（插在 [schedule] 之前，保持定时启停为末三列）。
+        
+        'skill_random' => [
+            ['name' => 'skill_preset_random_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'skill_preset_pool_text', 'kind' => 'preset_multi', 'maxlength' => 255, 'hint' => true],
+        ],
+        // 6 个独立奖池（boss.lua §3 的 REWARD_POOLS 镜像）：每池 开关 / 概率 / 获奖人数模式 / 获奖人数 /
+        
+        // 字段顺序必须与 boss.lua BOSS_CONFIG_SCHEMA_EXT 一致（都插在 [schedule] 之前）。
+        'reward_pool_1' => [
+            ['name' => 'reward_pool_1_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_1_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_1_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_1_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_1_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_1_items_text', 'kind' => 'itemlist', 'rows' => 3, 'maxlength' => 4000, 'hint' => true],
+        ],
+        'reward_pool_2' => [
+            ['name' => 'reward_pool_2_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_2_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_2_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_2_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_2_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_2_items_text', 'kind' => 'itemlist', 'rows' => 3, 'maxlength' => 4000, 'hint' => true],
+        ],
+        'reward_pool_3' => [
+            ['name' => 'reward_pool_3_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_3_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_3_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_3_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_3_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_3_items_text', 'kind' => 'itemlist', 'rows' => 3, 'maxlength' => 4000, 'hint' => true],
+        ],
+        'reward_pool_4' => [
+            ['name' => 'reward_pool_4_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_4_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_4_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_4_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_4_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_4_items_text', 'kind' => 'itemlist', 'rows' => 4, 'maxlength' => 4000, 'hint' => true],
+        ],
+        'reward_pool_5' => [
+            ['name' => 'reward_pool_5_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_5_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_5_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_5_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_5_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_5_items_text', 'kind' => 'itemlist', 'rows' => 3, 'maxlength' => 4000, 'hint' => true],
+        ],
+        'reward_pool_6' => [
+            ['name' => 'reward_pool_6_enabled', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_6_chance', 'kind' => 'int', 'min' => 0, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_6_winner_mode', 'kind' => 'enum', 'options' => ['all', 'count'], 'hint' => true],
+            ['name' => 'reward_pool_6_winner_count', 'kind' => 'int', 'min' => 1, 'max' => 100, 'hint' => true],
+            ['name' => 'reward_pool_6_class_filter', 'kind' => 'bool', 'hint' => true],
+            ['name' => 'reward_pool_6_items_text', 'kind' => 'itemlist', 'rows' => 3, 'maxlength' => 4000, 'hint' => true],
         ],
         // 定时启停：字段顺序必须与 boss.lua BOSS_CONFIG_SCHEMA_EXT 末尾三行一致（列序一致才能对上）
         'schedule' => [
             ['name' => 'activity_schedule_enabled', 'kind' => 'bool', 'hint' => true],
-            ['name' => 'activity_schedule_windows', 'kind' => 'schedule_windows', 'maxlength' => 255, 'hint' => true],
+            ['name' => 'activity_schedule_windows', 'kind' => 'schedule_windows', 'maxlength' => 255, 'hint' => true, 'hint_visible' => true],
             ['name' => 'activity_schedule_clear_on_close', 'kind' => 'bool', 'hint' => true],
         ],
     ],
 
-    // 出厂默认值（= boss.lua §3 的默认值；仅在 ext 表/行缺失时用于展示）
+    
     'ext_defaults' => [
         'boss_spawn_yell' => ' 让 {BOSS_NAME} 来打爆这个垃圾服务器！',
         'boss_enter_combat_yell' => '可恶，竟敢对我动手！',
@@ -250,7 +303,48 @@ return [
         'class_types_text' => "1=melee\n11=healer\n2=healer\n3=ranged\n4=melee\n5=healer\n6=melee\n7=healer\n8=ranged\n9=ranged",
         'class_reward_items_text' => "1=40611,40614,40617,40620,40623,40256,40371,39257,40431,40257,40372\n2=40622,40619,40616,40613,40610,40256,40371,39257,40431,40257,40372,40258,40382,39299\n3=40611,40614,40617,40620,40623,40256,40371,39257,40431\n4=40624,40621,40618,40615,40612,40256,40371,39257,40431\n5=40622,40619,40616,40613,40610,40255,40373,40432,40258,40382,39299\n6=40624,40621,40618,40615,40612,40256,40371,39257,40431,40257,40372\n7=40611,40614,40617,40620,40623,40255,40373,40432,40256,40371,39257,40431,40258,40382,39299\n8=40624,40621,40618,40615,40612,40255,40373,40432,39299\n9=40622,40619,40616,40613,40610,40255,40373,40432,39299\n11=40624,40621,40618,40615,40612,40255,40373,40432,40256,40371,39257,40431,40257,40372,40258,40382,39299",
         'managed_tier_entries_text' => '190090,190091,190092,190093',
-        // 定时启停：默认关闭、没有时间段（= 与 boss.lua §3 的出厂默认值一致）
+        
+        'skill_preset_random_enabled' => 0,
+        'skill_preset_pool_text' => '',
+        
+        
+        'reward_pool_1_enabled' => 1,
+        'reward_pool_1_chance' => 100,
+        'reward_pool_1_winner_mode' => 'all',
+        'reward_pool_1_winner_count' => 1,
+        'reward_pool_1_class_filter' => 1,
+        'reward_pool_1_items_text' => '40753',
+        'reward_pool_2_enabled' => 1,
+        'reward_pool_2_chance' => 100,
+        'reward_pool_2_winner_mode' => 'count',
+        'reward_pool_2_winner_count' => 3,
+        'reward_pool_2_class_filter' => 1,
+        'reward_pool_2_items_text' => '38082,41600,51809,34067',
+        'reward_pool_3_enabled' => 1,
+        'reward_pool_3_chance' => 10,
+        'reward_pool_3_winner_mode' => 'count',
+        'reward_pool_3_winner_count' => 3,
+        'reward_pool_3_class_filter' => 1,
+        'reward_pool_3_items_text' => '45059,44491',
+        'reward_pool_4_enabled' => 1,
+        'reward_pool_4_chance' => 15,
+        'reward_pool_4_winner_mode' => 'count',
+        'reward_pool_4_winner_count' => 1,
+        'reward_pool_4_class_filter' => 1,
+        'reward_pool_4_items_text' => '32768,30480,13335,37719,49282,49290,19872,33977,33809,37828,43963,54068,33183,33189,35513,43964,19902,43963,46109,50250,49286,30609,54860,37012',
+        'reward_pool_5_enabled' => 1,
+        'reward_pool_5_chance' => 60,
+        'reward_pool_5_winner_mode' => 'count',
+        'reward_pool_5_winner_count' => 3,
+        'reward_pool_5_class_filter' => 1,
+        'reward_pool_5_items_text' => '40611,40614,40617,40620,40623,40256,40371,39257,40431,40257,40372,40622,40619,40616,40613,40610,40258,40382,39299,40624,40621,40618,40615,40612,40255,40373,40432',
+        'reward_pool_6_enabled' => 0,
+        'reward_pool_6_chance' => 0,
+        'reward_pool_6_winner_mode' => 'count',
+        'reward_pool_6_winner_count' => 1,
+        'reward_pool_6_class_filter' => 1,
+        'reward_pool_6_items_text' => '',
+        
         'activity_schedule_enabled' => 0,
         'activity_schedule_windows' => '',
         'activity_schedule_clear_on_close' => 1,

@@ -2,10 +2,6 @@
 /**
  * File: app/Http/Controllers/AuditController.php
  * Purpose: Defines class AuditController for the app/Http/Controllers module.
- * Classes:
- *   - AuditController
- * Functions:
- *   - apiList()
  */
 
 namespace Acme\Panel\Http\Controllers;

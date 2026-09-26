@@ -1,6 +1,6 @@
 // Global Panel helper (dynamic base path + fetch wrappers)
 (function(){
-  if(window.Panel) return; // idempotent
+  if(window.Panel) return;
 
   function parsePanelJsonScripts(){
     document.querySelectorAll('script[data-panel-json]').forEach((node)=>{
@@ -207,8 +207,8 @@
 
   function buildUrl(path){
     if(!path) path = '/';
-    if(/^https?:\/\//i.test(path)) return path; // absolute
-    if(path[0] !== '/') path = '/' + path; // ensure leading slash
+    if(/^https?:\/\//i.test(path)) return path;
+    if(path[0] !== '/') path = '/' + path;
     return BASE + path; // BASE may be ''
   }
 
@@ -382,12 +382,8 @@
       return (path, fallback) => moduleLocaleValue(moduleName, path, fallback);
     },
     /**
-     * Base path of the panel installation ("/agmp", or "" at the web root).
-     *
-     * The server publishes it ONLY as data-app-base on <body>; window.APP_BASE is
-     * never defined. Any module building an absolute URL must therefore resolve it
-     * through here — reading window.APP_BASE directly yields "" and silently
-     * produces root-relative URLs that 404 on a sub-path install.
+     * 面板基路径（"/agmp"，部署在根时为 ""）。服务端只通过 <body data-app-base> 发布：
+     * window.APP_BASE 永远不存在，直接读它会得到 "" 并生成子路径下 404 的根相对 URL。
      */
     basePath(){
       return resolveBasePath();
@@ -399,16 +395,8 @@
       return base + (suffix.startsWith('/') ? suffix : '/' + suffix);
     },
     /**
-     * Runs `fn` once the DOM is available.
-     *
-     * Page modules must use this instead of the classic
-     * `if (document.readyState === 'loading') addEventListener(...) else fn()`:
-     * loadPageModule() injects the module script from an immediately-invoked
-     * body script, so the module frequently executes while the document is still
-     * parsing ("interactive"). In that state DOMContentLoaded has not fired yet
-     * AND the 'loading' test is false, so the classic form silently never runs
-     * the module — which is exactly how the character inventory panel ended up
-     * permanently empty.
+     * DOM 就绪后执行 fn。模块脚本由 body 内联脚本注入，常在文档仍解析时（interactive）
+     * 执行：此时 DOMContentLoaded 未触发、readyState 也不是 "loading"，经典判断式会静默不执行。
      */
     whenDomReady(fn){
       if(typeof fn !== 'function' || typeof document === 'undefined') return;
@@ -618,7 +606,7 @@
             if(!obj._csrf && !obj._token){ obj._csrf = csrfToken; obj._token = csrfToken; }
             init.body = JSON.stringify(obj);
           }catch(e){ /* ignore parse error */ }
-        } else if(init.body && typeof init.body === 'object'){ // plain object => convert
+        } else if(init.body && typeof init.body === 'object'){
           const fd = new FormData();
             Object.entries(init.body).forEach(([k,v])=>fd.append(k,v));
             if(!fd.has('_csrf')) fd.append('_csrf', csrfToken);

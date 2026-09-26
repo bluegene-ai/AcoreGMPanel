@@ -38,7 +38,7 @@ $warningBannerClass = 'setup-alert-banner';
     <header class="setup-header">
       <div>
         <h1 class="setup-header__title"><?= htmlspecialchars((string)($layoutPage['page_title'] ?? __('app.setup.layout.page_title'))) ?></h1>
-        <p class="setup-body-copy"><?= htmlspecialchars((string)($layoutPage['intro'] ?? __('app.setup.layout.intro'))) ?></p>
+        <p class="setup-body-copy"><?= htmlspecialchars(__('app.setup.layout.intro_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($layoutPage['intro'] ?? __('app.setup.layout.intro'))) ?>">i</span></p>
       </div>
       <nav class="setup-stepper" aria-label="<?= htmlspecialchars((string)($layoutPage['stepper_label'] ?? __('app.setup.layout.stepper_label'))) ?>">
         <?php foreach($steps as $stepIndex => $label): ?>

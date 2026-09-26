@@ -140,7 +140,6 @@ use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
     <summary><?= htmlspecialchars(__('app.item.edit.description')) ?></summary>
     <textarea name="description" rows="4" class="full-width"><?= htmlspecialchars($item['description']??'') ?></textarea>
   </details>
-  <!-- 底部保存按钮行移除，统一使用 sticky 工具条保存 -->
 </form>
 
 <section class="item-edit-span-2 sql-section" id="itemDiffSqlSection">
@@ -154,7 +153,7 @@ use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
   <button type="button" class="btn success btn-sm" id="btn-exec-diff-sql"><?= htmlspecialchars(__('app.item.edit.actions.execute')) ?></button>
   <?php endif; ?>
   </h2>
-  <div class="muted item-sql-section__hint"><?= htmlspecialchars(__('app.item.edit.diff.hint')) ?></div>
+  <div class="muted item-sql-section__hint"><?= htmlspecialchars(__('app.item.edit.diff.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.item.edit.diff.hint')) ?>">i</span></div>
   <pre id="itemDiffSqlLive" class="sql-result mono item-sql-section__live-box"><?= htmlspecialchars(__('app.item.edit.diff.placeholder')) ?></pre>
   <div id="itemDiffSqlExecResult" class="sql-exec-result item-sql-section__exec-result">
     <div class="result-head item-sql-section__result-head">
@@ -176,7 +175,6 @@ use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
   </div>
 </section>
 
-<!-- 受限 SQL 执行模块已移除，仅保留自动差异预览；如需恢复可从版本控制回滚 -->
 <script type="application/json" data-panel-json data-global="ITEM_EDIT_CONFIG"><?= json_encode([
   'quality_unknown' => __('app.item.quality.unknown'),
   'group_fallback' => __('app.item.edit.group_fallback'),

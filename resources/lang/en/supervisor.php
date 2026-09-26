@@ -7,6 +7,8 @@
 return [
     'page_title' => 'Supervisor',
     'intro' => 'Inspect and control acore_supervisor.exe: worldserver / authserver state, world-loop heartbeat, auth probe and restart counters, with start / stop / restart actions.',
+    'intro_short' => 'Inspect and control worldserver / authserver state and heartbeat; start, stop or restart.',
+    'intro_short' => 'Inspect and control the worldserver / authserver watchdog.',
 
     'supervisor' => [
         'running' => 'supervisor running',
@@ -27,6 +29,7 @@ return [
     'diagnostics' => [
         'title' => 'Why the supervisor was not found',
         'intro' => 'The panel looks for acore_supervisor.exe / supervisor.ini in the directories below. Running the supervisor somewhere else is fine - the panel just has to be told where it is.',
+        'intro_short' => 'The panel searches these paths for the supervisor.',
         'configured' => 'Configured directory',
         'configured_empty' => '(not configured, auto-detection)',
         'env' => 'Environment variable :var',
@@ -48,6 +51,7 @@ return [
         'source_default' => 'default file name',
         'source_none' => 'unresolved',
         'conflict_title' => 'The panel config disagrees with supervisor.ini (the panel config wins, so commands may land in a file the supervisor never reads):',
+        'conflict_title_short' => 'Panel config disagrees with supervisor.ini:',
         'conflict_line' => 'the panel says :configured, the ini says :ini',
         'ini_key_status' => 'StatusFile',
         'ini_key_control' => 'ControlFile',
@@ -56,16 +60,20 @@ return [
         'open_basedir' => 'open_basedir',
         'open_basedir_empty' => '(not restricted)',
         'open_basedir_warning' => 'PHP runs with an open_basedir restriction: a supervisor outside that list is invisible to the panel no matter what path you configure.',
+        'open_basedir_warning_short' => 'PHP open_basedir does not cover the supervisor folder.',
         'candidate_path' => 'Directories tried',
         'candidate_state' => 'exists / exe / ini / status file',
         'exists_yes' => 'yes',
         'exists_no' => 'no',
         'fix_title' => 'How to fix it',
         'fix_configured' => 'The "configured directory" above is wrong or the folder was renamed: correct dir in config/generated/supervisor.php, or drop that key to go back to auto-detection.',
+        'fix_configured_short' => 'The configured directory is wrong or renamed.',
         'fix_hint' => 'Pick either one, then refresh this page:',
+        'fix_hint_short' => 'Pick one of the two options, then refresh.',
         'fix_option_config' => 'Pin it in the panel config (recommended): create :file',
         'fix_option_env' => 'Set the :var environment variable for the PHP process (Apache SetEnv, or .env)',
         'fix_option_note' => 'Forward slashes or doubled backslashes both work; point at the FOLDER, not at the exe itself.',
+        'fix_option_note_short' => 'Point at the supervisor folder, not at the exe.',
         'placeholder_dir' => 'C:/replace/with/the/supervisor/folder',
     ],
 

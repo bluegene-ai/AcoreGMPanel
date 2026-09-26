@@ -2,14 +2,6 @@
 /**
  * File: app/Core/Config.php
  * Purpose: Defines class Config for the app/Core module.
- * Classes:
- *   - Config
- * Functions:
- *   - init()
- *   - get()
- *   - set()
- *   - loadDirectory()
- *   - mergeConfig()
  */
 
 declare(strict_types=1);

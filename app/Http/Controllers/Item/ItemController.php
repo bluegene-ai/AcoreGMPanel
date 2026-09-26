@@ -2,21 +2,6 @@
 /**
  * File: app/Http/Controllers/Item/ItemController.php
  * Purpose: Defines class ItemController for the app/Http/Controllers/Item module.
- * Classes:
- *   - ItemController
- * Functions:
- *   - __construct()
- *   - index()
- *   - editPage()
- *   - buildCancelQuery()
- *   - apiCreate()
- *   - apiDelete()
- *   - apiSave()
- *   - apiExecSql()
- *   - apiLogs()
- *   - apiCheck()
- *   - apiFetch()
- *   - apiSubclasses()
  */
 
 namespace Acme\Panel\Http\Controllers\Item;

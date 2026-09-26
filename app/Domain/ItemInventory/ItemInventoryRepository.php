@@ -1,29 +1,11 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/ItemInventoryRepository.php
- * Purpose: Read model for the unified item/inventory module. Answers both
- *          directions of the item_instance × character_inventory model:
- *            - character axis: search characters, then read everything they carry
- *            - item axis:      search item_template, then locate every owner
+ * Purpose: Read model for the unified item/inventory module, both directions of the
+ * item_instance x character_inventory model (character axis and item axis).
  *
- * This class performs reads only. Every write path lives in
- * ItemInventoryMutationService so that no read model can silently mutate data.
- *
- * Classes:
- *   - ItemInventoryRepository
- * Functions:
- *   - __construct()
- *   - searchCharacters()
- *   - characterItems()
- *   - characterInventoryMap()
- *   - searchItems()
- *   - fetchOwnership()
- *   - loadItemMeta()
- *   - resolveItemNames()
- *   - localeColumns()
- *   - localeOrder()
- *   - normalizeLimit()
- *   - normalizePage()
+ * This class performs reads only: every write path lives in ItemInventoryMutationService, so no read
+ * model can silently mutate data.
  */
 
 declare(strict_types=1);
@@ -42,18 +24,14 @@ class ItemInventoryRepository extends MultiServerRepository
     private PDO $world;
     private LocationResolver $locations;
 
-    /** @var array<int,array<int,array{bag:int,slot:int,item:int}>> */
     private array $inventoryMaps = [];
-    /** @var array<int,array<string,mixed>> */
     private array $itemMetaCache = [];
     /**
-     * entry => {entry, name, quality}, filled by resolveItemMeta(). Holds both the
-     * display name and the template quality so one query serves both needs.
-     *
+     * entry => {entry, name, quality}, filled by resolveItemMeta(): one query serves both the display name
+     * and the template quality.
      * @var array<int,array{entry:int,name:string,quality:?int}>
      */
     private array $itemNameCache = [];
-    /** @var array{table:bool,columns:array<int,string>}|null */
     private ?array $localeProbe = null;
 
     /** Item instance columns holding non-currency metadata, cleared on replace when present. */
@@ -74,9 +52,7 @@ class ItemInventoryRepository extends MultiServerRepository
         $this->locations = new LocationResolver();
     }
 
-    /**
-     * Switching realms must drop every per-realm cache, not just the PDO handles.
-     */
+    /** Switching realms must drop every per-realm cache, not just the PDO handles. */
     public function rebind(int $serverId): void
     {
         if ($serverId === $this->serverId) {
@@ -91,9 +67,7 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Character-axis entry point: find characters by exact account username or
-     * by (partial) character name.
-     *
+     * Character-axis entry point: find characters by exact account username or by (partial) character name.
      * @return array<int,array<string,mixed>>
      */
     public function searchCharacters(string $type, string $value, int $limit = 100): array
@@ -136,9 +110,8 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Everything one character carries: equipped, backpack, bank, keyring,
-     * currency, every bag container and the contents inside those containers.
-     *
+     * Everything one character carries: equipped, backpack, bank, keyring, currency, every bag container
+     * and the contents inside those containers.
      * @return array<int,array<string,mixed>>
      */
     public function characterItems(int $guid): array
@@ -218,9 +191,8 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Raw character_inventory rows for one character, keyed by the item guid so
-     * that a container can be looked up in O(1).
-     *
+     * Raw character_inventory rows for one character, keyed by the item guid so a container can be looked
+     * up in O(1).
      * @return array<int,array{bag:int,slot:int,item:int}>
      */
     public function characterInventoryMap(int $guid): array
@@ -255,7 +227,6 @@ class ItemInventoryRepository extends MultiServerRepository
 
     /**
      * Item-axis entry point: find item templates by localized name or exact entry.
-     *
      * @return array<int,array<string,mixed>>
      */
     public function searchItems(string $keyword, int $limit = 20): array
@@ -269,8 +240,7 @@ class ItemInventoryRepository extends MultiServerRepository
         $like = '%' . $keyword . '%';
         $entry = ctype_digit($keyword) ? (int) $keyword : null;
 
-        // Localized names live in locales_item; when the table is absent (many
-        // AzerothCore installs never create it) fall back to item_template.name.
+        // localized names live in locales_item; when the table is absent (many AzerothCore installs never create it) fall back to item_template.name
         $withLocales = $this->hasLocaleTable();
         $hasLocales = $withLocales['table'];
 
@@ -317,9 +287,8 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Item axis result: every stack of $entry across all characters, paginated,
-     * with summary totals computed over the whole result set.
-     *
+     * Item axis result: every stack of $entry across all characters, paginated, with summary totals
+     * computed over the whole result set.
      * @return array{item:?array,rows:array<int,array<string,mixed>>,summary:array<string,int>,paginated:bool,page:int,per_page:int}
      */
     public function fetchOwnership(int $entry, bool $paginate = true, int $page = 1, int $perPage = 100, int $maxRows = 1000): array
@@ -456,9 +425,7 @@ class ItemInventoryRepository extends MultiServerRepository
         ];
     }
 
-    /**
-     * @return array{characters:int,instances:int,count:int}
-     */
+    /** @return array{characters:int,instances:int,count:int} */
     private function ownershipSummary(int $entry): array
     {
         $stmt = $this->chars->prepare(
@@ -480,7 +447,6 @@ class ItemInventoryRepository extends MultiServerRepository
 
     /**
      * Whole-result-set per-character totals for the characters on the current page.
-     *
      * @param array<int,int> $characterGuids
      * @return array<int,array{count:int,instances:int}>
      */
@@ -555,9 +521,7 @@ class ItemInventoryRepository extends MultiServerRepository
         return $value === false ? 0 : (int) $value;
     }
 
-    /**
-     * Number of item instances sitting inside a container.
-     */
+    /** Number of item instances sitting inside a container. */
     public function containedItemCount(int $characterGuid, int $containerInstanceGuid): int
     {
         if ($characterGuid <= 0 || $containerInstanceGuid <= 0) {
@@ -620,10 +584,7 @@ class ItemInventoryRepository extends MultiServerRepository
         return $meta;
     }
 
-    /**
-     * @param array<int,int> $entries
-     * @return array<int,string>
-     */
+    /** @param array<int,int> $entries @return array<int,string> entry => display name */
     public function resolveItemNames(array $entries): array
     {
         $meta = $this->resolveItemMeta($entries);
@@ -632,13 +593,9 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Resolve localized display name AND template quality for a set of entries in
-     * one query (results cached per request).
-     *
-     * Quality drives the WoW colour coding, so it is resolved here rather than in
-     * a second round trip — the character axis would otherwise have to query
-     * item_template once per entry.
-     *
+     * Resolve localized display name AND template quality for a set of entries in one query (cached per
+     * request). Quality drives the WoW colour coding, so resolving it here avoids one item_template query
+     * per entry on the character axis.
      * @param array<int,int> $entries
      * @return array<int,array{entry:int,name:string,quality:?int}>
      */
@@ -669,8 +626,7 @@ class ItemInventoryRepository extends MultiServerRepository
                 $this->itemNameCache[$entry] = [
                     'entry' => $entry,
                     'name' => $this->nonEmpty($row['name'] ?? null) ?? ('#' . $entry),
-                    // A NULL Quality is a real possibility on custom templates; the
-                    // client renders those with the neutral "unknown" colour.
+                    // a NULL Quality is a real possibility on custom templates; the client renders those with the neutral "unknown" colour
                     'quality' => isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
                 ];
             }
@@ -686,9 +642,7 @@ class ItemInventoryRepository extends MultiServerRepository
         return $resolved;
     }
 
-    /**
-     * Quality for one entry, or null when unknown.
-     */
+    /** Quality for one entry, or null when unknown. */
     private function qualityOf(int $entry): ?int
     {
         if ($entry <= 0) {
@@ -702,9 +656,8 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Sorts by storage area, then bag, then slot — mirroring how the game client
-     * orders the bags (equipment first, then backpack, then bank, then nested).
-     *
+     * Sorts by storage area, then bag, then slot - mirroring how the game client orders the bags
+     * (equipment first, then backpack, then bank, then nested).
      * @param array<int,array<string,mixed>> $items
      */
     private function sortItems(array &$items): void
@@ -724,21 +677,16 @@ class ItemInventoryRepository extends MultiServerRepository
         });
     }
 
-    /**
-     * @return array<int,string>
-     */
     private function localeColumns(): array
     {
         return ['name_loc4', 'name_loc8', 'name_loc5', 'name_loc6', 'name_loc7'];
     }
 
     /**
-     * Detects whether locales_item exists AND exposes name_loc* columns, once per
-     * request. Many AzerothCore installs never create this table; when it is
-     * missing we must not JOIN it at all, because a JOIN against a missing table
-     * makes the whole WHERE clause throw and the naive "catch and retry" fallback
-     * can be short-circuited by SQL operator precedence.
-     *
+     * Detects whether locales_item exists AND exposes name_loc* columns, once per request. Many AzerothCore
+     * installs never create the table and it must then not be JOINed at all: a JOIN against a missing table
+     * throws for the whole WHERE clause, and a naive catch-and-retry can be short-circuited by SQL operator
+     * precedence.
      * @return array{table:bool,columns:array<int,string>}
      */
     private function hasLocaleTable(): array
@@ -763,8 +711,7 @@ class ItemInventoryRepository extends MultiServerRepository
             $this->logDegraded('locale_probe', $e);
         }
 
-        // Prefer the display order used by the rest of the panel, then append any
-        // locale column this particular schema happens to define.
+        // prefer the display order used by the rest of the panel, then append any locale column this schema defines
         $ordered = [];
         foreach ($this->localeColumns() as $column) {
             if (in_array($column, $available, true)) {
@@ -793,9 +740,9 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * COALESCE() alone is not enough: AzerothCore often stores empty strings
-     * rather than NULL in locales_item, which would win the COALESCE and show a
-     * blank name. NULLIF(col, '') forces the fallback chain to keep walking.
+     * COALESCE() alone is not enough: AzerothCore often stores empty strings rather than NULL in
+     * locales_item, which would win the COALESCE and show a blank name, so NULLIF(col, '') keeps the
+     * fallback chain walking.
      */
     private function localizedNameExpression(bool $withEnglishFallback = false): string
     {
@@ -815,9 +762,8 @@ class ItemInventoryRepository extends MultiServerRepository
     }
 
     /**
-     * Try each candidate statement in order; the first one that executes wins.
-     * Statement failures are recorded instead of vanishing.
-     *
+     * Try each candidate statement in order; the first one that executes wins. Statement failures are
+     * recorded instead of vanishing.
      * @param array<int,string> $candidates
      * @return array<int,array<string,mixed>>
      */
@@ -903,10 +849,7 @@ class ItemInventoryRepository extends MultiServerRepository
         return null;
     }
 
-    /**
-     * Localized reads used to fail silently, which hid broken joins from the
-     * operator. Degraded reads are now recorded in the module action log.
-     */
+    /** Degraded localized reads are recorded in the module action log instead of failing silently. */
     private function logDegraded(string $operation, Throwable $e): void
     {
         try {
@@ -919,10 +862,7 @@ class ItemInventoryRepository extends MultiServerRepository
         }
     }
 
-    /**
-     * @param array<int,array<string,mixed>> $rows
-     * @return array<int,array<string,mixed>>
-     */
+    /** @param array<int,array<string,mixed>> $rows @return array<int,array<string,mixed>> rows + account name/id */
     private function attachAccountMeta(array $rows, ?int $knownAccountId = null, ?string $knownUsername = null): array
     {
         if (!$rows) {

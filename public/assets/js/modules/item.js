@@ -1,36 +1,6 @@
 /**
  * File: public/assets/js/modules/item.js
  * Purpose: Provides functionality for the public/assets/js/modules module.
- * Functions:
- *   - qs()
- *   - qsa()
- *   - translate()
- *   - itemNotify()
- *   - escapeHtml()
- *   - load()
- *   - prime()
- *   - namesOf()
- *   - nameOf()
- *   - openModal()
- *   - closeModals()
- *   - initList()
- *   - ensureAll()
- *   - initNewItemModal()
- *   - fill()
- *   - collectChanges()
- *   - initEdit()
- *   - takeSnapshot()
- *   - currentValue()
- *   - markDirty()
- *   - gatherDiff()
- *   - buildUpdateSQL()
- *   - updateDiffPreview()
- *   - show()
- *   - setStatus()
- *   - ensureButtons()
- *   - boot()
- *   - refreshSqlLog()
- *   - attachSave()
  */
 
 function qs(sel,ctx=document){ return ctx.querySelector(sel); }

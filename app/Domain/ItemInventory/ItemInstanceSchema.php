@@ -1,30 +1,13 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/ItemInstanceSchema.php
- * Purpose: Probes the live `item_instance` schema once per request so the
- *          inventory mutation service can build SQL that works across
- *          AzerothCore variants without ever requiring a schema migration.
+ * Purpose: Probes the live `item_instance` schema once per request (INFORMATION_SCHEMA, cached in
+ * process) so the inventory mutation service can build SQL that works across AzerothCore variants
+ * without ever requiring a schema migration.
  *
- * Why probing is mandatory rather than cosmetic (verified against a live
- * AzerothCore realm):
- *   - `guid` is a plain PRIMARY KEY with DEFAULT 0, NOT AUTO_INCREMENT, so a new
- *     instance must allocate its own guid explicitly;
- *   - `enchantments` is TEXT NOT NULL with no default, so a minimal
- *     INSERT (itemEntry, count) fails under STRICT_TRANS_TABLES;
- *   - some forks spell metadata columns differently or omit them entirely.
- *
- * Everything is discovered through INFORMATION_SCHEMA and cached in-process.
- *
- * Classes:
- *   - ItemInstanceSchema
- * Functions:
- *   - __construct()
- *   - hasColumn()
- *   - clearableColumns()
- *   - clearLiteral()
- *   - clearValue()
- *   - insertColumns()
- *   - useDefaultGuid()
+ * Probing is mandatory: `guid` is a plain PRIMARY KEY with DEFAULT 0, not AUTO_INCREMENT, so a new
+ * instance must allocate its own guid; `enchantments` is TEXT NOT NULL with no default, so a minimal
+ * INSERT fails under STRICT_TRANS_TABLES; some forks spell metadata columns differently or omit them.
  */
 
 declare(strict_types=1);
@@ -39,10 +22,9 @@ final class ItemInstanceSchema
     public const TABLE = 'item_instance';
 
     /**
-     * Instance-level metadata that stops being meaningful when an instance is
-     * re-pointed at a different item template. `enchantments*` hold *slot*
-     * enchantments rather than item-type data, so they are deliberately NOT
-     * cleared — clearing them would silently strip a player's enchants.
+     * Instance-level metadata that stops being meaningful when an instance is re-pointed at a different
+     * item template. `enchantments*` hold *slot* enchantments rather than item-type data, so they are
+     * deliberately NOT cleared - clearing them would silently strip a player's enchants.
      */
     private const CLEARABLE = [
         'charges' => 0,
@@ -61,7 +43,6 @@ final class ItemInstanceSchema
         'giftCreatorGuid',
     ];
 
-    /** @var array<string,array{name:string,nullable:bool,hasDefault:bool,type:string}>|null */
     private ?array $columns = null;
 
     public function __construct(private PDO $pdo)
@@ -75,7 +56,6 @@ final class ItemInstanceSchema
 
     /**
      * Residue columns present in this schema, in a stable order.
-     *
      * @return array<int,string>
      */
     public function clearableColumns(): array
@@ -103,9 +83,8 @@ final class ItemInstanceSchema
     }
 
     /**
-     * True when the schema manages `guid` itself (AUTO_INCREMENT).
-     * On the dominant AzerothCore schema it does not, so the caller must
-     * allocate a guid explicitly.
+     * True when the schema manages `guid` itself (AUTO_INCREMENT); on the dominant AzerothCore schema it
+     * does not, so the caller must allocate a guid explicitly.
      */
     public function useDefaultGuid(): bool
     {
@@ -118,22 +97,18 @@ final class ItemInstanceSchema
     }
 
     /**
-     * INSERT column list for cloning an instance, plus the value source for each
-     * column: a bound parameter, or a SQL literal that satisfies NOT NULL.
-     *
-     * Structural columns present in the schema are bound; every other NOT NULL
-     * column without a default (e.g. the `enchantments` text column on live
-     * AzerothCore realms) gets a type-appropriate literal so the statement cannot
-     * fail under STRICT_TRANS_TABLES.
-     *
+     * INSERT column list for cloning an instance, plus the value source for each column: a bound parameter
+     * or a SQL literal that satisfies NOT NULL.
+     * Structural columns present in the schema are bound; every other NOT NULL column without a default
+     * (e.g. the `enchantments` text column on live AzerothCore realms) gets a type-appropriate literal so
+     * the statement cannot fail under STRICT_TRANS_TABLES.
      * @return array{columns:array<int,string>,bindings:array<string,string>,literals:array<string,string>}
      */
     public function insertPlan(): array
     {
         $map = $this->columnMap();
         if (!$map) {
-            // Probe failed: fall back to the minimal shape that the widest range
-            // of schemas accepts.
+            // probe failed: fall back to the minimal shape that the widest range of schemas accepts
             return [
                 'columns' => ['itemEntry', 'count', 'durability'],
                 'bindings' => ['itemEntry' => ':entry', 'count' => ':count', 'durability' => ':durability'],
@@ -176,10 +151,7 @@ final class ItemInstanceSchema
         return 'c_' . preg_replace('/[^A-Za-z0-9_]/', '_', $column);
     }
 
-    /**
-     * A literal that satisfies a NOT NULL column of the given MySQL type.
-     * Numeric → 0, everything else → empty string.
-     */
+    /** A literal that satisfies a NOT NULL column of the given MySQL type: numeric → 0, everything else → ''. */
     private function literalFor(string $type): string
     {
         $type = strtolower($type);
@@ -192,9 +164,7 @@ final class ItemInstanceSchema
         return "''";
     }
 
-    /**
-     * @return array<string,array{name:string,nullable:bool,hasDefault:bool,type:string,extra:string}>
-     */
+    /** @return array<string,array{name:string,nullable:bool,hasDefault:bool,type:string,extra:string}> */
     private function columnMap(): array
     {
         if ($this->columns !== null) {

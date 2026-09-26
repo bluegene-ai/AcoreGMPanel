@@ -4,6 +4,7 @@ return array (
   array (
     'page_title' => 'Setup Wizard - Acore GM Panel',
     'intro' => 'Follow the wizard to verify requirements, configure databases, and create the administrator account.',
+    'intro_short' => 'Follow the wizard to check, configure and finish.',
     'step_titles' => 
     array (
       1 => 'Environment check',
@@ -23,6 +24,7 @@ return array (
   array (
     'title' => 'Step 1 · Environment check',
     'hint' => 'Ensure the server meets all requirements before continuing.',
+    'hint_short' => 'All checks must pass before you can pick a language.',
     'pill' => 'Environment',
     'checks' => 
     array (
@@ -75,6 +77,7 @@ return array (
       array (
         'title' => 'Shared auth database',
         'hint' => 'For one-auth multi-realm mode, verify the auth connection first. The wizard will read realmlist and generate the remaining forms automatically.',
+        'hint_short' => 'Verify auth first; the realm forms are generated for you.',
         'pill' => 'Auth',
       ),
       'realm_groups' => 
@@ -91,18 +94,21 @@ return array (
         'title' => 'Single server',
         'badge' => 'Default',
         'desc' => 'Maintain one complete server configuration for a single-server deployment.',
+        'desc_short' => 'One complete server configuration.',
       ),
       'multi' => 
       array (
         'title' => 'One auth, many realms',
         'badge' => 'Shared auth',
         'desc' => 'Verify one shared auth database, then generate Characters, World, and SOAP settings for each realm from realmlist.',
+        'desc_short' => 'One shared auth database, one config per realm.',
       ),
       'multi_full' => 
       array (
         'title' => 'Many servers, many realms',
         'badge' => 'Isolated',
         'desc' => 'Each server group keeps its own Auth, Characters, World, and SOAP configuration.',
+        'desc_short' => 'Every server group keeps its own configuration.',
       ),
     ),
     'fields' => 
@@ -166,6 +172,7 @@ return array (
     'footer' => 
     array (
       'hint' => 'These values feed directly into the next connection test and can still be adjusted after installation.',
+      'hint_short' => 'These values are used by the next connection test.',
       'submit' => 'Save and continue',
       'back' => 'Back to environment check',
     ),
@@ -201,6 +208,12 @@ return array (
       'password_required' => 'Password is required',
       'password_mismatch' => 'Passwords do not match',
     ),
+    'errors' => 
+    array (
+      'username_required' => 'Username is required',
+      'password_required' => 'Password is required',
+      'password_mismatch' => 'Passwords do not match',
+    ),
     'submit' => 'Save and generate config',
     'back' => 'Back to connection test',
     'save_failed' => 'Failed to save administrator settings. Please try again.',
@@ -214,6 +227,7 @@ return array (
     'back' => 'Back to administrator',
     'errors' => 
     array (
+      'create_config_dir' => 'Unable to create config directory ":path"',
       'config_dir_create_failed' => 'Unable to create config directory ":path"',
       'write_failed' => 'Write failed: :file',
     ),

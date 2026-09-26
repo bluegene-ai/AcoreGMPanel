@@ -2,19 +2,6 @@
 /**
  * File: app/Core/Lang.php
  * Purpose: Defines class Lang for the app/Core module.
- * Classes:
- *   - Lang
- * Functions:
- *   - init()
- *   - setLocale()
- *   - locale()
- *   - fallbackLocale()
- *   - available()
- *   - get()
- *   - getFromLocale()
- *   - loadFile()
- *   - splitKey()
- *   - normalizeLocale()
  */
 
 declare(strict_types=1);

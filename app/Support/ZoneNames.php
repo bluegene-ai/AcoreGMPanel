@@ -1,10 +1,8 @@
 <?php
 /**
  * File: app/Support/ZoneNames.php
- * Purpose: Loads zone (area) names from resources/lang/<locale>/zone_names_*.php.
- *
- * Notes:
- * - The zone name files define a `$zones` array (zoneId => name).
+ * Purpose: Loads zone (area) names from resources/lang/<locale>/zone_names_*.php, where such a file
+ * defines a `$zones` array (zoneId => name).
  */
 
 declare(strict_types=1);
@@ -15,12 +13,8 @@ use Acme\Panel\Core\Lang;
 
 class ZoneNames
 {
-    /** @var array<string, array<int, string>> */
     private static array $cache = [];
 
-    /**
-     * @return array<int, string>
-     */
     public static function all(?string $locale = null): array
     {
         $locale = $locale ?: Lang::locale();

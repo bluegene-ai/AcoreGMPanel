@@ -2,14 +2,6 @@
 /**
  * File: app/Support/GameMeta.php
  * Purpose: Defines class GameMeta for the app/Support module.
- * Classes:
- *   - GameMeta
- * Functions:
- *   - className()
- *   - raceName()
- *   - classColorHex()
- *   - itemQualityColorHex()
- *   - qualityName()
  */
 
 namespace Acme\Panel\Support;

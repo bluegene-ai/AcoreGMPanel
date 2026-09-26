@@ -2,20 +2,6 @@
 /**
  * File: app/Domain/Soap/SoapWizardService.php
  * Purpose: Defines class SoapWizardService for the app/Domain/Soap module.
- * Classes:
- *   - SoapWizardService
- * Functions:
- *   - __construct()
- *   - metadata()
- *   - categories()
- *   - command()
- *   - buildCommand()
- *   - normalizeValue()
- *   - applyTemplate()
- *   - mapArguments()
- *   - buildIndex()
- *   - loadDefaultCatalog()
- *   - localizeCatalog()
  */
 
 namespace Acme\Panel\Domain\Soap;
