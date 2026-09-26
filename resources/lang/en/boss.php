@@ -379,6 +379,10 @@ return [
             'venom_pursuit' => 'Venom Pursuit',
             'grave_bombard' => 'Grave Bombard',
             'spellbreak_bulwark' => 'Spellbreak Bulwark',
+            'arcane_cataclysm' => 'Arcane Cataclysm',
+            'plague_swarm' => 'Plague Swarm',
+            'iron_vanguard' => 'Iron Vanguard',
+            'blood_covenant' => 'Blood Covenant',
         ],
         'summary' => [
             'storm_siege' => 'Focuses on chain pressure and zone control.',
@@ -387,6 +391,10 @@ return [
             'venom_pursuit' => 'Focuses on pursuit and poison attrition.',
             'grave_bombard' => 'Focuses on bombardment and area denial.',
             'spellbreak_bulwark' => 'Focuses on interrupts and anti-caster pressure.',
+            'arcane_cataclysm' => 'Focuses on arcane damage, spell vulnerability and cast pressure.',
+            'plague_swarm' => 'Focuses on disease stacking, swarms and area denial.',
+            'iron_vanguard' => 'Focuses on mechanical barrage, focused bursts and knockback.',
+            'blood_covenant' => 'Focuses on bleeds, armor shred and life drain attrition.',
         ],
     ],
     'tiers' => [

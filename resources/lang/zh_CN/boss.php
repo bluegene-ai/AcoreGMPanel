@@ -374,10 +374,14 @@ return [
         'labels' => [
             'storm_siege' => '风暴攻城',
             'ember_storm' => '余烬风暴',
-            'frost_whiteout' => '霜雪白茫',
-            'venom_pursuit' => '毒影追猎',
-            'grave_bombard' => '墓雨轰击',
+            'frost_whiteout' => '冰封压境',
+            'venom_pursuit' => '毒猎追击',
+            'grave_bombard' => '墓火轰炸',
             'spellbreak_bulwark' => '破法壁垒',
+            'arcane_cataclysm' => '奥术崩解',
+            'plague_swarm' => '瘟疫蜂群',
+            'iron_vanguard' => '钢铁先锋',
+            'blood_covenant' => '鲜血誓约',
         ],
         'summary' => [
             'storm_siege' => '偏雷电跳跃与震场压制。',
@@ -386,6 +390,10 @@ return [
             'venom_pursuit' => '偏追击与持续毒性伤害。',
             'grave_bombard' => '偏轰炸与场地封锁。',
             'spellbreak_bulwark' => '偏打断、反法与前排压制。',
+            'arcane_cataclysm' => '偏奥术伤害、法术易伤与施法压制。',
+            'plague_swarm' => '偏疾病叠压、虫群与场地围困。',
+            'iron_vanguard' => '偏机械弹幕、点名爆发与击退。',
+            'blood_covenant' => '偏流血、破甲与生命汲取的消耗战。',
         ],
     ],
     'tiers' => [
