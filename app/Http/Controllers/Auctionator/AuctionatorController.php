@@ -1096,6 +1096,12 @@ class AuctionatorController extends Controller
         );
         $market = $repository->marketStats($maxAgeDays);
         $sales = $repository->saleStats($botGuid);
+        // 成交记录里"非机器人卖家"能不能认定为「指定角色」，取决于本区的押金费率：模块用
+        // 押金 = 0 标记自己创建的上架，而该费率为 0 时核心给玩家挂单算出的押金也是 0，
+        // 那张表里就会混进玩家之间的成交，此时任何"指定角色"的说法都是无根据的。
+        $depositRate = $this->auctionDepositRate($paths);
+        $sales['deposit_rate'] = $depositRate;
+        $sales['deposit_marker_sound'] = $depositRate === null ? null : ($depositRate > 0.0);
         $saleRows = $repository->saleRows(
             $botGuid,
             $saleFrom,
@@ -1180,6 +1186,47 @@ class AuctionatorController extends Controller
     }
 
     /** @return array{conf_file: string, log_file: string, server_root: string} */
+    /**
+     * Rate.Auction.Deposit of the realm, read straight out of its worldserver.conf.
+     *
+     * The module stamps every listing it creates with `deposit = 0` (it never charges one, since
+     * the core pays the seller "bid + deposit - cut"). The core computes a player's deposit as
+     * `AH_MINIMUM_DEPOSIT * Rate.Auction.Deposit` when the item has no vendor price, and
+     * `max(<formula>, AH_MINIMUM_DEPOSIT * Rate.Auction.Deposit)` otherwise - so with the rate at
+     * 0 every player listing carries deposit = 0 as well and the marker stops distinguishing
+     * anything. The module's sale log then records player-to-player sales, and calling their
+     * sellers 「指定角色」 would be a plain fabrication.
+     *
+     * null = the file or the key could not be read; the page then stays silent about it instead of
+     * guessing in either direction.
+     */
+    private function auctionDepositRate(array $paths): ?float
+    {
+        $root = (string) ($paths['server_root'] ?? '');
+        if ($root === '') {
+            return null;
+        }
+
+        $relative = (string) Config::get('auctionator.worldserver_conf_file', 'configs/worldserver.conf');
+        $path = $this->joinPath($root, $relative);
+        if (!is_file($path) || !is_readable($path)) {
+            return null;
+        }
+
+        $contents = @file_get_contents($path);
+        if ($contents === false) {
+            return null;
+        }
+
+        // AuctionatorConfigFile::parse() only understands Auctionator.* keys, and this is a single
+        // value out of a ~100 KB file, so match the one line instead of parsing the whole thing.
+        if (!preg_match('/^\s*Rate\.Auction\.Deposit\s*=\s*(-?[0-9]*\.?[0-9]+)/mi', $contents, $matches)) {
+            return null;
+        }
+
+        return (float) $matches[1];
+    }
+
     private function realmPaths(): array
     {
         $serverId = ServerContext::currentId();

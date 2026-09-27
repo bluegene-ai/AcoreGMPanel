@@ -188,17 +188,20 @@ final class AuctionatorRepository extends MultiServerRepository
     /**
      * Rows of the sale log the bot/GM actually took part in.
      *
-     * The table only ever holds *module-created* listings (`deposit = 0`; the core floors every
-     * player deposit at AH_MINIMUM_DEPOSIT, so a player listing can never reach 0), but "created
-     * by the module" is not the same as "the bot/GM was a party to it":
-     *
      *   * `seller_is_bot = 1` - the listing was owned by Auctionator.CharacterGuid, the sale gold
      *     was swallowed by the mail script. Bot sold it.
      *   * `buyer_guid = <bot guid>` - the configured character won somebody else's listing.
-     *   * `seller_is_bot = 0` - the module listed it on behalf of an explicit owner
-     *     (`.auctionator add owner=<guid>`, the panel's "指定角色" field). The module created the
-     *     listing, but the bot/GM character is neither the seller nor the buyer, so the operator
-     *     asked for these to stay out of the log.
+     *
+     * Everything else is excluded: the module also lists on behalf of an explicit owner
+     * (`.auctionator add owner=<guid>`, the panel's 指定角色 field), and - on a realm whose
+     * Rate.Auction.Deposit is 0 - it cannot tell such a listing apart from a plain player auction
+     * at all, so its log contains player-to-player sales too. The bot/GM is a party to none of
+     * those, and the operator asked for them to stay out.
+     *
+     * Note this filter is deliberately independent of the `deposit` column: the module's own
+     * "deposit = 0 means I created it" marker is unsound whenever Rate.Auction.Deposit is 0 (the
+     * core then gives player listings a deposit of 0 as well), so nothing here may rely on it.
+     * See AuctionatorController::auctionDepositRate() for how the page reports that.
      *
      * With no configured CharacterGuid only the seller side is decidable, and `seller_is_bot`
      * (recorded by the module at sale time, so it survives a later config change) is then the
@@ -220,28 +223,27 @@ final class AuctionatorRepository extends MultiServerRepository
     /**
      * Aggregate of the module's sale log: mod_auctionator_sale, created by the module's
      * data/sql/db-characters/updates/2026_09_27_00_sale_log.sql and written by the module
-     * itself, one row per sold module listing (automatic seller + GM add/addlist).
+     * itself, one row per sold listing it believed to be its own.
      *
      * This is the only place to look for a finished sale: the core deletes the
      * `auctionhouse` row with the settlement, and its own log_money row only covers sales of
      * 500 gold and up.
      *
-     * Only sales the bot/GM took part in are counted (see saleParticipationFilter); the two
-     * `hidden_*` counters report what that leaves out, so "the log looks empty" can be told apart
-     * from "nothing sold":
-     *   hidden_designated - module listings whose owner was an explicit 指定角色
-     *   hidden_player     - rows with a real deposit, i.e. player auctions. With the current
-     *                       module these cannot occur; a non-zero value means the realm runs a
-     *                       build from before the module learned to ignore player auctions.
+     * Only sales the bot/GM took part in are counted (see saleParticipationFilter); `hidden`
+     * reports how many rows that leaves out, so "the log looks empty" can be told apart from
+     * "nothing sold". `hidden_unknown` narrows that to the rows whose provenance the module never
+     * recorded (written before module_listing existed): those are the ones that could be either a
+     * module listing for an explicit owner or a plain player auction, and the page says exactly
+     * that instead of calling them 指定角色.
      *
-     * @return array{ok: bool, error: string, rows: int, bot: int, buyouts: int, buyers: int, copper: int, newest: string, oldest: string, hidden_designated: int, hidden_player: int}
+     * @return array{ok: bool, error: string, rows: int, bot: int, buyouts: int, buyers: int, copper: int, newest: string, oldest: string, hidden: int, hidden_unknown: int}
      */
     public function saleStats(int $botGuid): array
     {
         $stats = [
             'ok' => false, 'error' => '', 'rows' => 0, 'bot' => 0, 'buyouts' => 0,
             'buyers' => 0, 'copper' => 0, 'newest' => '', 'oldest' => '',
-            'hidden_designated' => 0, 'hidden_player' => 0,
+            'hidden' => 0,
         ];
 
         $state = $this->saleTableState();
@@ -253,9 +255,18 @@ final class AuctionatorRepository extends MultiServerRepository
 
         $participating = $this->saleParticipationFilter($botGuid);
 
+        // `module_listing` arrives with the module's 2026_09_27_01_auction_registry.sql update, so
+        // a realm whose module (or its SQL) has not been upgraded yet has no column at all. Then
+        // every hidden row is of unknown provenance by definition, which is exactly what the
+        // counter should say - never fall back to guessing from `deposit`.
+        $provenanceKnown = $this->hasColumn('mod_auctionator_sale', 'module_listing', $this->characters()) === true;
+        $unknownProvenance = $provenanceKnown
+            ? 'SUM(NOT ' . $participating . ' AND module_listing IS NULL)'
+            : 'SUM(NOT ' . $participating . ')';
+
         // One scan, no WHERE: every figure is a conditional aggregate, so the same pass can also
         // report how many rows the participation filter is keeping out. Filtering in the WHERE
-        // would make those two counters structurally 0.
+        // would make that counter structurally 0.
         $row = $this->tryOne(
             'SELECT COALESCE(SUM(' . $participating . '), 0) AS rows_total,
                     COALESCE(SUM(seller_is_bot = 1), 0) AS bot_sales,
@@ -264,8 +275,8 @@ final class AuctionatorRepository extends MultiServerRepository
                     COALESCE(SUM(CASE WHEN ' . $participating . ' THEN price ELSE 0 END), 0) AS copper_total,
                     COALESCE(DATE_FORMAT(MAX(CASE WHEN ' . $participating . ' THEN sold_at END), "%Y-%m-%d %H:%i"), "") AS newest,
                     COALESCE(DATE_FORMAT(MIN(CASE WHEN ' . $participating . ' THEN sold_at END), "%Y-%m-%d %H:%i"), "") AS oldest,
-                    COALESCE(SUM(NOT ' . $participating . ' AND deposit = 0), 0) AS hidden_designated,
-                    COALESCE(SUM(NOT ' . $participating . ' AND deposit > 0), 0) AS hidden_player
+                    COALESCE(SUM(NOT ' . $participating . '), 0) AS hidden_total,
+                    COALESCE(' . $unknownProvenance . ', 0) AS hidden_unknown
                FROM mod_auctionator_sale s',
             [],
             $this->characters()
@@ -278,7 +289,7 @@ final class AuctionatorRepository extends MultiServerRepository
         }
 
         $stats['ok'] = true;
-        foreach (['rows' => 'rows_total', 'bot' => 'bot_sales', 'buyouts' => 'buyouts', 'buyers' => 'buyers', 'copper' => 'copper_total', 'hidden_designated' => 'hidden_designated', 'hidden_player' => 'hidden_player'] as $key => $column) {
+        foreach (['rows' => 'rows_total', 'bot' => 'bot_sales', 'buyouts' => 'buyouts', 'buyers' => 'buyers', 'copper' => 'copper_total', 'hidden' => 'hidden_total', 'hidden_unknown' => 'hidden_unknown'] as $key => $column) {
             $stats[$key] = (int) ($row[$column] ?? 0);
         }
         $stats['newest'] = (string) ($row['newest'] ?? '');
@@ -328,10 +339,16 @@ final class AuctionatorRepository extends MultiServerRepository
 
         $where = $this->saleParticipationFilter($botGuid);
 
+        // See saleStats(): the column only exists once the module's registry update has been
+        // applied, and a realm that has not applied it must keep rendering.
+        $provenanceKnown = $this->hasColumn('mod_auctionator_sale', 'module_listing', $this->characters()) === true;
+        $provenanceColumn = $provenanceKnown ? 's.module_listing' : 'NULL AS module_listing';
+
         $rows = $this->tryAll(
             'SELECT s.id, s.auction_id, s.item_entry, s.item_count, s.house_id, s.seller_guid,
-                    s.seller_is_bot, s.buyer_guid, s.price, s.startbid, s.buyout, s.cut,
-                    s.is_buyout, DATE_FORMAT(s.sold_at, "%Y-%m-%d %H:%i") AS sold_at,
+                    s.seller_is_bot, ' . $provenanceColumn . ', s.buyer_guid, s.price, s.startbid,
+                    s.buyout, s.cut, s.is_buyout,
+                    DATE_FORMAT(s.sold_at, "%Y-%m-%d %H:%i") AS sold_at,
                     cs.name AS seller_name, cb.name AS buyer_name
                FROM mod_auctionator_sale s
                LEFT JOIN characters cs ON cs.guid = s.seller_guid
@@ -368,6 +385,11 @@ final class AuctionatorRepository extends MultiServerRepository
                 'seller' => (int) $row['seller_guid'],
                 'seller_name' => (string) ($row['seller_name'] ?? ''),
                 'seller_is_bot' => (int) $row['seller_is_bot'] === 1,
+                // Recorded by the module at sale time from its registry: true = the module created
+                // this listing, false = it did not (a listing the configured character owned but
+                // the module did not put up), null = written before the column existed, so the
+                // provenance is unknown and nothing may be inferred from `deposit`.
+                'module_listing' => $row['module_listing'] === null ? null : ((int) $row['module_listing'] === 1),
                 'buyer' => (int) $row['buyer_guid'],
                 'buyer_name' => (string) ($row['buyer_name'] ?? ''),
                 'price' => (int) $row['price'],

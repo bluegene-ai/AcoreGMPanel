@@ -522,18 +522,23 @@ $bondingOptions = [
         </dl>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.only_module')) ?></p>
         <?php
-          // 这张表只记录"模块创建的上架"，但模块也会按 指定角色 代别人上架。那些成交里
-          // 机器人/GM 既不是卖家也不是买家，所以上面的统计和下面的列表都按"机器人/GM 参与过"过滤。
-          // 把被过滤掉的数量说出来，免得操作员把"过滤后为空"误读成"一笔都没成交"。
-          $hiddenDesignated = (int) ($sales['hidden_designated'] ?? 0);
-          $hiddenPlayer = (int) ($sales['hidden_player'] ?? 0);
+          // 只说实话：被排除掉多少行，其中多少行的来源模块从来没记过。
+          //
+          // 模块旧版（以及本区还没应用登记表那条 SQL 更新时）无法区分"自己创建的上架"和玩家挂单：
+          // 它的判据是"押金 = 0"，而核心给玩家挂单算押金用的是
+          // AH_MINIMUM_DEPOSIT × Rate.Auction.Deposit —— 该费率为 0 时玩家的押金也是 0。
+          // 升级后写入的行带 module_listing，来源确定；旧行没有，就照实说"无法判断"。
+          $hiddenSales = (int) ($sales['hidden'] ?? 0);
+          $hiddenUnknown = (int) ($sales['hidden_unknown'] ?? 0);
         ?>
-        <?php if ($hiddenDesignated > 0): ?>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_designated', ['count' => $hiddenDesignated])) ?><?= panel_hint(__('app.auctionator.sales.hidden_designated_hint')) ?></p>
+        <?php if ($hiddenSales > 0): ?>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hidden', ['count' => $hiddenSales])) ?></p>
         <?php endif; ?>
-        <?php if ($hiddenPlayer > 0): ?>
-          <?php // 正常情况下不可能出现：核心给玩家挂单的押金有下限（AH_MINIMUM_DEPOSIT），不会是 0 ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_player', ['count' => $hiddenPlayer])) ?></p>
+        <?php if ($hiddenUnknown > 0): ?>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_unknown', ['count' => $hiddenUnknown])) ?><?= panel_hint(__('app.auctionator.sales.hidden_unknown_hint')) ?></p>
+        <?php endif; ?>
+        <?php if (($sales['deposit_marker_sound'] ?? null) === false && $hiddenUnknown > 0): ?>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.deposit_rate_zero')) ?></p>
         <?php endif; ?>
 
         <div class="au-actions">
@@ -572,6 +577,17 @@ $bondingOptions = [
             <tbody>
             <?php foreach ($saleItems as $row): ?>
               <?php $soldByBot = (bool) ($row['seller_is_bot'] ?? false); ?>
+              <?php
+                // 「指定角色」只在这行**确实**由模块创建时才成立——依据是模块在成交当时写下的
+                // module_listing（来自它自己的上架登记表），不是从押金推断的：核心给玩家挂单算
+                // 押金用的是 AH_MINIMUM_DEPOSIT × Rate.Auction.Deposit，本区该费率为 0 时玩家挂单
+                // 的押金同样是 0，"押金 = 0" 证明不了任何事。未知来源只说"其他卖家"。
+                $sellerKey = $soldByBot
+                    ? 'app.auctionator.sales.seller_bot'
+                    : (($row['module_listing'] ?? null) === true
+                        ? 'app.auctionator.sales.seller_named'
+                        : 'app.auctionator.sales.seller_other');
+              ?>
               <tr data-au-sale-row="<?= (int) ($row['id'] ?? 0) ?>">
                 <td><?= htmlspecialchars((string) ($row['sold_at'] ?? '') ?: '--') ?></td>
                 <td><?= (int) ($row['auction_id'] ?? 0) ?></td>
@@ -585,7 +601,7 @@ $bondingOptions = [
                 <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
                 <td>
                   <?= $characterCell((int) ($row['seller'] ?? 0), (string) ($row['seller_name'] ?? '')) ?>
-                  <span class="<?= $toneClass($soldByBot ? 'warn' : 'muted') ?>"><?= htmlspecialchars(__($soldByBot ? 'app.auctionator.sales.seller_bot' : 'app.auctionator.sales.seller_other')) ?></span>
+                  <span class="<?= $toneClass($soldByBot ? 'warn' : 'muted') ?>"><?= htmlspecialchars(__($sellerKey)) ?></span>
                 </td>
                 <td><?= $characterCell((int) ($row['buyer'] ?? 0), (string) ($row['buyer_name'] ?? '')) ?></td>
                 <td><?= $gmPriceCell((int) ($row['price'] ?? 0)) ?></td>

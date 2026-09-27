@@ -27,6 +27,11 @@ return [
     'conf_file' => 'configs/modules/mod_auctionator.conf',
     'log_file' => 'logs/auctionator.log',
 
+    // 只读 Rate.Auction.Deposit 一个键。模块用"押金 = 0"标记自己创建的上架，而这个费率为 0 时
+    // 核心给玩家挂单算出的押金同样是 0，标记就不再能证明任何事——成交记录里会混进玩家之间的成交。
+    // 面板靠它决定"非机器人卖家"到底是「指定角色」还是无从判断的其他卖家。
+    'worldserver_conf_file' => 'configs/worldserver.conf',
+
     
     
     // （mod_auctionator_disabled_items）：装了就能管，没装 / 库连不上才退化成只读 + 说明。
