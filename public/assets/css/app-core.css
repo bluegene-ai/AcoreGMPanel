@@ -423,6 +423,13 @@ a.item-name-link.quality-badge:hover{text-decoration:underline;text-decoration-s
 .bag-query-class--default{--bag-query-class-color:#94a3b8;}
 .panel-flash{display:none;margin-bottom:12px;padding:10px 14px;border-radius:10px;font-weight:600;font-size:13px;border:1px solid transparent;transition:opacity .2s ease;}
 .panel-flash[hidden]{display:none!important;}
+/* hidden 属性的 display:none 只来自浏览器默认样式表，优先级低于任何作者声明。面板里大量元素
+   自带 display（.btn 是 inline-flex，卡片/表单行/各种面板是 flex），于是这些元素加上 hidden
+   根本不隐藏——实测 40 个带 hidden 的元素里有 24 个一直显示着（boss 的模拟结果面板、trivia 的
+   编辑表单、物品库存的翻页条、挂单明细的撤销按钮等）。
+   规范做法是补一条兜底：Bootstrap 5 与 normalize.css 都提供 [hidden]{display:none}，而因为
+   要压过任意作者规则，这里必须带 !important。 */
+[hidden]{display:none!important;}
 .panel-flash.is-visible{display:block;}
 .panel-flash--success{background:rgba(32,168,127,.18);border-color:rgba(32,168,127,.45);color:#58d2a0;}
 .panel-flash--error{background:rgba(205,72,69,.18);border-color:rgba(205,72,69,.45);color:#ff9090;}
