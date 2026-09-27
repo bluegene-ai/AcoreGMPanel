@@ -28,12 +28,16 @@
 .au-warning{margin:0;font-size:13px;}
 .au-note{margin:0;font-size:13px;background:#12202c;border-color:rgba(59,130,246,.28);color:#cbd9e6;}
 
-.au-grid{display:grid;gap:18px;grid-template-columns:repeat(2,minmax(0,1fr));}
-.au-grid--cards{grid-template-columns:repeat(2,minmax(0,1fr));}
-@media (max-width:1100px){.au-grid,.au-grid--cards{grid-template-columns:minmax(0,1fr);}}
+/* 卡片流用可换行的 flex，而不是固定 2 列网格。
+   网格下"宽卡片独占一行 + 落单的窄卡片"必然留下半行空白：总览的市场卡片、筛选策略的黑名单
+   卡片右边都会空一半。flex 里独占一行的卡片会被 flex-grow 拉满，不留洞；
+   两张窄卡片并排时仍然是等宽的两列。 */
+.au-grid{display:flex;flex-wrap:wrap;gap:18px;}
+.au-grid > *{flex:1 1 480px;min-width:0;}
+.au-grid > .au-card--wide{flex:1 1 100%;}
+@media (max-width:1100px){.au-grid > *{flex-basis:100%;}}
 
 .au-card{background:#101b27;border:1px solid rgba(148,163,184,.16);border-radius:12px;padding:16px;box-shadow:0 12px 30px rgba(5,13,22,.22);min-width:0;display:flex;flex-direction:column;gap:12px;}
-.au-card--wide{grid-column:1 / -1;}
 .au-card h3{margin:0;color:#eaf2fa;font-size:16px;}
 
 .au-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13px;}
@@ -61,6 +65,24 @@
 .au-fieldset legend{padding:0 8px;color:#9fb1c0;font-size:12px;letter-spacing:.04em;text-transform:uppercase;}
 .au-form__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;}
 @media (max-width:900px){.au-form__grid{grid-template-columns:minmax(0,1fr);}}
+/* 上架与补货那两张表单字段多而窄（ID/模式/两个价格/堆叠/时长/拍卖行/收款角色/启用）。
+   2 列会把每个控件拉到 500px 以上，页面显得全是空白；给它们单独的 4 列网格，
+   物品选择器与上架模式各占 2 列（名字/模式文案较长），其余窄字段各占 1 列。
+   设置页那张配置表单仍用默认 2 列，不受影响。 */
+.au-form--gm .au-form__grid,
+.au-form--add .au-form__grid{grid-template-columns:repeat(4,minmax(0,1fr));}
+.au-form--gm .au-form__row--wide,
+.au-form--add .au-form__row--wide{grid-column:span 2;}
+@media (max-width:1100px){
+  .au-form--gm .au-form__grid,
+  .au-form--add .au-form__grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:900px){
+  .au-form--gm .au-form__grid,
+  .au-form--add .au-form__grid{grid-template-columns:minmax(0,1fr);}
+  .au-form--gm .au-form__row--wide,
+  .au-form--add .au-form__row--wide{grid-column:auto;}
+}
 .au-form__row{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .au-form__label{color:#e6edf5;font-size:13px;font-weight:600;}
 .au-form__key{font-family:Consolas,Menlo,monospace;}
@@ -85,7 +107,10 @@
 .au-checkbox input{margin:0;}
 
 /* ---- 物品选择器（Panel.itemPicker）：按名字搜，替代背 item entry 的数字框 ---- */
-.au-picker{position:relative;flex:1 1 220px;min-width:180px;display:flex;flex-direction:column;gap:6px;}
+.au-picker{position:relative;min-width:0;display:flex;flex-direction:column;gap:6px;}
+/* flex 只能加在横向的行内表单上。.au-form__row 是纵向 flex，那里的 flex-basis 会落到**高度**上
+   （flex:1 1 220px → 选择器被撑成 220px 高），这就是"精选清单"表单里那一大块空白。 */
+.au-inline-form .au-picker{flex:1 1 220px;min-width:180px;}
 .au-picker__search{width:100%;}
 .au-picker__list{position:absolute;z-index:20;top:100%;left:0;right:0;margin:4px 0 0;padding:4px;list-style:none;
   max-height:260px;overflow:auto;background:#0d1621;border:1px solid rgba(148,163,184,.28);border-radius:10px;

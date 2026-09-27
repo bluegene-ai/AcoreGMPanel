@@ -917,7 +917,7 @@ $bondingOptions = [
           <?php if ($canManage && $supported): ?>
             <form class="au-form au-form--gm" data-au-policy="gm_save" data-au-listing-form>
               <div class="au-form__grid">
-                <label class="au-form__row">
+                <label class="au-form__row au-form__row--wide">
                   <span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?><?= panel_hint(__('app.auctionator.policy.gm_form_hint')) ?></span>
                   <div class="au-picker" data-au-picker>
                     <input type="hidden" name="item" data-au-picker-value>
@@ -1098,7 +1098,7 @@ $bondingOptions = [
 
         <form class="au-form au-form--add" id="auAddForm" data-au-listing-form>
           <div class="au-form__grid">
-            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.actions.items')) ?></span>
+            <label class="au-form__row au-form__row--wide"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.actions.items')) ?></span>
               <?php // 多选：每个选中的物品变成一枚可移除的标签，隐藏字段 name="items" 仍是逗号分隔的 entry 列表 ?>
               <div class="au-picker" data-au-picker data-au-picker-multiple="1">
                 <input type="hidden" name="items" data-au-picker-value>
