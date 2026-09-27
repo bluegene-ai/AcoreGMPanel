@@ -14,6 +14,9 @@ $market = is_array($snapshot['market'] ?? null) ? $snapshot['market'] : [];
 $policy = is_array($snapshot['policy'] ?? null) ? $snapshot['policy'] : [];
 $listingRows = is_array($snapshot['listing_rows'] ?? null) ? $snapshot['listing_rows'] : [];
 $listingItems = is_array($listingRows['rows'] ?? null) ? $listingRows['rows'] : [];
+$sales = is_array($snapshot['sales'] ?? null) ? $snapshot['sales'] : [];
+$saleRowPage = is_array($snapshot['sale_rows'] ?? null) ? $snapshot['sale_rows'] : [];
+$saleItems = is_array($saleRowPage['rows'] ?? null) ? $saleRowPage['rows'] : [];
 $logEntries = is_array($snapshot['log'] ?? null) ? $snapshot['log'] : [];
 $warnings = is_array($snapshot['warnings'] ?? null) ? $snapshot['warnings'] : [];
 $notes = is_array($snapshot['notes'] ?? null) ? $snapshot['notes'] : [];
@@ -35,22 +38,17 @@ $policyTableKey = $supported
     : (($notes['support_reason'] ?? '') === 'db_unreachable' ? 'table_unavailable' : 'table_not_deployed');
 $capabilityNotice = $canManage ? null : __('app.common.capabilities.read_only');
 
-$formatCopper = static function (int $copper): string {
-    $gold = intdiv($copper, 10000);
-    $silver = intdiv($copper % 10000, 100);
-    $rest = $copper % 100;
-    $parts = [];
-    if ($gold > 0) {
-        $parts[] = $gold . 'g';
-    }
-    if ($silver > 0) {
-        $parts[] = $silver . 's';
-    }
-    if ($rest > 0 || $parts === []) {
-        $parts[] = $rest . 'c';
-    }
+// 页面里所有铜币数值统一按"金 / 银 / 铜"显示（单位取自语言文件，英文界面是 g/s/c）。
+// 两个可编辑的价格框仍然收铜币（api/listing 与模块命令都按铜币走），换算值显示在输入框旁边。
+$moneyUnit = static function (string $unit): string {
+    return (string) __('app.auctionator.money.' . $unit);
+};
+$formatMoney = static function (int $copper) use ($moneyUnit): string {
+    $copper = max(0, $copper);
 
-    return implode(' ', $parts);
+    return intdiv($copper, 10000) . $moneyUnit('gold')
+        . intdiv($copper % 10000, 100) . $moneyUnit('silver')
+        . ($copper % 100) . $moneyUnit('copper');
 };
 $formatTime = static function (int $timestamp): string {
     return $timestamp > 0 ? date('Y-m-d H:i', $timestamp) : '--';
@@ -109,12 +107,32 @@ $gmListing = static function (array $row) use ($typed): array {
         'buyout' => $buyout,
     ];
 };
-$gmPriceCell = static function (int $copper) use ($formatCopper): string {
+$gmPriceCell = static function (int $copper) use ($formatMoney): string {
     if ($copper <= 0) {
         return '<span class="muted small">—</span>';
     }
 
-    return (int) $copper . ' <span class="muted small">' . htmlspecialchars($formatCopper($copper), ENT_QUOTES, 'UTF-8') . '</span>';
+    // 原始铜币留在 title 里：上架表单填的就是这个数，排查"价格不对"时需要它。
+    return '<span title="' . htmlspecialchars(__('app.auctionator.money.raw_title', ['copper' => $copper]), ENT_QUOTES, 'UTF-8') . '">'
+        . htmlspecialchars($formatMoney($copper), ENT_QUOTES, 'UTF-8') . '</span>';
+};
+// 行内价格输入框的换算提示（JS 按输入实时刷新，初始值由服务端渲染）。
+$copperHint = static function (string $field, int $copper) use ($formatMoney): string {
+    return '<span class="muted small" data-au-copper-hint="' . htmlspecialchars($field, ENT_QUOTES, 'UTF-8') . '">'
+        . ($copper > 0 ? htmlspecialchars($formatMoney($copper), ENT_QUOTES, 'UTF-8') : '') . '</span>';
+};
+// guid -> 角色链接；角色行不存在（被删号）时退化成"角色 #N（已不存在）"，仍然可点。
+$characterCell = static function (int $guid, string $name): string {
+    if ($guid <= 0) {
+        return '<span class="muted small">—</span>';
+    }
+
+    $link = $name !== ''
+        ? character_link($guid, $name)
+        : '<a href="' . htmlspecialchars(character_view_url($guid), ENT_QUOTES, 'UTF-8') . '">'
+            . htmlspecialchars((string) __('app.auctionator.character_missing', ['guid' => $guid]), ENT_QUOTES, 'UTF-8') . '</a>';
+
+    return $link . ' <span class="muted small">#' . $guid . '</span>';
 };
 $gmOwnerLabel = static function (int $owner): string {
     return $owner > 0 ? (string) $owner : __('app.auctionator.policy.owner_bot');
@@ -303,8 +321,9 @@ $qualityLabel = static function (int $quality): string {
             <?php if ((int) ($current_server ?? 0) > 0): ?>
               <input type="hidden" name="server" value="<?= (int) $current_server ?>">
             <?php endif; ?>
-            <?php // 两个列表共用一次 GET：把另一个分页参数带上，翻这一页不会把那一页重置回第一页 ?>
+            <?php // 三个列表共用一次 GET：把其他分页参数带上，翻这一页不会把那些页重置回第一页 ?>
             <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input type="hidden" name="sale_from" value="<?= (int) ($saleRows['from'] ?? 0) ?>">
             <input class="au-input" type="number" min="0" name="listing_from" value="<?= (int) ($listingRows['from'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.auctionator.listing_detail.filter_from')) ?>">
             <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.policy.filter_apply')) ?></button>
           </form>
@@ -322,6 +341,8 @@ $qualityLabel = static function (int $quality): string {
                 <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.listing_detail.startbid')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.listing_detail.buyout')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.current_bid')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.bidder')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.listing_detail.expires')) ?></th>
                 <th></th>
@@ -344,7 +365,8 @@ $qualityLabel = static function (int $quality): string {
                   <?php if ($rowEditable): ?>
                     <input class="au-input au-input--tiny" type="number" min="1" data-au-field-name="startbid"
                            value="<?= (int) ($row['startbid'] ?? 0) ?>"
-                           title="<?= htmlspecialchars($formatCopper((int) ($row['startbid'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>">
+                           title="<?= htmlspecialchars(__('app.auctionator.money.raw_title', ['copper' => (int) ($row['startbid'] ?? 0)]), ENT_QUOTES, 'UTF-8') ?>">
+                    <?= $copperHint('startbid', (int) ($row['startbid'] ?? 0)) ?>
                   <?php else: ?>
                     <?= $gmPriceCell((int) ($row['startbid'] ?? 0)) ?>
                   <?php endif; ?>
@@ -353,11 +375,15 @@ $qualityLabel = static function (int $quality): string {
                   <?php if ($rowEditable): ?>
                     <input class="au-input au-input--tiny" type="number" min="0" data-au-field-name="buyout"
                            value="<?= (int) ($row['buyout'] ?? 0) ?>"
-                           title="<?= htmlspecialchars($formatCopper((int) ($row['buyout'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>">
+                           title="<?= htmlspecialchars(__('app.auctionator.money.raw_title', ['copper' => (int) ($row['buyout'] ?? 0)]), ENT_QUOTES, 'UTF-8') ?>">
+                    <?= $copperHint('buyout', (int) ($row['buyout'] ?? 0)) ?>
                   <?php else: ?>
                     <?= $gmPriceCell((int) ($row['buyout'] ?? 0)) ?>
                   <?php endif; ?>
                 </td>
+                <?php // 当前最高出价与出价人：核心只保留"当前最高"这一份，被超越的出价人和金额不会留在这里 ?>
+                <td><?= $hasBid ? $gmPriceCell((int) ($row['bid'] ?? 0)) : '<span class="muted small">—</span>' ?></td>
+                <td><?= $hasBid ? $characterCell((int) ($row['bidder'] ?? 0), (string) ($row['bidder_name'] ?? '')) : '<span class="muted small">—</span>' ?></td>
                 <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
                 <td><?= htmlspecialchars($formatTime((int) ($row['expires'] ?? 0))) ?></td>
                 <td class="au-table__actions">
@@ -373,7 +399,7 @@ $qualityLabel = static function (int $quality): string {
               </tr>
             <?php endforeach; ?>
             <?php if ($listingItems === []): ?>
-              <tr><td colspan="9" class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.empty')) ?></td></tr>
+              <tr><td colspan="11" class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.empty')) ?></td></tr>
             <?php endif; ?>
             </tbody>
           </table>
@@ -386,8 +412,117 @@ $qualityLabel = static function (int $quality): string {
               <input type="hidden" name="server" value="<?= (int) $current_server ?>">
             <?php endif; ?>
             <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input type="hidden" name="sale_from" value="<?= (int) ($saleRowPage['from'] ?? 0) ?>">
             <input type="hidden" name="listing_from" value="<?= (int) ($listingRows['next_from'] ?? 0) ?>">
             <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.listing_detail.next_page')) ?></button>
+          </form>
+        <?php endif; ?>
+      <?php endif; ?>
+    </div>
+
+    <?php
+      // 成交记录：模块自己写的 mod_auctionator_sale。这是"谁买走了机器人的东西、花了多少"的唯一来源
+      // —— 核心不保留已结束的拍卖，它自己的 log_money 只覆盖 500 金以上的成交。只读。
+    ?>
+    <div class="au-card au-card--wide">
+      <h3><?= htmlspecialchars(__('app.auctionator.sales.title')) ?></h3>
+      <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.auctionator.sales.hint')) ?>">i</span></p>
+
+      <?php if (!$supported): ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.not_deployed')) ?></p>
+      <?php elseif (($sales['error'] ?? '') === 'missing'): ?>
+        <?php // 旧版模块还没有这张表（SQL 更新没执行 / worldserver 没重编）：如实说，别显示成"没有成交" ?>
+        <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.missing_table')) ?></p>
+      <?php elseif (!($sales['ok'] ?? false)): ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.unavailable')) ?></p>
+      <?php else: ?>
+        <dl class="au-kv">
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.total')) ?></dt>
+          <dd><?= (int) ($sales['rows'] ?? 0) ?></dd>
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.bot_sales')) ?></dt>
+          <dd><?= (int) ($sales['bot'] ?? 0) ?></dd>
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.buyouts')) ?></dt>
+          <dd><?= (int) ($sales['buyouts'] ?? 0) ?></dd>
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.buyers')) ?></dt>
+          <dd><?= (int) ($sales['buyers'] ?? 0) ?></dd>
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.copper_total')) ?></dt>
+          <dd><?= $gmPriceCell((int) ($sales['copper'] ?? 0)) ?></dd>
+          <dt><?= htmlspecialchars(__('app.auctionator.sales.window')) ?></dt>
+          <dd><?= htmlspecialchars(((string) ($sales['oldest'] ?? '') ?: '--') . ' → ' . ((string) ($sales['newest'] ?? '') ?: '--')) ?></dd>
+        </dl>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.only_module')) ?></p>
+
+        <div class="au-actions">
+          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.showing', [
+              'shown' => count($saleItems),
+              'total' => (int) ($sales['rows'] ?? 0),
+          ])) ?></span>
+          <form class="au-inline-form" method="get">
+            <?php if ((int) ($current_server ?? 0) > 0): ?>
+              <input type="hidden" name="server" value="<?= (int) $current_server ?>">
+            <?php endif; ?>
+            <?php // 与另外两个列表共用一次 GET：带上它们的分页参数，翻成交记录不会重置那两页 ?>
+            <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input type="hidden" name="listing_from" value="<?= (int) ($listingRows['from'] ?? 0) ?>">
+            <input class="au-input" type="number" min="0" name="sale_from" value="<?= (int) ($saleRowPage['from'] ?? 0) ?>" placeholder="<?= htmlspecialchars(__('app.auctionator.sales.filter_from')) ?>">
+            <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.policy.filter_apply')) ?></button>
+          </form>
+        </div>
+
+        <div class="au-table-wrap">
+          <table class="au-table">
+            <thead>
+              <tr>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.time')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.auction_id')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.item')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.count')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.house')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.seller')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.buyer')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.price')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.kind')) ?></th>
+                <th><?= htmlspecialchars(__('app.auctionator.sales.cut')) ?></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($saleItems as $row): ?>
+              <?php $soldByBot = (bool) ($row['seller_is_bot'] ?? false); ?>
+              <tr data-au-sale-row="<?= (int) ($row['id'] ?? 0) ?>">
+                <td><?= htmlspecialchars((string) ($row['sold_at'] ?? '') ?: '--') ?></td>
+                <td><?= (int) ($row['auction_id'] ?? 0) ?></td>
+                <td><?= (int) ($row['item'] ?? 0) ?> <?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                <td><?= (int) ($row['count'] ?? 0) ?></td>
+                <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
+                <td>
+                  <?= $characterCell((int) ($row['seller'] ?? 0), (string) ($row['seller_name'] ?? '')) ?>
+                  <span class="<?= $toneClass($soldByBot ? 'warn' : 'muted') ?>"><?= htmlspecialchars(__($soldByBot ? 'app.auctionator.sales.seller_bot' : 'app.auctionator.sales.seller_other')) ?></span>
+                </td>
+                <td><?= $characterCell((int) ($row['buyer'] ?? 0), (string) ($row['buyer_name'] ?? '')) ?></td>
+                <td><?= $gmPriceCell((int) ($row['price'] ?? 0)) ?></td>
+                <td>
+                  <?php $wasBuyout = (bool) ($row['is_buyout'] ?? false); ?>
+                  <span class="<?= $toneClass($wasBuyout ? 'ok' : 'muted') ?>"><?= htmlspecialchars(__($wasBuyout ? 'app.auctionator.sales.kind_buyout' : 'app.auctionator.sales.kind_bid')) ?></span>
+                </td>
+                <td><?= $gmPriceCell((int) ($row['cut'] ?? 0)) ?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($saleItems === []): ?>
+              <tr><td colspan="10" class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.empty')) ?></td></tr>
+            <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+
+        <?php if (($saleRowPage['truncated'] ?? false) && (int) ($saleRowPage['next_from'] ?? 0) > 0): ?>
+          <form class="au-inline-form" method="get">
+            <?php if ((int) ($current_server ?? 0) > 0): ?>
+              <input type="hidden" name="server" value="<?= (int) $current_server ?>">
+            <?php endif; ?>
+            <input type="hidden" name="disabled_from" value="<?= (int) ($policy['disabled_from'] ?? 0) ?>">
+            <input type="hidden" name="listing_from" value="<?= (int) ($listingRows['from'] ?? 0) ?>">
+            <input type="hidden" name="sale_from" value="<?= (int) ($saleRowPage['next_from'] ?? 0) ?>">
+            <button type="submit" class="btn btn-xs outline"><?= htmlspecialchars(__('app.auctionator.sales.next_page')) ?></button>
           </form>
         <?php endif; ?>
       <?php endif; ?>

@@ -62,6 +62,17 @@ return [
         'horde' => 'Horde (6)',
         'neutral' => 'Neutral (7)',
     ],
+    // Money units: every copper amount on this page is displayed as gold / silver / copper
+    // (the raw copper value is kept in the title tooltip, and the two editable price inputs
+    // must stay copper, so they get a converted value next to them).
+    'money' => [
+        'gold' => 'g',
+        'silver' => 's',
+        'copper' => 'c',
+        'raw_title' => 'Raw value: :copper copper',
+    ],
+    // Shown for a guid whose characters row is gone (deleted character); the link still points at it.
+    'character_missing' => 'Character #:guid (no longer exists)',
     // Listing mode: decides how the start-bid / buyout prices are used.
     'modes' => [
         'buyout' => 'Fixed price',
@@ -112,8 +123,10 @@ return [
         'showing' => 'Showing :shown of :total',
         'filter_from' => 'From auction id',
         'auction_id' => 'Auction id',
-        'startbid' => 'Start bid (copper)',
-        'buyout' => 'Buyout (copper)',
+        'startbid' => 'Start bid',
+        'buyout' => 'Buyout',
+        'current_bid' => 'Current bid',
+        'bidder' => 'Highest bidder',
         'expires' => 'Expires',
         'delist' => 'Delist',
         'reprice' => 'Reprice',
@@ -122,7 +135,45 @@ return [
         'empty' => 'The bot currently has no auctions listed.',
         'next_page' => 'Next page',
         'no_bot_guid' => 'Auctionator.CharacterGuid is not configured on this realm (or is 0), so there is no owner to tell the bot\'s listings apart by; the detail cannot be listed.',
-        'price_note' => 'Both prices are TOTALS in copper - the two numbers this row already shows - not the per-unit prices the add command takes. A buyout of 0 means "no buyout" (pure auction).',
+        'price_note' => 'Both prices are stack TOTALS and the inputs take copper (the two numbers this row already showed), not the per-unit prices the add command takes; the value next to each input shows the same amount as gold/silver/copper. A buyout of 0 means "no buyout" (pure auction).',
+    ],
+    // The module's own sale log (mod_auctionator_sale): read-only, and the only place that
+    // answers "who bought the bot's item, and for how much" - the core deletes the auctionhouse
+    // row with the settlement and writes a log_money row for sales of 500 gold and up only.
+    'sales' => [
+        'title' => 'Sale log (entries the module listed)',
+        'hint' => 'The module\'s "auction successful" hook writes one row per listing it created - the automatic seller and the GM listings both - covering a buyout and a winning bid at expiry. '
+            . 'The core keeps no record of a finished auction (the auctionhouse row is deleted with the settlement) and its own log_money only covers sales of 500 gold and up, so this is the only place that answers '
+            . '"who bought which item, and for how much". Player-to-player auctions are not in here.',
+        'hint_short' => 'Read-only ledger of the sales of module-listed entries, with buyer and price.',
+        'only_module' => 'Only entries the module listed (the automatic seller and the GM listings); player-to-player sales in the auction house are not here.',
+        'total' => 'Sales',
+        'bot_sales' => 'Bot-listed sales',
+        'buyouts' => 'Bought out',
+        'buyers' => 'Distinct buyers',
+        'copper_total' => 'Total sold',
+        'window' => 'Oldest / newest',
+        'showing' => 'Showing :shown of :total',
+        'filter_from' => 'Record id (page to older)',
+        'next_page' => 'Older records',
+        'time' => 'Sold at',
+        'auction_id' => 'Auction id',
+        'item' => 'Item',
+        'count' => 'Count',
+        'house' => 'House',
+        'seller' => 'Seller',
+        'seller_bot' => 'Bot (gold sink)',
+        'seller_other' => 'Named character',
+        'buyer' => 'Buyer',
+        'price' => 'Price',
+        'kind' => 'How it sold',
+        'kind_bid' => 'Bid',
+        'kind_buyout' => 'Buyout',
+        'cut' => 'Cut',
+        'empty' => 'No sales recorded yet. Rows appear once a module-listed entry is bought.',
+        'missing_table' => 'This realm\'s characters database has no mod_auctionator_sale table, so the module records no sales. Apply the module\'s data/sql/db-characters/updates/2026_09_27_00_sale_log.sql and restart the worldserver with a module build that has it.',
+        'unavailable' => 'The sale log could not be read; see storage/logs/auctionator_repository_warnings.log.',
+        'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no sale log.',
     ],
     'market' => [
         'title' => 'Market price table',
@@ -373,6 +424,7 @@ return [
         'bidder_enabled' => 'A bidder is enabled: the bot buys player auctions without paying, and the core pays the seller with newly created gold (an economic faucet).',
         'faction_seller_enabled' => 'An alliance/horde seller is enabled while AllowTwoSide.Interaction.Auction is 1: it will only log an error each cycle and list nothing.',
         'no_market_data' => 'The market table is empty and no import file is configured, so the seller prices everything from item_template.BuyPrice x quality multiplier.',
+        'sale_log_missing' => 'This realm\'s characters database has no mod_auctionator_sale table, so the module records no sales at all. Apply the module\'s data/sql/db-characters/updates/2026_09_27_00_sale_log.sql.',
     ],
     'js' => [
         'modules' => [
@@ -413,10 +465,17 @@ return [
                 'actions' => [
                     'output_empty' => '(no output yet)',
                 ],
+                // Gold/silver/copper units for the JS side (every copper amount on the page is
+                // displayed as gold/silver/copper).
+                'money' => [
+                    'gold' => 'g',
+                    'silver' => 's',
+                    'copper' => 'c',
+                ],
                 // Live preview of the listing mode and prices (the JS substitutes the :placeholders).
                 'listing' => [
                     'choose_mode' => 'Choose a listing mode first.',
-                    'unit' => ':copper copper/unit',
+                    'unit' => ':copper/unit',
                     'per_stack' => ':stack per stack',
                     'buyout' => 'Fixed price: buyout :unit, whole stack :total. The start bid is pinned to the buyout, so nobody can underbid.',
                     'bid_with_buyout' => 'Auction: start bid :bid (stack :bid_total), buyout :buyout (stack :buyout_total).',

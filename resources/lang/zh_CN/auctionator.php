@@ -61,6 +61,16 @@ return [
         'horde' => '部落 (6)',
         'neutral' => '中立 (7)',
     ],
+    // 金额单位：页面里所有铜币数值都按"金 / 银 / 铜"显示，原始铜币只留在 title 提示里
+    // （输入框必须收铜币，所以那里另配一行换算显示）。
+    'money' => [
+        'gold' => '金',
+        'silver' => '银',
+        'copper' => '铜',
+        'raw_title' => '原始值：:copper 铜',
+    ],
+    // 角色行已经不在 characters 表里时（删号）的退代表述，链接仍然指向该 guid。
+    'character_missing' => '角色 #:guid（已不存在）',
     // 上架模式：决定“起拍单价 / 买断单价”这两个参数怎么用。
     'modes' => [
         'buyout' => '一口价',
@@ -108,8 +118,10 @@ return [
         'showing' => '显示 :shown 条，共 :total 条',
         'filter_from' => '从挂单 ID',
         'auction_id' => '挂单 ID',
-        'startbid' => '起拍价（铜）',
-        'buyout' => '一口价（铜）',
+        'startbid' => '起拍价',
+        'buyout' => '一口价',
+        'current_bid' => '当前出价',
+        'bidder' => '最高出价人',
         'expires' => '到期时间',
         'delist' => '下架',
         'reprice' => '改价',
@@ -118,7 +130,44 @@ return [
         'empty' => '当前没有机器人挂单。',
         'next_page' => '下一页',
         'no_bot_guid' => '本区还没有配置 Auctionator.CharacterGuid（或为 0），无法确定哪些挂单属于机器人，因此列不出明细。',
-        'price_note' => '两个价格都是整组总价（铜），就是这一行当前的两个数字，不是 add 命令那种单位价。一口价填 0 表示不设一口价（纯竞拍）。',
+        'price_note' => '两个价格都是整组总价，输入框里填的是铜币整数（就是这一行原本的两个数字），不是 add 命令那种单位价；输入框右侧会按"金/银/铜"显示同一数值。一口价填 0 表示不设一口价（纯竞拍）。',
+    ],
+    // 模块自己写的成交记录（mod_auctionator_sale）：只读，用于回答"谁买走了机器人的东西、花了多少"。
+    // 核心不留已结束拍卖的痕迹（auctionhouse 行会被删、log_money 只记 500 金以上），所以这张表是唯一来源。
+    'sales' => [
+        'title' => '成交记录（模块上架的条目）',
+        'hint' => '模块的"拍卖成功"钩子为每一条自己创建的挂单写一行：自动卖家与 GM 上架都包括，一口价买走和到期被最高出价买走都算。'
+            . '核心不会保留已结束的拍卖（auctionhouse 行随结算删除），它自己的 log_money 只在成交价 ≥ 500 金时记录，所以这里是唯一能回答'
+            . '"谁买走了哪个物品、花了多少"的地方。玩家与玩家之间的拍卖不在其中。',
+        'hint_short' => '只读流水：模块自己上架条目的成交，含买家与成交价。',
+        'only_module' => '只记录模块上架的条目（自动卖家与 GM 上架）；拍卖行里玩家之间的成交这里没有。',
+        'total' => '成交笔数',
+        'bot_sales' => '机器人上架成交',
+        'buyouts' => '一口价成交',
+        'buyers' => '不同买家',
+        'copper_total' => '成交总额',
+        'window' => '最早/最新成交',
+        'showing' => '显示 :shown 条，共 :total 条',
+        'filter_from' => '记录 ID（往更早翻）',
+        'next_page' => '更早的记录',
+        'time' => '成交时间',
+        'auction_id' => '挂单 ID',
+        'item' => '物品',
+        'count' => '数量',
+        'house' => '拍卖行',
+        'seller' => '卖家',
+        'seller_bot' => '机器人（金币回收）',
+        'seller_other' => '指定角色',
+        'buyer' => '买家',
+        'price' => '成交价',
+        'kind' => '成交方式',
+        'kind_bid' => '竞拍',
+        'kind_buyout' => '一口价',
+        'cut' => '手续费',
+        'empty' => '还没有成交记录。模块上架的条目被买走后才会出现。',
+        'missing_table' => '本区角色库里没有 mod_auctionator_sale 表，模块不会记录任何成交。请执行模块的 data/sql/db-characters/updates/2026_09_27_00_sale_log.sql，并用带该功能的模块版本重启 worldserver。',
+        'unavailable' => '成交记录表读取失败，详见 storage/logs/auctionator_repository_warnings.log。',
+        'not_deployed' => '本区没有部署 mod-auctionator，因此没有成交记录。',
     ],
     'market' => [
         'title' => '市场数据表',
@@ -369,6 +418,7 @@ return [
         'bidder_enabled' => '有竞拍者处于启用状态：机器人会买断玩家拍卖且不付款，核心凭空支付卖家金币（经济水龙头）。',
         'faction_seller_enabled' => '联盟/部落卖家被启用：本服 AllowTwoSide.Interaction.Auction 为 1，它们每个周期只会报错、不会上架。',
         'no_market_data' => '市场数据表为空且未配置导入文件：自动卖家会用 item_template.BuyPrice × 品质倍率定价。',
+        'sale_log_missing' => '本区角色库里没有 mod_auctionator_sale 表，模块不会记录任何成交。请执行模块的 data/sql/db-characters/updates/2026_09_27_00_sale_log.sql。',
     ],
     'js' => [
         'modules' => [
@@ -409,10 +459,16 @@ return [
                 'actions' => [
                     'output_empty' => '（暂无输出）',
                 ],
+                // JS 侧的金/银/铜单位（页面里所有铜币数值都按金银铜显示）
+                'money' => [
+                    'gold' => '金',
+                    'silver' => '银',
+                    'copper' => '铜',
+                ],
                 // 上架模式与价格的实时预览（JS 自己替换 :占位符）
                 'listing' => [
                     'choose_mode' => '请先选择上架模式。',
-                    'unit' => ':copper 铜/个',
+                    'unit' => ':copper/个',
                     'per_stack' => ':stack 个/组',
                     'buyout' => '一口价：买断 :unit，整组 :total；起拍价被钉在买断价上，无法低价竞拍。',
                     'bid_with_buyout' => '竞拍：起拍 :bid（整组 :bid_total），买断 :buyout（整组 :buyout_total）。',

@@ -4,7 +4,8 @@
  * Purpose: Read the mod-auctionator state and edit its three policy tables.
  *
  * world: mod_auctionator_itemclass_config / _disabled_items / _gm_list / _item_class (labels only);
- * characters: mod_auctionator_market_price + auctionhouse/item_instance/mail for the dashboard counters.
+ * characters: mod_auctionator_market_price + auctionhouse/item_instance/mail for the dashboard
+ * counters, and mod_auctionator_sale for the sale log of the module's own listings.
  */
 
 declare(strict_types=1);
@@ -126,9 +127,10 @@ final class AuctionatorRepository extends MultiServerRepository
 
         $rows = $this->tryAll(
             'SELECT ah.id, ah.houseid, ah.itemowner, ah.buyoutprice, ah.startbid, ah.lastbid,
-                    ah.buyguid, ah.time, ii.itemEntry, ii.count AS stack
+                    ah.buyguid, ah.time, ii.itemEntry, ii.count AS stack, cb.name AS bidder_name
                FROM auctionhouse ah
                JOIN item_instance ii ON ii.guid = ah.itemguid
+               LEFT JOIN characters cb ON cb.guid = ah.buyguid
               WHERE ah.itemowner = :owner AND ah.id >= :from
               ORDER BY ah.id ASC
               LIMIT ' . ($limit + 1),
@@ -160,6 +162,9 @@ final class AuctionatorRepository extends MultiServerRepository
                 'buyout' => (int) $row['buyoutprice'],
                 'bid' => (int) $row['lastbid'],
                 'bidder' => (int) $row['buyguid'],
+                // The characters row of the current highest bidder, so the page can show a
+                // name (and link) next to the guid. Empty when that character is gone.
+                'bidder_name' => (string) ($row['bidder_name'] ?? ''),
                 'has_bid' => $hasBid,
                 'expires' => (int) $row['time'],
             ];
@@ -172,6 +177,169 @@ final class AuctionatorRepository extends MultiServerRepository
             : 0;
 
         return $result;
+    }
+
+    /**
+     * Aggregate of the module's sale log: mod_auctionator_sale, created by the module's
+     * data/sql/db-characters/updates/2026_09_27_00_sale_log.sql and written by the module
+     * itself, one row per sold module listing (automatic seller + GM add/addlist).
+     *
+     * This is the only place to look for a finished sale: the core deletes the
+     * `auctionhouse` row with the settlement, and its own log_money row only covers sales of
+     * 500 gold and up.
+     *
+     * @return array{ok: bool, error: string, rows: int, bot: int, buyouts: int, buyers: int, copper: int, newest: string, oldest: string}
+     */
+    public function saleStats(): array
+    {
+        $stats = [
+            'ok' => false, 'error' => '', 'rows' => 0, 'bot' => 0, 'buyouts' => 0,
+            'buyers' => 0, 'copper' => 0, 'newest' => '', 'oldest' => '',
+        ];
+
+        $state = $this->saleTableState();
+        if ($state !== 'ok') {
+            $stats['error'] = $state;
+
+            return $stats;
+        }
+
+        $row = $this->tryOne(
+            'SELECT COUNT(*) AS rows_total,
+                    COALESCE(SUM(seller_is_bot = 1), 0) AS bot_sales,
+                    COALESCE(SUM(is_buyout = 1), 0) AS buyouts,
+                    COUNT(DISTINCT buyer_guid) AS buyers,
+                    COALESCE(SUM(price), 0) AS copper_total,
+                    COALESCE(DATE_FORMAT(MAX(sold_at), "%Y-%m-%d %H:%i"), "") AS newest,
+                    COALESCE(DATE_FORMAT(MIN(sold_at), "%Y-%m-%d %H:%i"), "") AS oldest
+               FROM mod_auctionator_sale',
+            [],
+            $this->characters()
+        );
+
+        if ($row === null) {
+            $stats['error'] = 'unreadable';
+
+            return $stats;
+        }
+
+        $stats['ok'] = true;
+        foreach (['rows' => 'rows_total', 'bot' => 'bot_sales', 'buyouts' => 'buyouts', 'buyers' => 'buyers', 'copper' => 'copper_total'] as $key => $column) {
+            $stats[$key] = (int) ($row[$column] ?? 0);
+        }
+        $stats['newest'] = (string) ($row['newest'] ?? '');
+        $stats['oldest'] = (string) ($row['oldest'] ?? '');
+
+        return $stats;
+    }
+
+    /**
+     * One page of the sale log, newest first.
+     *
+     * Paged by the table's primary key descending: `from` = 0 starts at the newest record,
+     * otherwise the page holds `id <= from`. A keyset cursor stays stable while new sales are
+     * appended underneath it - unlike an OFFSET page, a fresh sale cannot shift the rows of
+     * the page after it.
+     *
+     * `is_buyout` is the module's own reading of the sale: 1 = the listing was bought out,
+     * 0 = it was won by bidding, in which case `price` is the winning bid.
+     *
+     * @return array{rows: array<int, array<string, mixed>>, from: int, limit: int, next_from: int, truncated: bool, error: string}
+     */
+    public function saleRows(int $from, int $limit): array
+    {
+        $limit = max(1, $limit);
+        $from = max(0, $from);
+        // 0 = "start at the newest record"; the keyset cursor needs an upper bound, which is
+        // the maximum id. `from` itself is reported back unchanged so the page's filter box
+        // shows what the operator asked for instead of that internal bound.
+        $upper = $from > 0 ? $from : 4294967295;
+
+        $result = [
+            'rows' => [],
+            'from' => $from,
+            'limit' => $limit,
+            'next_from' => 0,
+            'truncated' => false,
+            'error' => '',
+        ];
+
+        $state = $this->saleTableState();
+        if ($state !== 'ok') {
+            $result['error'] = $state;
+
+            return $result;
+        }
+
+        $rows = $this->tryAll(
+            'SELECT s.id, s.auction_id, s.item_entry, s.item_count, s.house_id, s.seller_guid,
+                    s.seller_is_bot, s.buyer_guid, s.price, s.startbid, s.buyout, s.cut,
+                    s.is_buyout, DATE_FORMAT(s.sold_at, "%Y-%m-%d %H:%i") AS sold_at,
+                    cs.name AS seller_name, cb.name AS buyer_name
+               FROM mod_auctionator_sale s
+               LEFT JOIN characters cs ON cs.guid = s.seller_guid
+               LEFT JOIN characters cb ON cb.guid = s.buyer_guid
+              WHERE s.id <= :from
+              ORDER BY s.id DESC
+              LIMIT ' . ($limit + 1),
+            [':from' => $upper],
+            $this->characters()
+        );
+
+        $truncated = count($rows) > $limit;
+        if ($truncated) {
+            array_pop($rows);
+        }
+
+        $names = $this->itemNames(array_map(static fn (array $row): int => (int) $row['item_entry'], $rows));
+
+        $sales = [];
+        foreach ($rows as $row) {
+            $entry = (int) $row['item_entry'];
+            $sales[] = [
+                'id' => (int) $row['id'],
+                'auction_id' => (int) $row['auction_id'],
+                'item' => $entry,
+                'name' => $names[$entry] ?? '',
+                'count' => (int) $row['item_count'],
+                'house' => (int) $row['house_id'],
+                'seller' => (int) $row['seller_guid'],
+                'seller_name' => (string) ($row['seller_name'] ?? ''),
+                'seller_is_bot' => (int) $row['seller_is_bot'] === 1,
+                'buyer' => (int) $row['buyer_guid'],
+                'buyer_name' => (string) ($row['buyer_name'] ?? ''),
+                'price' => (int) $row['price'],
+                'startbid' => (int) $row['startbid'],
+                'buyout' => (int) $row['buyout'],
+                'cut' => (int) $row['cut'],
+                'is_buyout' => (int) $row['is_buyout'] === 1,
+                'sold_at' => (string) ($row['sold_at'] ?? ''),
+            ];
+        }
+
+        $result['rows'] = $sales;
+        $result['truncated'] = $truncated;
+        $result['next_from'] = $truncated && $sales !== []
+            ? (int) $sales[count($sales) - 1]['id'] - 1
+            : 0;
+
+        return $result;
+    }
+
+    /**
+     * Is the sale log table usable? ok = read it; missing = this realm's module (or its SQL
+     * update) predates it; unavailable = the characters database cannot be inspected.
+     *
+     * @return string ok|missing|unavailable
+     */
+    private function saleTableState(): string
+    {
+        $has = $this->hasTable('mod_auctionator_sale', $this->characters());
+        if ($has === null) {
+            return 'unavailable';
+        }
+
+        return $has ? 'ok' : 'missing';
     }
 
     /**

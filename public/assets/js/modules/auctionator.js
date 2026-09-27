@@ -232,17 +232,39 @@
    * 两种 GM 上架入口（addlist 表单与 ".auctionator add"）都用"模式 + 两个单价"，模式决定用哪个单价，
    * 所以字段跟着模式切换，预览要写出整组价格（单价 × 堆叠）。
    */
+  // 金额显示：页面里所有铜币数值都按"金/银/铜"呈现，单位取模块语言文件（英文界面是 g/s/c）。
+  function moneyUnit(key, fallback) {
+    return t('money.' + key, fallback);
+  }
+
   function copperText(value) {
     const copper = Math.max(0, Math.floor(Number(value) || 0));
-    const gold = Math.floor(copper / 10000);
-    const silver = Math.floor((copper % 10000) / 100);
-    const rest = copper % 100;
-    const parts = [];
-    if (gold > 0) parts.push(gold + 'g');
-    if (silver > 0) parts.push(silver + 's');
-    if (rest > 0 || parts.length === 0) parts.push(rest + 'c');
-    return parts.join(' ') + ' (' + copper + 'c)';
+    return Math.floor(copper / 10000) + moneyUnit('gold', '金')
+      + Math.floor((copper % 10000) / 100) + moneyUnit('silver', '银')
+      + (copper % 100) + moneyUnit('copper', '铜');
   }
+
+  /**
+   * 挂单明细行里的价格输入框收铜币（api/listing 与模块命令都按铜币走），
+   * 所以输入框旁边那行提示按"金/银/铜"显示同一个数值，随输入实时刷新。
+   */
+  function syncCopperHints(scope) {
+    const root = scope || document;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-au-copper-hint]'), function (hint) {
+      const container = hint.closest('tr') || root;
+      const input = container.querySelector('[data-au-field-name="' + hint.dataset.auCopperHint + '"]');
+      if (!input) return;
+      const copper = Math.max(0, Math.floor(Number(input.value) || 0));
+      hint.textContent = copper > 0 ? copperText(copper) : '';
+    });
+  }
+
+  document.addEventListener('input', function (event) {
+    const node = event.target;
+    if (!node || !node.dataset || !node.dataset.auFieldName) return;
+    syncCopperHints(node.closest('tr') || document);
+  });
+  syncCopperHints(document);
 
   function unitText(copper) {
     return tt('listing.unit', { copper: copperText(copper) }, ':copper copper/unit');

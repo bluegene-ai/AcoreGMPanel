@@ -97,7 +97,8 @@ class AuctionatorController extends Controller
 
         $snapshot = $this->snapshot(
             $this->boundedInt($request, 'disabled_from', 0, 0, 16777215),
-            $this->boundedInt($request, 'listing_from', 0, 0, 4294967295)
+            $this->boundedInt($request, 'listing_from', 0, 0, 4294967295),
+            $this->boundedInt($request, 'sale_from', 0, 0, 4294967295)
         );
         $server = ServerContext::server();
 
@@ -133,7 +134,8 @@ class AuctionatorController extends Controller
             'success' => true,
             'payload' => $this->snapshot(
                 $this->boundedInt($request, 'disabled_from', 0, 0, 16777215),
-                $this->boundedInt($request, 'listing_from', 0, 0, 4294967295)
+                $this->boundedInt($request, 'listing_from', 0, 0, 4294967295),
+                $this->boundedInt($request, 'sale_from', 0, 0, 4294967295)
             ),
         ]);
     }
@@ -979,7 +981,7 @@ class AuctionatorController extends Controller
      * Everything the page and the status endpoint need.
      * @return array<string, mixed>
      */
-    private function snapshot(int $disabledFrom = 0, int $listingFrom = 0): array
+    private function snapshot(int $disabledFrom = 0, int $listingFrom = 0, int $saleFrom = 0): array
     {
         $fields = (array) Config::get('auctionator.fields', []);
         $paths = $this->realmPaths();
@@ -1017,6 +1019,16 @@ class AuctionatorController extends Controller
                     'truncated' => false,
                     'error' => $unreachable ? 'unavailable' : 'not_deployed',
                 ],
+                // 成交记录同样只回答"读不到"，不去碰该区的 characters 库
+                'sales' => ['ok' => false, 'error' => $unreachable ? 'unavailable' : 'missing'],
+                'sale_rows' => [
+                    'rows' => [],
+                    'from' => $saleFrom,
+                    'limit' => 0,
+                    'next_from' => 0,
+                    'truncated' => false,
+                    'error' => $unreachable ? 'unavailable' : 'missing',
+                ],
                 'market' => ['ok' => false, 'error' => $unreachable ? 'unreadable' : 'not_deployed'],
                 'policy' => [
                     'disabled_from' => $disabledFrom,
@@ -1049,6 +1061,11 @@ class AuctionatorController extends Controller
             (int) Config::get('auctionator.listing_limit', 100)
         );
         $market = $repository->marketStats($maxAgeDays);
+        $sales = $repository->saleStats();
+        $saleRows = $repository->saleRows(
+            $saleFrom,
+            (int) Config::get('auctionator.sale_limit', 50)
+        );
         $policy = $repository->policyRows(
             0,
             (int) Config::get('auctionator.disabled_items_limit', 300),
@@ -1078,6 +1095,9 @@ class AuctionatorController extends Controller
         if ($market['ok'] && $market['rows'] === 0 && trim((string) ($typed['Auctionator.MarketData.ImportFile'] ?? '')) === '') {
             $warnings[] = Lang::get('app.auctionator.warnings.no_market_data');
         }
+        if (($sales['error'] ?? '') === 'missing') {
+            $warnings[] = Lang::get('app.auctionator.warnings.sale_log_missing');
+        }
 
         return [
             'paths' => $paths,
@@ -1094,6 +1114,8 @@ class AuctionatorController extends Controller
             'listings' => $listings,
             'listing_rows' => $listingRows,
             'market' => $market,
+            'sales' => $sales,
+            'sale_rows' => $saleRows,
             'policy' => $policy,
             'log' => $this->logTail((int) Config::get('auctionator.log_tail_lines', 40)),
             'warnings' => array_values(array_unique($warnings)),

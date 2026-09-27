@@ -51,6 +51,8 @@ return [
     // 机器人挂单明细每页行数（auctionhouse 里 itemowner = Auctionator.CharacterGuid 的那些）。
     // 这张表按挂单 id 分页（listing_from），不是按物品 id。
     'listing_limit' => 100,
+    // 成交记录（mod_auctionator_sale）每页行数，按记录 id 从新到旧分页（sale_from）。
+    'sale_limit' => 50,
 
     
     
