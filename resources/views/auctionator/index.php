@@ -521,6 +521,20 @@ $bondingOptions = [
           <dd><?= htmlspecialchars(((string) ($sales['oldest'] ?? '') ?: '--') . ' → ' . ((string) ($sales['newest'] ?? '') ?: '--')) ?></dd>
         </dl>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.only_module')) ?></p>
+        <?php
+          // 这张表只记录"模块创建的上架"，但模块也会按 指定角色 代别人上架。那些成交里
+          // 机器人/GM 既不是卖家也不是买家，所以上面的统计和下面的列表都按"机器人/GM 参与过"过滤。
+          // 把被过滤掉的数量说出来，免得操作员把"过滤后为空"误读成"一笔都没成交"。
+          $hiddenDesignated = (int) ($sales['hidden_designated'] ?? 0);
+          $hiddenPlayer = (int) ($sales['hidden_player'] ?? 0);
+        ?>
+        <?php if ($hiddenDesignated > 0): ?>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_designated', ['count' => $hiddenDesignated])) ?><?= panel_hint(__('app.auctionator.sales.hidden_designated_hint')) ?></p>
+        <?php endif; ?>
+        <?php if ($hiddenPlayer > 0): ?>
+          <?php // 正常情况下不可能出现：核心给玩家挂单的押金有下限（AH_MINIMUM_DEPOSIT），不会是 0 ?>
+          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_player', ['count' => $hiddenPlayer])) ?></p>
+        <?php endif; ?>
 
         <div class="au-actions">
           <span class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.showing', [

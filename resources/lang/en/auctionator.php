@@ -180,7 +180,10 @@ return [
             . 'The core keeps no record of a finished auction (the auctionhouse row is deleted with the settlement) and its own log_money only covers sales of 500 gold and up, so this is the only place that answers '
             . '"who bought which item, and for how much". Player-to-player auctions are not in here.',
         'hint_short' => 'Read-only ledger of the sales of module-listed entries, with buyer and price.',
-        'only_module' => 'Only entries the module listed (the automatic seller and the GM listings); player-to-player sales in the auction house are not here.',
+        'only_module' => 'Only the sales the bot/GM took part in: listings the bot put up, and listings the bot itself won.',
+        'hidden_designated' => 'Another :count sale(s) came from listings the module created for a "named character"; the bot/GM is neither seller nor buyer, so neither the totals above nor the list below include them.',
+        'hidden_designated_hint' => 'That gold went to the named character, not to the bot. List without an owner to have such sales show up here.',
+        'hidden_player' => 'Warning: :count record(s) carry a player deposit, so this realm runs a module build from before it learned to ignore player auctions. The panel hides them already, but the module should be rebuilt and redeployed.',
         'total' => 'Sales',
         'bot_sales' => 'Bot-listed sales',
         'buyouts' => 'Bought out',

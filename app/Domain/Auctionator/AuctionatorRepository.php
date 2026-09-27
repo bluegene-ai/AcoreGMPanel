@@ -186,6 +186,38 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
+     * Rows of the sale log the bot/GM actually took part in.
+     *
+     * The table only ever holds *module-created* listings (`deposit = 0`; the core floors every
+     * player deposit at AH_MINIMUM_DEPOSIT, so a player listing can never reach 0), but "created
+     * by the module" is not the same as "the bot/GM was a party to it":
+     *
+     *   * `seller_is_bot = 1` - the listing was owned by Auctionator.CharacterGuid, the sale gold
+     *     was swallowed by the mail script. Bot sold it.
+     *   * `buyer_guid = <bot guid>` - the configured character won somebody else's listing.
+     *   * `seller_is_bot = 0` - the module listed it on behalf of an explicit owner
+     *     (`.auctionator add owner=<guid>`, the panel's "指定角色" field). The module created the
+     *     listing, but the bot/GM character is neither the seller nor the buyer, so the operator
+     *     asked for these to stay out of the log.
+     *
+     * With no configured CharacterGuid only the seller side is decidable, and `seller_is_bot`
+     * (recorded by the module at sale time, so it survives a later config change) is then the
+     * whole filter.
+     *
+     * The guid is interpolated instead of bound: the driver runs with ATTR_EMULATE_PREPARES =
+     * false, and there a named placeholder used more than once is rejected outright (HY093,
+     * "Invalid parameter number") - while the predicate is needed in several expressions of the
+     * aggregate below. The value is an int-typed scalar, so nothing user-supplied reaches the SQL.
+     */
+    private function saleParticipationFilter(int $botGuid): string
+    {
+        // -1 matches no guid: an unconfigured bot must not match every "no buyer" row.
+        $guid = $botGuid > 0 ? $botGuid : -1;
+
+        return '(s.seller_is_bot = 1 OR s.buyer_guid = ' . $guid . ')';
+    }
+
+    /**
      * Aggregate of the module's sale log: mod_auctionator_sale, created by the module's
      * data/sql/db-characters/updates/2026_09_27_00_sale_log.sql and written by the module
      * itself, one row per sold module listing (automatic seller + GM add/addlist).
@@ -194,13 +226,22 @@ final class AuctionatorRepository extends MultiServerRepository
      * `auctionhouse` row with the settlement, and its own log_money row only covers sales of
      * 500 gold and up.
      *
-     * @return array{ok: bool, error: string, rows: int, bot: int, buyouts: int, buyers: int, copper: int, newest: string, oldest: string}
+     * Only sales the bot/GM took part in are counted (see saleParticipationFilter); the two
+     * `hidden_*` counters report what that leaves out, so "the log looks empty" can be told apart
+     * from "nothing sold":
+     *   hidden_designated - module listings whose owner was an explicit 指定角色
+     *   hidden_player     - rows with a real deposit, i.e. player auctions. With the current
+     *                       module these cannot occur; a non-zero value means the realm runs a
+     *                       build from before the module learned to ignore player auctions.
+     *
+     * @return array{ok: bool, error: string, rows: int, bot: int, buyouts: int, buyers: int, copper: int, newest: string, oldest: string, hidden_designated: int, hidden_player: int}
      */
-    public function saleStats(): array
+    public function saleStats(int $botGuid): array
     {
         $stats = [
             'ok' => false, 'error' => '', 'rows' => 0, 'bot' => 0, 'buyouts' => 0,
             'buyers' => 0, 'copper' => 0, 'newest' => '', 'oldest' => '',
+            'hidden_designated' => 0, 'hidden_player' => 0,
         ];
 
         $state = $this->saleTableState();
@@ -210,15 +251,22 @@ final class AuctionatorRepository extends MultiServerRepository
             return $stats;
         }
 
+        $participating = $this->saleParticipationFilter($botGuid);
+
+        // One scan, no WHERE: every figure is a conditional aggregate, so the same pass can also
+        // report how many rows the participation filter is keeping out. Filtering in the WHERE
+        // would make those two counters structurally 0.
         $row = $this->tryOne(
-            'SELECT COUNT(*) AS rows_total,
+            'SELECT COALESCE(SUM(' . $participating . '), 0) AS rows_total,
                     COALESCE(SUM(seller_is_bot = 1), 0) AS bot_sales,
-                    COALESCE(SUM(is_buyout = 1), 0) AS buyouts,
-                    COUNT(DISTINCT buyer_guid) AS buyers,
-                    COALESCE(SUM(price), 0) AS copper_total,
-                    COALESCE(DATE_FORMAT(MAX(sold_at), "%Y-%m-%d %H:%i"), "") AS newest,
-                    COALESCE(DATE_FORMAT(MIN(sold_at), "%Y-%m-%d %H:%i"), "") AS oldest
-               FROM mod_auctionator_sale',
+                    COALESCE(SUM(' . $participating . ' AND is_buyout = 1), 0) AS buyouts,
+                    COUNT(DISTINCT CASE WHEN ' . $participating . ' THEN buyer_guid END) AS buyers,
+                    COALESCE(SUM(CASE WHEN ' . $participating . ' THEN price ELSE 0 END), 0) AS copper_total,
+                    COALESCE(DATE_FORMAT(MAX(CASE WHEN ' . $participating . ' THEN sold_at END), "%Y-%m-%d %H:%i"), "") AS newest,
+                    COALESCE(DATE_FORMAT(MIN(CASE WHEN ' . $participating . ' THEN sold_at END), "%Y-%m-%d %H:%i"), "") AS oldest,
+                    COALESCE(SUM(NOT ' . $participating . ' AND deposit = 0), 0) AS hidden_designated,
+                    COALESCE(SUM(NOT ' . $participating . ' AND deposit > 0), 0) AS hidden_player
+               FROM mod_auctionator_sale s',
             [],
             $this->characters()
         );
@@ -230,7 +278,7 @@ final class AuctionatorRepository extends MultiServerRepository
         }
 
         $stats['ok'] = true;
-        foreach (['rows' => 'rows_total', 'bot' => 'bot_sales', 'buyouts' => 'buyouts', 'buyers' => 'buyers', 'copper' => 'copper_total'] as $key => $column) {
+        foreach (['rows' => 'rows_total', 'bot' => 'bot_sales', 'buyouts' => 'buyouts', 'buyers' => 'buyers', 'copper' => 'copper_total', 'hidden_designated' => 'hidden_designated', 'hidden_player' => 'hidden_player'] as $key => $column) {
             $stats[$key] = (int) ($row[$column] ?? 0);
         }
         $stats['newest'] = (string) ($row['newest'] ?? '');
@@ -240,7 +288,8 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
-     * One page of the sale log, newest first.
+     * One page of the sale log, newest first, restricted to the sales the bot/GM took part in
+     * (see saleParticipationFilter).
      *
      * Paged by the table's primary key descending: `from` = 0 starts at the newest record,
      * otherwise the page holds `id <= from`. A keyset cursor stays stable while new sales are
@@ -252,7 +301,7 @@ final class AuctionatorRepository extends MultiServerRepository
      *
      * @return array{rows: array<int, array<string, mixed>>, from: int, limit: int, next_from: int, truncated: bool, error: string}
      */
-    public function saleRows(int $from, int $limit): array
+    public function saleRows(int $botGuid, int $from, int $limit): array
     {
         $limit = max(1, $limit);
         $from = max(0, $from);
@@ -277,6 +326,8 @@ final class AuctionatorRepository extends MultiServerRepository
             return $result;
         }
 
+        $where = $this->saleParticipationFilter($botGuid);
+
         $rows = $this->tryAll(
             'SELECT s.id, s.auction_id, s.item_entry, s.item_count, s.house_id, s.seller_guid,
                     s.seller_is_bot, s.buyer_guid, s.price, s.startbid, s.buyout, s.cut,
@@ -285,7 +336,7 @@ final class AuctionatorRepository extends MultiServerRepository
                FROM mod_auctionator_sale s
                LEFT JOIN characters cs ON cs.guid = s.seller_guid
                LEFT JOIN characters cb ON cb.guid = s.buyer_guid
-              WHERE s.id <= :from
+              WHERE s.id <= :from AND ' . $where . '
               ORDER BY s.id DESC
               LIMIT ' . ($limit + 1),
             [':from' => $upper],

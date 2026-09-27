@@ -1095,8 +1095,9 @@ class AuctionatorController extends Controller
             (int) Config::get('auctionator.listing_limit', 100)
         );
         $market = $repository->marketStats($maxAgeDays);
-        $sales = $repository->saleStats();
+        $sales = $repository->saleStats($botGuid);
         $saleRows = $repository->saleRows(
+            $botGuid,
             $saleFrom,
             (int) Config::get('auctionator.sale_limit', 50)
         );
