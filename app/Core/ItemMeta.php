@@ -36,7 +36,11 @@ final class ItemMeta
 
     public static function qualityName(int $q): string
     {
-        return Lang::get('app.item_meta.qualities.' . $q, [], (string) $q);
+        // 品质名在 resources/lang/<locale>/item.php 的 meta.qualities 下，也就是 app.item.meta.qualities.*。
+        // 这里原先查的是 app.item_meta.qualities.*，而语言路由（ModuleAssets::SPLIT_LANG_SECTIONS）
+        // 里没有 item_meta 这一段，于是永远取不到值、静默退化成数字：品质筛选下拉、物品编辑的品质
+        // 下拉、APP_ENUMS.qualities（JS 侧）以及共用的 item_name_link() 悬停提示全都吃这个值。
+        return Lang::get('app.item.meta.qualities.' . $q, [], '#' . $q);
     }
 
     public static function qualities(): array
