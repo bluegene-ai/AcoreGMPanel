@@ -20,3 +20,11 @@
   border-color: rgba(220, 168, 82, .85);
   color: #ffe1ab;
 }
+
+/* 键盘焦点：说明标记现在可聚焦（panel_hint() 会带 tabindex），必须看得见焦点落在哪 */
+.panel-hint:focus-visible {
+  outline: 2px solid rgba(220, 168, 82, .9);
+  outline-offset: 2px;
+  border-color: rgba(220, 168, 82, .85);
+  color: #ffe1ab;
+}

@@ -159,6 +159,13 @@ return array (
         'confirm' => 'Confirm',
         'cancel' => 'Cancel',
         'retry' => 'Retry',
+        'remove' => 'Remove',
+      ),
+      // Strings for the shared name-search item picker (Panel.itemPicker).
+      'picker' => 
+      array (
+        'type_to_search' => 'Type an item name or id to search',
+        'no_match' => 'No matching item',
       ),
       'yes' => 'Yes',
       'no' => 'No',

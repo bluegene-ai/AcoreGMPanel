@@ -55,6 +55,12 @@ final class PanelLocale
                 'confirm' => Lang::get('app.js.common.actions.confirm'),
                 'cancel' => Lang::get('app.js.common.actions.cancel'),
                 'retry' => Lang::get('app.js.common.actions.retry'),
+                'remove' => Lang::get('app.js.common.actions.remove'),
+            ],
+            // 共用的物品选择器（Panel.itemPicker）的状态文案
+            'picker' => [
+                'type_to_search' => Lang::get('app.js.common.picker.type_to_search'),
+                'no_match' => Lang::get('app.js.common.picker.no_match'),
             ],
             'yes' => Lang::get('app.js.common.yes'),
             'no' => Lang::get('app.js.common.no'),

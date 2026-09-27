@@ -255,6 +255,7 @@ return static function (Router $router): void {
         
         $router->get('/auctionator', [AuctionatorController::class, 'index']);
         $router->get('/auctionator/api/status', [AuctionatorController::class, 'apiStatus']);
+        $router->get('/auctionator/api/items', [AuctionatorController::class, 'apiItems']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/auctionator/api/config', [AuctionatorController::class, 'apiConfigSave']);
             $router->post('/auctionator/api/item', [AuctionatorController::class, 'apiItem']);

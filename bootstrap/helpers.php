@@ -163,6 +163,32 @@ if (!function_exists('item_name_link')) {
     }
 }
 
+if (!function_exists('panel_hint')) {
+    /**
+     * 行内的 ⓘ 说明标记：可见内容只有一个圆点，真正的说明在 title 里。
+     *
+     * 渲染成可聚焦的 <span tabindex="0" role="note" aria-label="...">：键盘用户 Tab 到它时
+     * 浏览器会弹出 title，读屏则直接念 aria-label。之前各处手写的
+     * <span class="panel-hint" title="...">i</span> 不可聚焦，键盘用户完全拿不到这些说明，
+     * 而面板里几乎所有关键概念的解释都塞在里面。
+     *
+     * @param string $text  完整说明（同时进 title 与 aria-label）
+     * @param string $label 可见字符，默认 "i"
+     */
+    function panel_hint(string $text, string $label = 'i'): string
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return '';
+        }
+
+        $escaped = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+
+        return '<span class="panel-hint" tabindex="0" role="note" aria-label="' . $escaped . '"'
+            . ' title="' . $escaped . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+    }
+}
+
 if (!function_exists('flash_add')) {
     function flash_add(string $type, string $message): void
     {

@@ -363,6 +363,432 @@
     return { show, success, error, info, clear };
   }
 
+  /** HTML 转义。面板里十几个模块各写了一份自己的 esc，这里是共用的一份。 */
+  function escapeHtmlText(value){
+    return String(value ?? '').replace(/[&<>"']/g, (ch)=>({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  /**
+   * 物品选择器（combobox）：把"让 GM 背 item entry"换成"按名字搜"。
+   *
+   * 服务端渲染的骨架约定：
+   *   <div data-au-picker [data-au-picker-multiple="1"]>
+   *     <input type="hidden" name="item" data-au-picker-value>          <- 表单真正提交的字段
+   *     <input type="text" data-au-picker-search role="combobox" ...>   <- 可见的搜索框
+   *     <ul data-au-picker-list role="listbox" hidden></ul>
+   *   </div>
+   * 隐藏字段沿用原来的 name，所以表单处理器与后端契约都不用改。
+   *
+   * 键盘：上下键移动、Enter 选中、Esc 关闭；多选模式下搜索框为空时 Backspace 删掉最后一个。
+   * 请求带序号，过期响应直接丢弃——否则快速输入时后到的旧结果会覆盖新结果。
+   *
+   * @param {Element|string} target  [data-au-picker] 容器
+   * @param {object} [options]
+   * @param {string} [options.endpoint='/auctionator/api/items']
+   * @param {object} [options.params]    每次请求都带上的额外查询参数（例如 server）
+   * @param {number} [options.limit=20]
+   * @param {number} [options.debounceMs=180]
+   * @param {number} [options.minChars=1]
+   * @param {boolean} [options.multiple] 默认读容器的 data-au-picker-multiple
+   * @param {Function} [options.onSelect] (item, instance) => void
+   * @returns {{value: Function, values: Function, set: Function, clear: Function, focus: Function}|null}
+   */
+  function createItemPicker(target, options){
+    const opts = options || {};
+    const host = typeof target === 'string' ? document.querySelector(target) : target;
+    if(!host) return null;
+    if(host.__itemPicker) return host.__itemPicker;
+
+    const searchInput = host.querySelector('[data-au-picker-search]');
+    const valueInput = host.querySelector('[data-au-picker-value]');
+    const list = host.querySelector('[data-au-picker-list]');
+    if(!searchInput || !valueInput || !list) return null;
+
+    const multiple = opts.multiple !== undefined ? !!opts.multiple : host.getAttribute('data-au-picker-multiple') === '1';
+    const endpoint = opts.endpoint || '/auctionator/api/items';
+    const limit = opts.limit || 20;
+    const debounceMs = opts.debounceMs === undefined ? 180 : opts.debounceMs;
+    const minChars = opts.minChars === undefined ? 1 : opts.minChars;
+    const extraParams = opts.params || {};
+    const onSelect = typeof opts.onSelect === 'function' ? opts.onSelect : null;
+    const label = (path, fallback)=> getLocale(path, fallback);
+
+    let selected = [];
+    let matches = [];
+    let activeIndex = -1;
+    let timer = null;
+    let seq = 0;
+
+    if(!list.id) list.id = 'panel-picker-' + Math.random().toString(36).slice(2, 8);
+    searchInput.setAttribute('aria-controls', list.id);
+    searchInput.setAttribute('aria-expanded', 'false');
+
+    function close(){
+      list.hidden = true;
+      list.innerHTML = '';
+      matches = [];
+      activeIndex = -1;
+      searchInput.setAttribute('aria-expanded', 'false');
+      searchInput.removeAttribute('aria-activedescendant');
+    }
+
+    function syncValue(){
+      valueInput.value = selected.map((item)=> item.entry).join(',');
+      host.classList.toggle('has-value', selected.length > 0);
+    }
+
+    function renderChips(){
+      const box = host.querySelector('[data-au-picker-chips]');
+      if(!box) return;
+      box.innerHTML = selected.map((item, index)=> [
+        '<span class="au-picker__chip">',
+        '<span class="au-picker__chip-name ' + (item.quality === null || item.quality === undefined ? '' : 'item-quality-q' + item.quality) + '">',
+        escapeHtmlText(item.name || ('#' + item.entry)),
+        '</span>',
+        ' <span class="au-picker__chip-id">#' + item.entry + '</span>',
+        '<button type="button" class="au-picker__chip-x" data-au-picker-remove="' + index + '" aria-label="'
+          + escapeHtmlText(label('common.actions.remove', 'Remove')) + '">&times;</button>',
+        '</span>'
+      ].join('')).join('');
+    }
+
+    function highlight(index){
+      if(!matches.length){ return; }
+      activeIndex = (index + matches.length) % matches.length;
+      Array.prototype.forEach.call(list.children, (node, i)=>{
+        const on = i === activeIndex;
+        node.classList.toggle('is-active', on);
+        node.setAttribute('aria-selected', on ? 'true' : 'false');
+        if(on){
+          const id = list.id + '-opt-' + i;
+          node.id = id;
+          searchInput.setAttribute('aria-activedescendant', id);
+          if(typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    }
+
+    function renderMatches(){
+      if(!matches.length){
+        const hasQuery = searchInput.value.trim().length >= minChars;
+        list.innerHTML = '<li class="au-picker__empty" role="presentation">'
+          + escapeHtmlText(hasQuery ? label('common.picker.no_match', 'No matching item') : label('common.picker.type_to_search', 'Type a name or item id'))
+          + '</li>';
+        list.hidden = false;
+        searchInput.setAttribute('aria-expanded', 'true');
+        activeIndex = -1;
+        return;
+      }
+
+      list.innerHTML = matches.map((item, i)=> {
+        const q = item.quality === null || item.quality === undefined ? '' : ' item-quality-q' + item.quality;
+        return '<li class="au-picker__option" role="option" aria-selected="false" data-index="' + i + '">'
+          + '<span class="au-picker__option-name' + q + '">' + escapeHtmlText(item.name || ('#' + item.entry)) + '</span>'
+          + '<span class="au-picker__option-id">#' + item.entry + '</span>'
+          + '</li>';
+      }).join('');
+      list.hidden = false;
+      searchInput.setAttribute('aria-expanded', 'true');
+      highlight(0);
+    }
+
+    async function search(){
+      const keyword = searchInput.value.trim();
+      if(keyword.length < minChars){ close(); return; }
+
+      list.innerHTML = '<li class="au-picker__empty" role="presentation">' + escapeHtmlText(label('common.loading', 'Loading…')) + '</li>';
+      list.hidden = false;
+      searchInput.setAttribute('aria-expanded', 'true');
+
+      const mine = ++seq;
+      let payload = null;
+      try{
+        payload = await api.get(endpoint, Object.assign({ keyword, limit }, extraParams));
+      }catch(error){
+        payload = null;
+      }
+      if(mine !== seq) return;          // 已经有更新的请求了，丢掉这份过期结果
+
+      if(!payload || payload.success === false){
+        list.innerHTML = '<li class="au-picker__empty" role="presentation">'
+          + escapeHtmlText((payload && payload.message) || label('common.api.errors.request_failed_retry', 'Request failed, try again later'))
+          + '</li>';
+        matches = [];
+        return;
+      }
+      matches = payload.items || payload.data || [];
+      renderMatches();
+    }
+
+    function commit(item){
+      if(!item) return;
+      if(multiple){
+        if(!selected.some((row)=> row.entry === item.entry)) selected.push(item);
+        renderChips();
+      }else{
+        selected = [item];
+        searchInput.value = item.name || ('#' + item.entry);
+      }
+      syncValue();
+      if(multiple){ searchInput.value = ''; }
+      close();
+      if(onSelect) onSelect(item, instance);
+      if(multiple) searchInput.focus();
+    }
+
+    function removeAt(index){
+      selected.splice(index, 1);
+      renderChips();
+      syncValue();
+      if(onSelect) onSelect(null, instance);
+    }
+
+    searchInput.addEventListener('input', ()=>{
+      if(timer) window.clearTimeout(timer);
+      timer = window.setTimeout(search, debounceMs);
+    });
+
+    searchInput.addEventListener('keydown', (event)=>{
+      if(event.key === 'ArrowDown'){ event.preventDefault(); if(list.hidden){ search(); } else { highlight(activeIndex + 1); } }
+      else if(event.key === 'ArrowUp'){ event.preventDefault(); highlight(activeIndex - 1); }
+      else if(event.key === 'Enter'){
+        if(!list.hidden && matches.length){ event.preventDefault(); commit(matches[activeIndex < 0 ? 0 : activeIndex]); }
+      }
+      else if(event.key === 'Escape'){ close(); }
+      else if(event.key === 'Backspace' && multiple && searchInput.value === '' && selected.length){ removeAt(selected.length - 1); }
+    });
+
+    searchInput.addEventListener('focus', ()=>{
+      if(searchInput.value.trim().length >= minChars && list.hidden && !matches.length) search();
+    });
+    searchInput.addEventListener('blur', ()=>{ window.setTimeout(()=>{ if(!host.contains(document.activeElement)) close(); }, 120); });
+
+    list.addEventListener('mousedown', (event)=>{
+      // mousedown 而不是 click：blur 先跑会把列表关掉
+      const option = event.target.closest ? event.target.closest('[data-index]') : null;
+      if(!option) return;
+      event.preventDefault();
+      commit(matches[Number(option.getAttribute('data-index'))]);
+    });
+
+    host.addEventListener('click', (event)=>{
+      const remove = event.target.closest ? event.target.closest('[data-au-picker-remove]') : null;
+      if(remove){ event.preventDefault(); removeAt(Number(remove.getAttribute('data-au-picker-remove'))); }
+    });
+
+    const instance = {
+      value: ()=> valueInput.value,
+      values: ()=> selected.slice(),
+      set(items){
+        selected = (Array.isArray(items) ? items : []).filter((item)=> item && item.entry);
+        if(!multiple && selected.length){ searchInput.value = selected[0].name || ('#' + selected[0].entry); }
+        renderChips();
+        syncValue();
+      },
+      clear(){
+        selected = [];
+        searchInput.value = '';
+        renderChips();
+        syncValue();
+        close();
+      },
+      focus: ()=> searchInput.focus()
+    };
+
+    syncValue();
+    host.__itemPicker = instance;
+    return instance;
+  }
+
+  /**
+   * 表格客户端过滤：给已经渲染好的表加一个搜索框，纯前端过滤，不发请求。
+   *
+   * 约定（服务端只要在 <table> 上写 data-au-searchable 即可，ids 都不用给）：
+   *   <table class="au-table" data-au-searchable data-filter-empty="没有匹配的行">
+   * JS 在 .au-table-wrap 之前插入搜索框，并管理"全部被过滤掉"时的空行。
+   * 可重复调用：已经绑过的表会被跳过，所以局部刷新之后直接再调一次就行。
+   *
+   * @param {Element|string} [root] 扫描范围，默认 document
+   * @param {object} [defaults] 没有在表上写 data-filter-* 时用的默认文案
+   * @param {string} [defaults.emptyLabel]
+   * @param {string} [defaults.placeholder]
+   * @returns {Array<{table: Element, apply: Function}>}
+   */
+  function bindTableFilters(root, defaults){
+    const fallback = defaults || {};
+    const scope = typeof root === 'string' ? document.querySelector(root) : (root || document);
+    if(!scope) return [];
+
+    const bound = [];
+    Array.prototype.forEach.call(scope.querySelectorAll('table[data-au-searchable]'), (table)=>{
+      if(table.__panelTableFilter) { bound.push(table.__panelTableFilter); return; }
+      const tbody = table.tBodies[0];
+      if(!tbody) return;
+
+      const emptyLabel = table.getAttribute('data-filter-empty') || fallback.emptyLabel || getLocale(['common','no_data'], 'No data');
+      const placeholder = table.getAttribute('data-filter-placeholder') || fallback.placeholder || getLocale(['common','search_placeholder'], 'Search…');
+
+      const tools = document.createElement('div');
+      tools.className = 'table-filter-tools';
+      tools.innerHTML = '<input type="search" class="au-input table-filter-input" autocomplete="off"'
+        + ' aria-label="' + escapeHtmlText(placeholder) + '" placeholder="' + escapeHtmlText(placeholder) + '">';
+
+      const wrap = table.closest('.au-table-wrap') || table.parentNode;
+      if(wrap && wrap.parentNode) wrap.parentNode.insertBefore(tools, wrap);
+      const input = tools.querySelector('input');
+
+      // 「没有匹配的行」这一行由 JS 维护，不影响原来的空状态行
+      let noneRow = tbody.querySelector('.js-filter-none');
+      if(!noneRow){
+        noneRow = document.createElement('tr');
+        noneRow.className = 'js-filter-none';
+        noneRow.hidden = true;
+        const cell = document.createElement('td');
+        cell.colSpan = table.tHead && table.tHead.rows[0] ? table.tHead.rows[0].cells.length : 1;
+        cell.className = 'muted small';
+        cell.textContent = emptyLabel;
+        noneRow.appendChild(cell);
+        tbody.appendChild(noneRow);
+      }
+
+      function apply(){
+        const query = (input.value || '').trim().toLowerCase();
+        let visible = 0;
+
+        Array.prototype.forEach.call(tbody.rows, (row)=>{
+          if(row === noneRow) return;
+          const text = (row.textContent || '').toLowerCase();
+          const match = query === '' || text.indexOf(query) >= 0;
+          // 原来的"表是空的"提示行只在没有查询时才由数据决定显示
+          if(row.classList.contains('js-empty-row')){
+            row.hidden = query !== '';
+            return;
+          }
+          row.hidden = !match;
+          if(match) visible++;
+        });
+
+        noneRow.hidden = !(query !== '' && visible === 0);
+        tools.classList.toggle('is-filtering', query !== '');
+      }
+
+      input.addEventListener('input', apply);
+      apply();
+
+      table.__panelTableFilter = { table, input, apply };
+      bound.push(table.__panelTableFilter);
+    });
+
+    return bound;
+  }
+
+  /**
+   * 带后果说明的确认框，取代 window.confirm。
+   *
+   * 返回 Promise<boolean>：确定 true；取消 / Esc / 点背景都 false。
+   * opts.requireText 非空时要求照打一段文字（用于"会波及全服玩家"这类不可逆操作）。
+   *
+   * 用 window.Modal 渲染（同一套 .modal-backdrop 样式），并补上 Modal 缺的东西：
+   * role="dialog" / aria-modal、打开时移入焦点、关闭后把焦点还给触发元素、
+   * 以及让 Esc 与背景点击都能把 Promise 落地（否则 await 会永远挂住）。
+   *
+   * @param {object} options
+   * @param {string} options.message      后果说明（必填，纯文本，会被转义）
+   * @param {string} [options.title]
+   * @param {string} [options.confirmLabel]
+   * @param {string} [options.cancelLabel]
+   * @param {boolean} [options.danger]    确定按钮用危险色
+   * @param {string} [options.requireText] 需要照打的文字；非空时确定按钮初始禁用
+   * @param {string} [options.requireLabel] 提示"请照打 :text"
+   * @returns {Promise<boolean>}
+   */
+  function createConfirm(){
+    const MODAL_ID = 'panel-confirm';
+    let resolver = null;
+    let keyHandler = null;
+    let trigger = null;
+
+    function finish(value){
+      const resolve = resolver;
+      resolver = null;
+      if(keyHandler){ window.removeEventListener('keydown', keyHandler, true); keyHandler = null; }
+      if(window.Modal) window.Modal.hide(MODAL_ID);
+      const back = trigger;
+      trigger = null;
+      if(back && typeof back.focus === 'function' && document.contains(back)) back.focus();
+      if(resolve) resolve(value);
+    }
+
+    return function confirm(options){
+      const opts = options || {};
+      if(!window.Modal){
+        // 没有 Modal 就退回原生确认，至少不会静默丢掉这次操作
+        return Promise.resolve(window.confirm(String(opts.message || '')));
+      }
+
+      // 上一次还没被回答就再来一次：把旧的当成取消，避免 Promise 悬挂
+      if(resolver) finish(false);
+
+      const required = String(opts.requireText || '');
+      const okLabel = opts.confirmLabel || getLocale(['common','actions','confirm'], 'Confirm');
+      const cancelLabel = opts.cancelLabel || getLocale(['common','actions','cancel'], 'Cancel');
+
+      const body = '<p class="panel-confirm__message">' + escapeHtmlText(opts.message || '') + '</p>'
+        + (required === ''
+          ? ''
+          : '<label class="panel-confirm__gate"><span>'
+            + escapeHtmlText(opts.requireLabel || '') + '</span>'
+            + '<input class="au-input" type="text" data-confirm-gate autocomplete="off" spellcheck="false"></label>');
+
+      const footer = '<button type="button" class="btn" data-confirm-cancel>' + escapeHtmlText(cancelLabel) + '</button>'
+        + '<button type="button" class="btn ' + (opts.danger ? 'danger' : 'primary') + '" data-confirm-ok>'
+        + escapeHtmlText(okLabel) + '</button>';
+
+      trigger = document.activeElement;
+      const ref = window.Modal.show({
+        id: MODAL_ID,
+        title: opts.title || '',
+        content: body,
+        footer: footer,
+        width: ''
+      });
+
+      ref.el.setAttribute('role', 'dialog');
+      ref.el.setAttribute('aria-modal', 'true');
+      if(opts.title) ref.el.setAttribute('aria-label', String(opts.title));
+
+      const okBtn = ref.footerEl.querySelector('[data-confirm-ok]');
+      const cancelBtn = ref.footerEl.querySelector('[data-confirm-cancel]');
+      const gate = ref.bodyEl.querySelector('[data-confirm-gate]');
+
+      if(gate){
+        const sync = ()=>{ okBtn.disabled = gate.value.trim().toUpperCase() !== required.toUpperCase(); };
+        gate.addEventListener('input', sync);
+        sync();
+      }
+
+      cancelBtn.addEventListener('click', ()=> finish(false));
+      okBtn.addEventListener('click', ()=>{ if(!okBtn.disabled) finish(true); });
+      // 背景点击：Modal 自己的处理器只 hide，不会 resolve，所以这里补一条
+      ref.el.addEventListener('click', (event)=>{ if(event.target === ref.el) finish(false); });
+
+      keyHandler = (event)=>{
+        if(event.key !== 'Escape') return;
+        event.stopPropagation();
+        event.preventDefault();
+        finish(false);
+      };
+      window.addEventListener('keydown', keyHandler, true);
+
+      const focusTarget = gate || okBtn;
+      if(focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
+
+      return new Promise((resolve)=>{ resolver = resolve; });
+    };
+  }
+
   const PanelContext = {
     base: BASE,
     url: buildUrl,
@@ -393,6 +819,105 @@
       const base = resolveBasePath();
       const suffix = String(path ?? '');
       return base + (suffix.startsWith('/') ? suffix : '/' + suffix);
+    },
+    /** HTML 转义（模块里那些手写的 esc 可以改用这个）。 */
+    escapeHtml(value){
+      return escapeHtmlText(value);
+    },
+    /** 按名字搜索的物品选择器；见 createItemPicker() 的用法说明。 */
+    itemPicker(target, options){
+      return createItemPicker(target, options);
+    },
+    /** 给所有 table[data-au-searchable] 挂上客户端搜索框；可重复调用。 */
+    tableFilter(root, defaults){
+      return bindTableFilters(root, defaults);
+    },
+    /** 带后果说明的确认框（Promise<boolean>），取代 window.confirm。 */
+    confirm: createConfirm(),
+    /** 读回某个选择器当前的 entry（逗号分隔），表单校验用；未初始化时返回 null。 */
+    itemPickerValue(target){
+      const host = typeof target === 'string' ? document.querySelector(target) : target;
+      return host && host.__itemPicker ? host.__itemPicker.value() : null;
+    },
+    /**
+     * 标准标签页行为：点击、左右方向键、Home / End 切换；roving tabindex 与 aria-selected 同步。
+     *
+     * 面板由每个 tab 的 aria-controls 解析（ID 列表），切的是 hidden 属性——所以一个 tab 可以由
+     * 页面上不相邻的多段区块组成，而标记里仍然只有一份声明。项目里此前有 7 份手写的标签页实现，
+     * 全都没有键盘支持，这个函数是它们共同该用的那份。
+     *
+     * @param {object} [options]
+     * @param {Element|string} [options.root]        含 tablist 的容器（选择器或元素），默认 document
+     * @param {string} [options.tabSelector]         默认 '[role="tab"]'
+     * @param {string} [options.tabNameAttr]         tab 上承载名字的属性，默认 'data-tab'
+     * @param {string} [options.activeClass]         tab 的选中类，默认 'is-active'
+     * @param {string} [options.defaultTab]          没有 hash 或 hash 无效时的 tab 名
+     * @param {boolean} [options.hash]               切换时是否写回 location.hash（replaceState）
+     * @param {Function} [options.onChange]          (name) => void
+     * @returns {{activate: Function, active: Function}|null} 找不到 tablist 时返回 null
+     */
+    tabs(options){
+      const opts = options || {};
+      const root = typeof opts.root === 'string' ? document.querySelector(opts.root) : (opts.root || document);
+      if(!root) return null;
+
+      const tabs = Array.prototype.slice.call(root.querySelectorAll(opts.tabSelector || '[role="tab"]'));
+      if(!tabs.length) return null;
+
+      const nameAttr = opts.tabNameAttr || 'data-tab';
+      const activeClass = opts.activeClass || 'is-active';
+      const nameOf = (tab) => tab.getAttribute(nameAttr) || '';
+      const panelsFor = (tab) => String(tab.getAttribute('aria-controls') || '')
+        .split(/\s+/).filter(Boolean)
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+
+      let current = '';
+
+      function activate(name, mode){
+        const opts2 = mode || {};
+        if(!name || !tabs.some((tab) => nameOf(tab) === name)) return;
+        current = name;
+
+        tabs.forEach((tab)=>{
+          const on = nameOf(tab) === name;
+          tab.classList.toggle(activeClass, on);
+          tab.setAttribute('aria-selected', on ? 'true' : 'false');
+          tab.tabIndex = on ? 0 : -1;
+          panelsFor(tab).forEach((panel)=>{ panel.hidden = !on; });
+          if(on && opts2.focus && typeof tab.focus === 'function') tab.focus();
+        });
+
+        if(opts.hash && opts2.pushHash && window.history && typeof window.history.replaceState === 'function'){
+          window.history.replaceState(null, '', '#' + name);
+        }
+        if(typeof opts.onChange === 'function') opts.onChange(name);
+      }
+
+      // 只接管左右方向键：上下键留给页面滚动，横向 tablist 不该把它们吃掉。
+      function step(from, delta){
+        const index = tabs.indexOf(from);
+        if(index < 0) return;
+        activate(nameOf(tabs[(index + delta + tabs.length) % tabs.length]), { focus: true, pushHash: true });
+      }
+
+      tabs.forEach((tab)=>{
+        tab.addEventListener('click', ()=> activate(nameOf(tab), { pushHash: true }));
+        tab.addEventListener('keydown', (event)=>{
+          if(event.key === 'ArrowRight'){ event.preventDefault(); step(tab, 1); }
+          else if(event.key === 'ArrowLeft'){ event.preventDefault(); step(tab, -1); }
+          else if(event.key === 'Home'){ event.preventDefault(); activate(nameOf(tabs[0]), { focus: true, pushHash: true }); }
+          else if(event.key === 'End'){ event.preventDefault(); activate(nameOf(tabs[tabs.length - 1]), { focus: true, pushHash: true }); }
+        });
+      });
+
+      const fromHash = (window.location.hash || '').replace('#', '');
+      const initial = (fromHash && tabs.some((tab) => nameOf(tab) === fromHash))
+        ? fromHash
+        : ((opts.defaultTab && tabs.some((tab) => nameOf(tab) === opts.defaultTab)) ? opts.defaultTab : nameOf(tabs[0]));
+      activate(initial, {});
+
+      return { activate, active: () => current };
     },
     /**
      * DOM 就绪后执行 fn。模块脚本由 body 内联脚本注入，常在文档仍解析时（interactive）

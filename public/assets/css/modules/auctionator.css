@@ -6,9 +6,21 @@
 .au-tab{background:rgba(15,25,35,.45);border:1px solid rgba(148,163,184,.18);color:#c7d0d9;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease;}
 .au-tab:hover{border-color:rgba(59,130,246,.5);color:#e6edf5;}
 .au-tab--active{background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.65);color:#dbeafe;}
+/* 键盘用户要能看见焦点落在哪个 tab 上；:focus-visible 只对键盘触发，鼠标点击不闪 */
+.au-tab:focus-visible{outline:2px solid rgba(96,165,250,.9);outline-offset:2px;}
 
 .au-panel{display:flex;flex-direction:column;gap:18px;}
 .au-panel[hidden]{display:none;}
+/* 注：[hidden] 被作者 display 顶掉的问题（这页的上架模式字段、空命令输出卡片、撤销按钮都中过）
+   已在 app-core.css 里全局兜底（[hidden]{display:none!important}），这里不再重复。 */
+/* 每个分区顶部的一句话说明：这个 tab 能干什么。取代原先要靠 tooltip 才能看懂的标签。 */
+.au-panel__lead{margin:0;padding:10px 14px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.22);color:#cfe0f0;font-size:13px;line-height:1.6;}
+
+/* 命令输出常驻在 tabs 之外，吸在页面底部：从哪个分区发的命令，结果都在同一处，
+   不会被当前没打开的分区藏起来。空输出时 JS 会把它 hidden 掉。 */
+.au-output-panel{position:sticky;bottom:0;z-index:5;margin-top:18px;box-shadow:0 -8px 24px rgba(2,6,12,.55);}
+.au-output-panel h3{display:flex;align-items:center;gap:8px;}
+.au-output-panel h3::before{content:'';width:8px;height:8px;border-radius:50%;background:#5ea9ff;box-shadow:0 0 8px rgba(94,169,255,.8);}
 
 .au-feedback{margin:0;}
 .au-feedback.panel-flash{display:block;}
@@ -68,12 +80,62 @@
 .au-table th{position:sticky;top:0;background:#0d1621;color:#9fb1c0;font-weight:600;z-index:1;}
 .au-table__actions{display:flex;gap:6px;}
 
-.au-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
-.au-actions .au-input{width:auto;min-width:130px;}
+.au-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}.au-actions .au-input{width:auto;min-width:130px;}
 .au-checkbox{display:inline-flex;align-items:center;gap:8px;color:#c7d0d9;font-size:13px;}
 .au-checkbox input{margin:0;}
 
+/* ---- 物品选择器（Panel.itemPicker）：按名字搜，替代背 item entry 的数字框 ---- */
+.au-picker{position:relative;flex:1 1 220px;min-width:180px;display:flex;flex-direction:column;gap:6px;}
+.au-picker__search{width:100%;}
+.au-picker__list{position:absolute;z-index:20;top:100%;left:0;right:0;margin:4px 0 0;padding:4px;list-style:none;
+  max-height:260px;overflow:auto;background:#0d1621;border:1px solid rgba(148,163,184,.28);border-radius:10px;
+  box-shadow:0 12px 32px rgba(2,6,12,.6);}
+.au-picker__option{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;}
+.au-picker__option.is-active{background:rgba(59,130,246,.2);}
+.au-picker__option-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.au-picker__option-id{color:#8b96a1;font-variant-numeric:tabular-nums;font-size:12px;}
+.au-picker__empty{padding:8px;color:#8b96a1;font-size:12px;}
+.au-picker__chips{display:flex;flex-wrap:wrap;gap:6px;}
+.au-picker__chips:empty{display:none;}
+.au-picker__chip{display:inline-flex;align-items:center;gap:6px;padding:3px 6px 3px 8px;border-radius:999px;
+  background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.24);font-size:12px;}
+.au-picker__chip-id{color:#8b96a1;font-variant-numeric:tabular-nums;}
+.au-picker__chip-x{background:none;border:none;color:#c3ccd6;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;}
+.au-picker__chip-x:hover{color:#ffc2c2;}
+
 .au-output{max-height:340px;overflow:auto;background:#08111a;border:1px solid rgba(148,163,184,.14);border-radius:10px;padding:12px;margin:0;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#cfdae5;}
+
+/* ---- 表格客户端筛选（Panel.tableFilter）：搜索框插在 .au-table-wrap 之前 ---- */
+.table-filter-tools{display:flex;justify-content:flex-end;margin:0 0 8px;}
+.table-filter-tools .table-filter-input{width:auto;min-width:200px;max-width:280px;}
+.table-filter-tools.is-filtering .table-filter-input{border-color:rgba(59,130,246,.6);}
+
+/* ---- 挂单明细：行级 dirty 与多选 ---- */
+.au-col-check{width:34px;text-align:center;}
+.au-col-check input{margin:0;vertical-align:middle;}
+/* 12 列（多出勾选列后）在这张卡里会横向溢出，操作列会被挤到视口外——下架/改价必须先横向滚才够得到。
+   把操作列钉在右侧，主操作永远可见。只作用于含挂单行的那张表。 */
+.au-table:has([data-au-listing-row]) th:last-child,
+.au-table:has([data-au-listing-row]) td.au-table__actions{position:sticky;right:0;background:#0f1a25;}
+.au-table:has([data-au-listing-row]) th:last-child{background:#0d1621;z-index:3;}
+.au-table:has([data-au-listing-row]) td.au-table__actions{z-index:2;}
+/* 改过的行要一眼看出来，否则「改价」按钮为什么亮着得靠猜 */
+.au-table tr.is-dirty{background:rgba(217,119,6,.10);box-shadow:inset 3px 0 0 rgba(217,119,6,.85);}
+.au-table tr.is-dirty:hover{background:rgba(217,119,6,.16);}
+.au-table__actions .btn[disabled]{opacity:.4;cursor:not-allowed;}
+
+.au-bulk-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 0;padding:10px 12px;
+  border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.34);}
+.au-bulk-bar[hidden]{display:none;}
+.au-bulk-bar [data-au-bulk-count]{margin-right:auto;color:#dbeafe;font-weight:600;}
+
+/* 只锁触发请求的那个控件（不再禁全页）：正在忙要看得出来 */
+.au-page .is-busy{opacity:.55;cursor:progress;}
+
+/* ---- Panel.confirm：带后果说明的确认框 ---- */
+.panel-confirm__message{margin:0;font-size:14px;line-height:1.65;color:#e6edf5;}
+.panel-confirm__gate{display:flex;flex-direction:column;gap:6px;margin-top:14px;font-size:13px;color:#c7d0d9;}
+.panel-confirm__gate input{width:100%;}
 
 .au-power{display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid rgba(148,163,184,.14);}
 .au-power__title{color:#eaf2fa;font-size:13px;}

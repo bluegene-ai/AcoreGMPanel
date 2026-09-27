@@ -11,11 +11,31 @@ return [
     'scope_note' => 'Realm: :server · Configuration file: :path',
     'tabs' => [
         'label' => 'Auction bot page sections',
-        'status' => 'Status',
-        'listings' => 'Listings',
-        'settings' => 'Settings',
-        'policy' => 'Item policy',
-        'actions' => 'Actions',
+        // Sections are named after the task, and each tab opens with a one-line lead saying what
+        // it is for. The old names (status / listings / settings / item policy / actions) were cut
+        // along the data tables, which is where "I cannot find it" came from.
+        'overview' => 'Overview',
+        'overview_lead' => 'Whether this realm\'s bot is running, how much it has listed, how fresh the market data is, and the tail of the module log. Everything here is read-only.',
+        'live' => 'Live listings',
+        'live_lead' => 'What the bot is selling right now - reprice or delist one row at a time - with the sales it has already made below.',
+        'stock' => 'Listing & restock',
+        'stock_lead' => 'The pick list decides which special items the bot keeps restocking; "Restock" lists the whole list in one go, and the form later in this section lists items that are not on it.',
+        'filters' => 'Filters',
+        'filters_lead' => 'What the bot is allowed to sell: the blacklist, the class whitelist and the quality gate. All three are re-read every seller cycle, so edits apply immediately.',
+        'settings' => 'Configuration',
+        'settings_lead' => 'Edit this realm\'s mod_auctionator.conf in place: only changed keys are rewritten and the previous file is kept as .agmp.bak. A worldserver restart is required.',
+        'maintenance' => 'Maintenance',
+        'maintenance_lead' => 'Read-only queries, runtime switches that only touch memory, and market-price import / scan / prune. Command output is pinned to the bottom of the page, whichever section runs the command.',
+    ],
+    // Prompts for the shared item picker (Panel.itemPicker): the single-select forms and the
+    // multi-select "list items ad hoc" form.
+    'picker' => [
+        'search_item' => 'Search item name or id',
+        'search_add_items' => 'Search and add items - more than one allowed',
+        'need_item' => 'Search and pick an item first.',
+        // Shown when the picker cannot search - never as "no matching item".
+        'unavailable_not_deployed' => 'mod-auctionator is not deployed on this realm, so items cannot be searched.',
+        'unavailable_unavailable' => 'This realm\'s world database is unreachable, so items cannot be searched.',
     ],
     'state' => [
         'on' => 'on',
@@ -135,6 +155,20 @@ return [
         'empty' => 'The bot currently has no auctions listed.',
         'next_page' => 'Next page',
         'no_bot_guid' => 'Auctionator.CharacterGuid is not configured on this realm (or is 0), so there is no owner to tell the bot\'s listings apart by; the detail cannot be listed.',
+        // Selection and bulk actions
+        'select_all' => 'Select every manageable listing on this page',
+        'select_row' => 'Select auction #:id',
+        'reset' => 'Undo',
+        'bulk_selected' => ':count selected',
+        'bulk_save' => 'Save changes',
+        'bulk_delist' => 'Delist selected',
+        'bulk_clear' => 'Clear selection',
+        'bulk_save_none' => 'None of the selected rows has a change. Edit a price first.',
+        'bulk_progress' => 'Working: :done / :total …',
+        'bulk_done' => 'Done: :ok succeeded, :failed failed.',
+        'dirty_note' => 'This row has unsaved changes.',
+        'unsaved_leave' => 'You have unsaved price changes. Leave anyway?',
+        'type_to_confirm' => 'This cannot be undone. Type :text to confirm.',
         'price_note' => 'Both prices are stack TOTALS and the inputs take copper (the two numbers this row already showed), not the per-unit prices the add command takes; the value next to each input shows the same amount as gold/silver/copper. A buyout of 0 means "no buyout" (pure auction).',
     ],
     // The module's own sale log (mod_auctionator_sale): read-only, and the only place that
@@ -284,7 +318,15 @@ return [
         'table_unavailable' => 'This realm\'s database cannot be reached, so the policy tables cannot be read right now (reload once the connection is back; no SQL re-import needed).',
         'class' => 'Class',
         'subclass' => 'Subclass',
-        'bonding' => 'Bonding',
+        'bonding' => 'Bind threshold',
+        // bonding is a MINIMUM threshold, not a bind-type enum. 1 is called out because the module
+        // always excludes bind-on-pickup items, so picking 1 is effectively "no extra constraint".
+        'bonding_options' => [
+            0 => '0 · no extra constraint',
+            1 => '>=1 · bind on pickup (the module always excludes BoP, so this means no constraint)',
+            2 => '>=2 · bind on equip or stronger',
+            3 => '>=3 · bind on use or stronger',
+        ],
         'max_count' => 'Quota',
         'stack_count' => 'Stack',
         'save' => 'Save',
@@ -444,6 +486,8 @@ return [
                     'enable' => 'Enable this switch at runtime?',
                     'disable' => 'Disable this switch at runtime?',
                     'addlist' => 'Restock from gm_list? Every row is listed with its own mode and prices.',
+                    'expireall_all' => 'This also force-expires every PLAYER auction on the realm, not just the bot\'s. Continue?',
+                    'bulk_delist' => 'Delist :count auctions? Each item is mailed back to its owner on the next auction house tick; the bot\'s own mail is recycled (i.e. destroyed).',
                     'add' => 'List these items with the selected mode and prices?',
                     'power_start' => 'Start the auction bot on this realm? This writes this realm\'s option file and applies immediately.',
                     'power_stop' => 'Stop the auction bot on this realm? Only this realm is affected; auctions already listed stay.',
@@ -461,6 +505,7 @@ return [
                     'power_failure' => 'The master switch did not take effect.',
                     'buyout_failure' => 'The buyout switch did not take effect.',
                     'listing_failure' => 'The listing change failed.',
+                    'listing_success' => 'Listing updated.',
                 ],
                 'actions' => [
                     'output_empty' => '(no output yet)',
@@ -482,11 +527,36 @@ return [
                     'bid_no_buyout' => 'Auction: start bid :bid (stack :bid_total), no buyout (highest bidder wins).',
                     'missing_bid' => 'Provide a start bid above 0.',
                     'missing_buyout' => 'Provide a buyout above 0.',
+                    // Both inputs on a listing-detail row take stack TOTALS, so the hint also spells
+                    // out the equivalent unit price (total / stack).
+                    'total_only' => 'stack total :total',
+                    'total_and_unit' => 'stack total :total (unit :unit x :stack)',
                     // Delist/reprice validation (JS fills the :placeholders; both prices are stack totals)
                     'startbid_required' => 'The start bid must be at least 1 copper.',
                     'buyout_below_startbid' => 'The buyout must not be below the start bid (0 means "no buyout").',
                     'no_buyout' => 'no buyout',
                 ],
+                // Client-side table search boxes (Panel.tableFilter in panel.js)
+                'table' => [
+                    'filter' => 'Filter this page…',
+                    'no_match' => 'No matching row.',
+                ],
+                // Item picker, JS side (the server-rendered placeholders use the top-level picker.*)
+                'picker' => [
+                    'need_item' => 'Search and pick an item first.',
+                ],
+                // Listing detail: only the selection/bulk strings the JS needs
+                'listing_detail' => [
+                    'bulk_selected' => ':count selected',
+                    'bulk_save_none' => 'None of the selected rows has a change. Edit a price first.',
+                    'bulk_progress' => 'Working: :done / :total …',
+                    'bulk_done' => 'Done: :ok succeeded, :failed failed.',
+                    // Dialog titles/buttons are looked up on the JS side too
+                    'delist' => 'Delist',
+                    'reprice' => 'Reprice',
+                    'bulk_delist' => 'Delist selected',
+                ],
+                'type_to_confirm' => 'This cannot be undone. Type :text to confirm.',
             ],
         ],
     ],

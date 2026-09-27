@@ -159,6 +159,13 @@ return array (
         'confirm' => '确定',
         'cancel' => '取消',
         'retry' => '重试',
+        'remove' => '移除',
+      ),
+      // 共用的按名字搜索物品选择器（Panel.itemPicker）用到的文案
+      'picker' => 
+      array (
+        'type_to_search' => '输入物品名字或 ID 开始搜索',
+        'no_match' => '没有匹配的物品',
       ),
       'yes' => '是',
       'no' => '否',

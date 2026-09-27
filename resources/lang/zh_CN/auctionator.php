@@ -11,11 +11,29 @@ return [
     'scope_note' => '当前服务器：:server · 配置文件：:path',
     'tabs' => [
         'label' => '拍卖机器人页面分区',
-        'status' => '状态',
-        'listings' => '挂单',
+        // 分区按「GM 要做的事」命名，每个 tab 顶部的 lead 一句话说明这里能干什么。
+        // 旧名字（状态 / 挂单 / 配置 / 物品策略 / 操作）是按数据表切的，"东西找不到"就是从这儿来的。
+        'overview' => '总览',
+        'overview_lead' => '本区机器人开着没有、挂了多少单、市场数据新不新，以及模块日志的尾部。这里都是只读的，要动手改东西去别的分区。',
+        'live' => '在售',
+        'live_lead' => '机器人此刻在卖的东西：逐条改价或下架；下面是已经卖掉的流水。',
+        'stock' => '上架与补货',
+        'stock_lead' => '精选清单决定机器人要长期反复卖哪些特殊物品；「补货」按清单一次性上架，同一分区后段的表单用来临时上架清单之外的物品。',
+        'filters' => '筛选策略',
+        'filters_lead' => '决定机器人被允许卖什么：黑名单、类别白名单、品质开关。这三张表每个卖家周期都会重读，改完即生效。',
         'settings' => '配置',
-        'policy' => '物品策略',
-        'actions' => '操作',
+        'settings_lead' => '直接编辑本区的 mod_auctionator.conf：只改写动过的键，原文件留 .agmp.bak。保存后需重启 worldserver 才生效。',
+        'maintenance' => '维护',
+        'maintenance_lead' => '只读查询、只改内存的运行时开关，以及市场价的导入 / 采样 / 清理。命令输出固定在页面底部，任何分区触发的命令都落在那里。',
+    ],
+    // 共用的物品选择器（Panel.itemPicker）在两处的提示语：单选的表单和多选的"临时上架"表单
+    'picker' => [
+        'search_item' => '搜索物品名或 ID',
+        'search_add_items' => '搜索并添加物品，可加多个',
+        'need_item' => '请先搜索并选中一个物品。',
+        // 选择器搜不了时的说明：不要把它显示成"没有匹配的物品"
+        'unavailable_not_deployed' => '本区没有部署 mod-auctionator，无法搜索物品。',
+        'unavailable_unavailable' => '连不上本区的 world 库，无法搜索物品。',
     ],
     'state' => [
         'on' => '开',
@@ -130,6 +148,21 @@ return [
         'empty' => '当前没有机器人挂单。',
         'next_page' => '下一页',
         'no_bot_guid' => '本区还没有配置 Auctionator.CharacterGuid（或为 0），无法确定哪些挂单属于机器人，因此列不出明细。',
+        // 多选与批量
+        'select_all' => '全选本页可操作的挂单',
+        'select_row' => '选择挂单 #:id',
+        'reset' => '撤销',
+        'bulk_selected' => '已选 :count 条',
+        'bulk_save' => '保存改动',
+        'bulk_delist' => '批量下架',
+        'bulk_clear' => '清除选择',
+        'bulk_save_none' => '选中的行里没有改动。先改价格再保存。',
+        'bulk_progress' => '正在处理 :done / :total …',
+        'bulk_done' => '完成 :ok 条，失败 :failed 条。',
+        'dirty_note' => '这一行有未保存的改动。',
+        'unsaved_leave' => '有未保存的改价，确定要离开吗？',
+        // 需要照打才放行的不可逆操作
+        'type_to_confirm' => '这是不可逆操作。请照打 :text 以确认。',
         'price_note' => '两个价格都是整组总价，输入框里填的是铜币整数（就是这一行原本的两个数字），不是 add 命令那种单位价；输入框右侧会按"金/银/铜"显示同一数值。一口价填 0 表示不设一口价（纯竞拍）。',
     ],
     // 模块自己写的成交记录（mod_auctionator_sale）：只读，用于回答"谁买走了机器人的东西、花了多少"。
@@ -279,6 +312,14 @@ return [
         'class' => '类别',
         'subclass' => '子类别',
         'bonding' => '绑定门槛',
+        // bonding 是"最低绑定门槛"，不是绑定类型枚举。1 单独标出来是因为模块恒排除拾取绑定物品，
+        // 选了 1 实际就等于"不额外约束"——不写清楚这个下拉会骗人。
+        'bonding_options' => [
+            0 => '0 · 不额外约束',
+            1 => '≥1 · 拾取绑定（模块恒排除 BoP，实际等同于不限）',
+            2 => '≥2 · 装备绑定及以上',
+            3 => '≥3 · 使用绑定及以上',
+        ],
         'max_count' => '配额',
         'stack_count' => '堆叠',
         'save' => '保存',
@@ -438,6 +479,8 @@ return [
                     'enable' => '确认在运行时启用该开关吗？',
                     'disable' => '确认在运行时停用该开关吗？',
                     'addlist' => '确认按 gm_list 批量补货吗？每行会按自己的模式与价格上架。',
+                    'expireall_all' => '这会连全服玩家的挂单一起强制过期，不只是机器人的。确定继续吗？',
+                    'bulk_delist' => '批量下架 :count 条挂单？物品会在下一次拍卖行结算时按邮件退回所有者；机器人自己的邮件会被回收（等于销毁）。',
                     'add' => '确认按选定的模式与价格上架这些物品吗？',
                     'power_start' => '确认启动当前区服的拍卖机器人吗？会写入本区配置文件并立即生效。',
                     'power_stop' => '确认停止当前区服的拍卖机器人吗？只会停掉本区，已挂出的拍卖不受影响。',
@@ -455,6 +498,7 @@ return [
                     'power_failure' => '总开关没有生效。',
                     'buyout_failure' => '买断模式开关没有生效。',
                     'listing_failure' => '挂单操作失败。',
+                    'listing_success' => '挂单已更新。',
                 ],
                 'actions' => [
                     'output_empty' => '（暂无输出）',
@@ -475,11 +519,35 @@ return [
                     'bid_no_buyout' => '竞拍：起拍 :bid（整组 :bid_total），不设一口价（价高者得）。',
                     'missing_bid' => '请填写大于 0 的起拍单价。',
                     'missing_buyout' => '请填写大于 0 的买断单价。',
+                    // 挂单明细行的两个输入框收的是整组总价，提示里补出等价单价（总价 ÷ 堆叠）
+                    'total_only' => '整组 :total',
+                    'total_and_unit' => '整组 :total（单价 :unit × :stack）',
                     // 挂单明细的改价校验（JS 自己替换 :占位符；这里两个价格是整组总价）
                     'startbid_required' => '起拍价至少要 1 铜。',
                     'buyout_below_startbid' => '一口价不能低于起拍价（填 0 表示不设一口价）。',
                     'no_buyout' => '不设一口价',
                 ],
+                // 表格客户端搜索框（panel.js 的 Panel.tableFilter）
+                'table' => [
+                    'filter' => '筛选本页…',
+                    'no_match' => '没有匹配的行。',
+                ],
+                // 物品选择器在 JS 侧的提示（服务端渲染的占位符走顶层 picker.*）
+                'picker' => [
+                    'need_item' => '请先搜索并选中一个物品。',
+                ],
+                // 挂单明细里只有 JS 用到的那几个多选/批量文案
+                'listing_detail' => [
+                    'bulk_selected' => '已选 :count 条',
+                    'bulk_save_none' => '选中的行里没有改动。先改价格再保存。',
+                    'bulk_progress' => '正在处理 :done / :total …',
+                    'bulk_done' => '完成 :ok 条，失败 :failed 条。',
+                    // 确认框的标题与按钮也要走 JS 侧（服务端那份是同名的按钮文案）
+                    'delist' => '下架',
+                    'reprice' => '改价',
+                    'bulk_delist' => '批量下架',
+                ],
+                'type_to_confirm' => '这是不可逆操作。请照打 :text 以确认。',
             ],
         ],
     ],

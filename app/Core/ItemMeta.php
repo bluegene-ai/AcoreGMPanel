@@ -63,7 +63,11 @@ final class ItemMeta
 
     public static function className(int $id): string
     {
-        return Lang::get('app.item_meta.classes.' . $id, [], (string) $id);
+        // 与 qualityName() 同一个毛病：类别名在 resources/lang/<locale>/item.php 的 meta.classes 下
+        // （app.item.meta.classes.*），原先查的 app.item_meta.* 没有对应的语言路由段，取不到就退化成
+        // 数字——物品列表的类型列、物品编辑的类别下拉、get_item_class_name() 与 APP_ENUMS.classes
+        // 因此一直显示 "4" 而不是"护甲"。
+        return Lang::get('app.item.meta.classes.' . $id, [], '#' . $id);
     }
 
     public static function subclassesOf(int $classId): array
@@ -78,7 +82,8 @@ final class ItemMeta
 
     public static function subclassName(int $classId, int $subId): string
     {
-        return Lang::get('app.item_meta.subclasses.' . $classId . '.' . $subId, [], (string) $subId);
+        // 同上：子类名在 app.item.meta.subclasses.<class>.<subclass>。
+        return Lang::get('app.item.meta.subclasses.' . $classId . '.' . $subId, [], '#' . $subId);
     }
 
     public static function allSubclassesFlat(): array

@@ -143,6 +143,37 @@ class AuctionatorController extends Controller
         ]);
     }
 
+    /**
+     * 物品选择器的后端：`GET /auctionator/api/items?keyword=&limit=` → entry / name / quality。
+     *
+     * 不借用 item-inventory 的 /item-inventory/api/search-items：那个端点挂的是 inventory.view，
+     * 只有 auctionator.* 权限的账号会被 403，而这两个表单（黑名单、精选清单）本来就属于本模块。
+     */
+    public function apiItems(Request $request): Response
+    {
+        $this->requireViewCapability();
+        $this->maybeSwitchServer($request);
+
+        // 本区管不了时不去碰它的 world 库。这里回 success=false + 原因，而不是空列表：
+        // 空列表在选择器里显示成"没有匹配的物品"，会把"本区没部署 / 连不上库"说成"搜索没结果"。
+        if (!$this->serverSupported()) {
+            $reason = $this->serverSupport()['reason'];
+
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.auctionator.picker.unavailable_' . ($reason === 'db_unreachable' ? 'unavailable' : 'not_deployed')),
+            ]);
+        }
+
+        $keyword = $this->normalizedString($request, 'keyword');
+        $limit = $this->boundedInt($request, 'limit', 20, 1, 50);
+
+        return $this->json([
+            'success' => true,
+            'items' => $keyword === '' ? [] : $this->repo()->searchItems($keyword, $limit),
+        ]);
+    }
+
     public function apiConfigSave(Request $request): Response
     {
         $this->requireManageCapability();

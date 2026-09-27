@@ -662,6 +662,50 @@ final class AuctionatorRepository extends MultiServerRepository
     }
 
     /**
+     * 物品选择器的后端：按名字或 entry 段搜索 item_template。
+     *
+     * 刻意只搜 item_template.name —— 这一页上挂单表显示的就是这一列（见 itemNames()），
+     * 所以"搜到的名字"和"表里看到的名字"永远一致，不会出现搜得到却对不上号的情况。
+     * 纯数字输入按 entry 前缀匹配：GM 手里常常只有 ID，两种输入都该命中。
+     *
+     * @return array<int, array{entry: int, name: string, quality: ?int}>
+     */
+    public function searchItems(string $keyword, int $limit): array
+    {
+        $keyword = trim($keyword);
+        $limit = max(1, min(50, $limit));
+        if ($keyword === '') {
+            return [];
+        }
+
+        $rows = ctype_digit($keyword)
+            ? $this->tryAll(
+                'SELECT entry, name, Quality AS quality FROM item_template
+                  WHERE entry = ? OR entry LIKE ? ORDER BY entry ASC LIMIT ' . $limit,
+                [(int) $keyword, $keyword . '%'],
+                $this->world()
+            )
+            : $this->tryAll(
+                'SELECT entry, name, Quality AS quality FROM item_template
+                  WHERE name LIKE ? ORDER BY entry ASC LIMIT ' . $limit,
+                ['%' . $keyword . '%'],
+                $this->world()
+            );
+
+        $items = [];
+        foreach ($rows as $row) {
+            $items[] = [
+                'entry' => (int) $row['entry'],
+                'name' => (string) $row['name'],
+                // NULL 是可能的（自定义模板没有 Quality）：保留 null，让前端不着色而不是猜一个"粗糙"。
+                'quality' => isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * Template quality for a set of item entries, so a list can colour item names the way the client
      * does. Deliberately a separate query from itemNames(): a schema without the Quality column (or a
      * statement that fails for any other reason) then costs the colouring only, never the names.
