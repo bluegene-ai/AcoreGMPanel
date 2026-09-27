@@ -27,10 +27,14 @@ $capabilities = $__pageCapabilities ?? [
     'view' => $__can('auctionator.view'),
     'manage' => $__can('auctionator.manage'),
     'control' => $__can('auctionator.control'),
+    'content_view' => $__can('content.view'),
 ];
 $__pageCapabilities = $capabilities;
 $canManage = (bool) ($capabilities['manage'] ?? false);
 $canControl = (bool) ($capabilities['control'] ?? false);
+// 物品名深链到物品管理页的编辑入口：目标页同样以 content.view 为门槛，没权限就只给纯文本，
+// 免得给出一个必然被拒的链接。
+$canEditContent = (bool) ($capabilities['content_view'] ?? $__can('content.view'));
 $supported = (bool) ($notes['supported'] ?? true);
 // 策略表"读不到"的三种说法要分开：缺表（该执行 SQL）/ 本区没部署 / 连不上库。
 $policyTableKey = $supported
@@ -144,6 +148,9 @@ $typeLabel = static function (int $class, string $fallback): string {
 $qualityLabel = static function (int $quality): string {
     return (string) __('app.auctionator.qualities.' . $quality, [], '#' . $quality);
 };
+// 物品名单元格不再在这里拼：用项目统一的 item_name_link()（bootstrap/helpers.php），
+// 样式也只有一份（app-core.css 的 .item-name-link），别在本模块再定义一套。
+// $canEditContent 决定给不给链接：没 content.view 就给同色的纯文本，而不是必然被拒的链接。
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>
 <?php include __DIR__ . '/../components/capability_notice.php'; ?>
@@ -359,7 +366,12 @@ $qualityLabel = static function (int $quality): string {
               <tr data-au-listing-row="<?= (int) ($row['id'] ?? 0) ?>">
                 <td><?= (int) ($row['id'] ?? 0) ?></td>
                 <td><?= (int) ($row['item'] ?? 0) ?></td>
-                <td><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                <td><?= item_name_link(
+                    (int) ($row['item'] ?? 0),
+                    (string) ($row['name'] ?? ''),
+                    isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
+                    $canEditContent
+                ) ?></td>
                 <td><?= (int) ($row['stack'] ?? 0) ?></td>
                 <td>
                   <?php if ($rowEditable): ?>
@@ -491,7 +503,12 @@ $qualityLabel = static function (int $quality): string {
               <tr data-au-sale-row="<?= (int) ($row['id'] ?? 0) ?>">
                 <td><?= htmlspecialchars((string) ($row['sold_at'] ?? '') ?: '--') ?></td>
                 <td><?= (int) ($row['auction_id'] ?? 0) ?></td>
-                <td><?= (int) ($row['item'] ?? 0) ?> <?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                <td><?= (int) ($row['item'] ?? 0) ?> <?= item_name_link(
+                    (int) ($row['item'] ?? 0),
+                    (string) ($row['name'] ?? ''),
+                    isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
+                    $canEditContent
+                ) ?></td>
                 <td><?= (int) ($row['count'] ?? 0) ?></td>
                 <td><?= htmlspecialchars($houseLabel((int) ($row['house'] ?? 7))) ?></td>
                 <td>

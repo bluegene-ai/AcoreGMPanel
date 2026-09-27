@@ -110,6 +110,9 @@ class AuctionatorController extends Controller
                 'view' => 'auctionator.view',
                 'manage' => 'auctionator.manage',
                 'control' => 'auctionator.control',
+                // 挂单明细里的物品名要深链到物品管理页，那一页自己以 content.view 为门槛；
+                // 这里只决定"给不给链接"，没权限时物品名仍然是带品质颜色的纯文本。
+                'content_view' => 'content.view',
             ],
             'header' => [
                 'intro' => __('app.auctionator.intro_short'),

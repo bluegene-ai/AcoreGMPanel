@@ -143,7 +143,9 @@ final class AuctionatorRepository extends MultiServerRepository
             array_pop($rows);
         }
 
-        $names = $this->itemNames(array_map(static fn (array $row): int => (int) $row['itemEntry'], $rows));
+        $entries = array_map(static fn (array $row): int => (int) $row['itemEntry'], $rows);
+        $names = $this->itemNames($entries);
+        $qualities = $this->itemQualities($entries);
 
         $listings = [];
         foreach ($rows as $row) {
@@ -157,6 +159,10 @@ final class AuctionatorRepository extends MultiServerRepository
                 'house' => (int) $row['houseid'],
                 'item' => $entry,
                 'name' => $names[$entry] ?? '',
+                // The template quality drives the WoW colour of the name cell. It is resolved in the
+                // same pass as the name so the table needs no extra query per row; null means the
+                // template has no row (or no Quality), and the cell is then left uncoloured.
+                'quality' => $qualities[$entry] ?? null,
                 'stack' => (int) $row['stack'],
                 'startbid' => (int) $row['startbid'],
                 'buyout' => (int) $row['buyoutprice'],
@@ -291,7 +297,9 @@ final class AuctionatorRepository extends MultiServerRepository
             array_pop($rows);
         }
 
-        $names = $this->itemNames(array_map(static fn (array $row): int => (int) $row['item_entry'], $rows));
+        $entries = array_map(static fn (array $row): int => (int) $row['item_entry'], $rows);
+        $names = $this->itemNames($entries);
+        $qualities = $this->itemQualities($entries);
 
         $sales = [];
         foreach ($rows as $row) {
@@ -301,6 +309,9 @@ final class AuctionatorRepository extends MultiServerRepository
                 'auction_id' => (int) $row['auction_id'],
                 'item' => $entry,
                 'name' => $names[$entry] ?? '',
+                // Same contract as botListings(): the row carries its template quality so the view
+                // can colour the item name without a query of its own. Null = unknown.
+                'quality' => $qualities[$entry] ?? null,
                 'count' => (int) $row['item_count'],
                 'house' => (int) $row['house_id'],
                 'seller' => (int) $row['seller_guid'],
@@ -648,6 +659,42 @@ final class AuctionatorRepository extends MultiServerRepository
         }
 
         return $names;
+    }
+
+    /**
+     * Template quality for a set of item entries, so a list can colour item names the way the client
+     * does. Deliberately a separate query from itemNames(): a schema without the Quality column (or a
+     * statement that fails for any other reason) then costs the colouring only, never the names.
+     *
+     * @param int[] $entries
+     * @return array<int, int> entry => quality, missing entries are absent (0..7, see item_template)
+     */
+    public function itemQualities(array $entries): array
+    {
+        $entries = array_values(array_unique(array_filter(array_map('intval', $entries), static fn (int $id): bool => $id > 0)));
+        if ($entries === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($entries), '?'));
+        $rows = $this->tryAll(
+            'SELECT entry, Quality AS quality FROM item_template WHERE entry IN (' . $placeholders . ')',
+            $entries,
+            $this->world()
+        );
+
+        $qualities = [];
+        foreach ($rows as $row) {
+            // A NULL Quality is possible on custom templates: skip it so the caller renders the cell
+            // uncoloured instead of painting it as "poor" (quality 0).
+            if (!isset($row['quality']) || $row['quality'] === null) {
+                continue;
+            }
+
+            $qualities[(int) $row['entry']] = (int) $row['quality'];
+        }
+
+        return $qualities;
     }
 
     /**

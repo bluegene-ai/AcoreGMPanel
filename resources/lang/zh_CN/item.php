@@ -239,6 +239,11 @@ return array (
   array (
     'quality' => '品质: :quality (:value)',
   ),
+  // 物品名深链到本页编辑入口时的悬停提示（item_name_link() 用，见 bootstrap/helpers.php）
+  'link' => 
+  array (
+    'manage' => '在物品管理中打开 #:id',
+  ),
   'actions' => 
   array (
     'edit' => '编辑',

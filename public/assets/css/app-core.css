@@ -329,6 +329,15 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 .item-quality-heirloom{color:var(--item-quality-heirloom)!important;}
 .quality-badge{display:inline-block;padding:2px 6px;font-size:12px;line-height:1.1;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);border-radius:4px;font-weight:500;letter-spacing:.5px;}
 .quality-badge[class*="item-quality-"]{text-shadow:0 0 4px rgba(0,0,0,.35);} 
+/* 「物品名 = 可点的物品链接」的项目通用样式，标记由 bootstrap/helpers.php 的 item_name_link() 生成。
+   颜色一律来自上面的 item-quality-* 类，这里只负责"这是个链接"的观感：虚线下划线，悬停转实线。
+   以"徽章"呈现的物品名会同时带 .quality-badge（见物品管理列表），那种形态不加下划线。 */
+a.item-name-link{text-decoration:underline;text-decoration-style:dotted;text-decoration-color:currentColor;text-underline-offset:2px;}
+a.item-name-link:hover{text-decoration-style:solid;}
+/* 徽章形态（物品管理列表把 .item-name-link 和 .quality-badge 叠在一起用）保持原样：
+   平时无下划线、悬停才出现，与引入本规则之前完全一致。 */
+a.item-name-link.quality-badge{text-decoration:none;}
+a.item-name-link.quality-badge:hover{text-decoration:underline;text-decoration-style:solid;}
 /* Mail bulk bar layout refinements */
 .mail-bulk-bar .bulk-stats .muted{color:#8b96a1;font-size:12px;}
 .mail-bulk-bar .bulk-stats{white-space:nowrap;}

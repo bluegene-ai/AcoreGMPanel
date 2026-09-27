@@ -239,6 +239,11 @@ return array (
   array (
     'quality' => 'Quality: :quality (:value)',
   ),
+  // Hover title when an item name deep-links into this page's editor (used by item_name_link()).
+  'link' => 
+  array (
+    'manage' => 'Open #:id in item management',
+  ),
   'actions' => 
   array (
     'edit' => 'Edit',

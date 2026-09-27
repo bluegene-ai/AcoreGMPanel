@@ -13,8 +13,10 @@
 
 declare(strict_types=1);
 
+use Acme\Panel\Core\ItemQuality;
 use Acme\Panel\Core\Lang;
 use Acme\Panel\Core\Url;
+use Acme\Panel\Support\ContentLink;
 use Acme\Panel\Support\ServerContext;
 
 if (!function_exists('url')) {
@@ -98,6 +100,66 @@ if (!function_exists('account_link')) {
         return '<a href="' . htmlspecialchars(account_view_url($accountId, $serverId), ENT_QUOTES, 'UTF-8') . '">'
             . htmlspecialchars($text, ENT_QUOTES, 'UTF-8')
             . '</a>';
+    }
+}
+
+if (!function_exists('item_name_link')) {
+    /**
+     * 物品名 → 物品管理页的编辑入口，并按 item_template.quality 上色。
+     *
+     * 这是"物品名 = 可点的物品链接"的项目统一实现：任何列表要显示物品名都调这个函数，
+     * 不要各自拼 class。配套的样式只有一处，在 public/assets/css/app-core.css 的
+     * `.item-name-link` 块里（颜色一律来自 ItemQuality 的 item-quality-* 类）。
+     *
+     * - $linkable = false（调用方没有 content.view）时输出同色的纯文本，不给必然被拒的链接；
+     * - $name 为空时退化成 "#entry"，至少不丢信息；
+     * - $quality 为 null（自定义模板没有 Quality）时不着色，而不是猜一个"粗糙"；
+     * - 悬停提示把"哪个品质"和"点开去哪儿"都写出来：颜色本身对色觉障碍者不可读。
+     *
+     * @param int|string $entry    物品 entry
+     * @param string|null $name    item_template.name，空则显示 #entry
+     * @param int|null $quality    item_template.quality（0..7），null = 未知
+     * @param bool $linkable       是否渲染成链接（由调用方按 content.view 决定）
+     * @param int|null $serverId   目标页区服；默认跟随当前区服
+     */
+    function item_name_link(
+        int|string $entry,
+        ?string $name = null,
+        ?int $quality = null,
+        bool $linkable = true,
+        ?int $serverId = null
+    ): string {
+        $entry = (int) $entry;
+        $label = trim((string) $name);
+        if ($label === '') {
+            $label = '#' . $entry;
+        }
+
+        $url = $linkable ? ContentLink::url('item', $entry, $serverId) : null;
+
+        $title = [];
+        if ($quality !== null) {
+            $title[] = __('app.item.tooltip.quality', [
+                'quality' => ItemQuality::label($quality, false),
+                'value' => $quality,
+            ]);
+        }
+        if ($url !== null) {
+            $title[] = __('app.item.link.manage', ['id' => $entry]);
+        }
+        $titleAttr = $title === []
+            ? ''
+            : ' title="' . htmlspecialchars(implode(' · ', $title), ENT_QUOTES, 'UTF-8') . '"';
+
+        $class = 'item-name-link' . ($quality !== null ? ' ' . ItemQuality::css($quality) : '');
+        $inner = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
+
+        if ($url !== null) {
+            return '<a class="' . $class . '"' . $titleAttr
+                . ' href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $inner . '</a>';
+        }
+
+        return '<span class="' . $class . '"' . $titleAttr . '>' . $inner . '</span>';
     }
 }
 
