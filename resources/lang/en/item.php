@@ -77,6 +77,10 @@ return array (
         8 => 'Two-Handed Sword',
         9 => 'Obsolete',
         10 => 'Staff',
+        // 11/12 are the unused weapon subclasses in the DBC (Exotic / Exotic2): outside
+        // ItemMeta's subclass list, but the module's class whitelist may still hold rows for them.
+        11 => 'Exotic (obsolete)',
+        12 => 'Exotic2 (obsolete)',
         13 => 'Fist Weapon',
         14 => 'Miscellaneous Weapon',
         15 => 'Dagger',

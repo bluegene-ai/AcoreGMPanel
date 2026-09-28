@@ -14,18 +14,19 @@ return [
         // Sections are named after the task, and each tab opens with a one-line lead saying what
         // it is for. The old names (status / listings / settings / item policy / actions) were cut
         // along the data tables, which is where "I cannot find it" came from.
+        // The lead stays one line: anything longer belongs in the card-title hint.
         'overview' => 'Overview',
-        'overview_lead' => 'Whether this realm\'s bot is running, how much it has listed, how fresh the market data is, and the tail of the module log. Everything here is read-only.',
+        'overview_lead' => 'Bot state, listing counts, market-data freshness and the log tail - all read-only.',
         'live' => 'Live listings',
-        'live_lead' => 'What the bot is selling right now - reprice or delist one row at a time - with the sales it has already made below.',
+        'live_lead' => 'What the bot is selling right now, and the sales it has already made.',
         'stock' => 'Listing & restock',
-        'stock_lead' => 'The pick list decides which special items the bot keeps restocking; "Restock" lists the whole list in one go, and the form later in this section lists items that are not on it.',
+        'stock_lead' => 'The pick list is what the bot keeps restocking; the form below it lists items outside that list.',
         'filters' => 'Filters',
-        'filters_lead' => 'What the bot is allowed to sell: the blacklist, the class whitelist and the quality gate. All three are re-read every seller cycle, so edits apply immediately.',
+        'filters_lead' => 'What the bot is allowed to sell: blacklist, class whitelist, quality gate.',
         'settings' => 'Configuration',
-        'settings_lead' => 'Edit this realm\'s mod_auctionator.conf in place: only changed keys are rewritten and the previous file is kept as .agmp.bak. A worldserver restart is required.',
+        'settings_lead' => 'Edit this realm\'s mod_auctionator.conf in place; only changed keys are rewritten.',
         'maintenance' => 'Maintenance',
-        'maintenance_lead' => 'Read-only queries, runtime switches that only touch memory, and market-price import / scan / prune. Command output is pinned to the bottom of the page, whichever section runs the command.',
+        'maintenance_lead' => 'Read-only queries, memory-only runtime switches, and market-price import / scan / prune.',
     ],
     // Prompts for the shared item picker (Panel.itemPicker): the single-select forms and the
     // multi-select "list items ad hoc" form.
@@ -42,8 +43,10 @@ return [
         'off' => 'off',
         'listed' => 'Listed',
         'not_listed' => 'Not listed',
-        'buyout_on' => 'Buyout mode: on (has a buyout, bidding still possible)',
-        'buyout_off' => 'Buyout mode: off (bidding only)',
+        // Buyout mode is a single row in the overview; the full semantics live in
+        // master.buyout_hint (the hint next to the label).
+        'buyout_on' => 'on (biddable)',
+        'buyout_off' => 'off (bids only)',
     ],
     // Localised item_template.class names for the two filter cards; the module's own label table
     // (English) is the fallback for anything missing here.
@@ -77,10 +80,12 @@ return [
         6 => 'Artifact',
         7 => 'Heirloom',
     ],
+    // Auction-house names without the (2)/(6)/(7) suffix: those are core enum values and only
+    // cost column width in tables and selects.
     'houses' => [
-        'alliance' => 'Alliance (2)',
-        'horde' => 'Horde (6)',
-        'neutral' => 'Neutral (7)',
+        'alliance' => 'Alliance',
+        'horde' => 'Horde',
+        'neutral' => 'Neutral',
     ],
     // Money units: every copper amount on this page is displayed as gold / silver / copper
     // (the raw copper value is kept in the title tooltip, and the two editable price inputs
@@ -111,7 +116,6 @@ return [
         'buyout_title' => 'Buyout mode (applies at once)',
         'buyout_on' => 'Enable buyout',
         'buyout_off' => 'Disable buyout (bidding only)',
-        'buyout_conf' => '(:key = :value)',
         'buyout_hint' => 'Controls the shape of the entries the automatic seller creates, in the same two steps: Auctionator.Seller.BidOnly is written into this realm\'s conf (so it survives a restart) and ".auctionator buyout 0|1" is sent to this realm\'s worldserver, which the seller then follows on its very next run. Buyout on = BidOnly 0: every listing has a buyout and the start bid is derived from Auctionator.Seller.BidStartModifier. Buyout off = BidOnly 1: no buyout at all, so the computed price becomes the start bid and the entry can only be won by bidding (an entry nobody bids on expires and is recycled). This realm only; pick-list rows that name a mode explicitly are unaffected.',
         'buyout_hint_short' => 'Applies from the next seller run; pick-list rows with an explicit mode are exempt.',
     ],
@@ -139,14 +143,13 @@ return [
             . 'that already has a bid cannot be delisted or repriced - the core settles it with the bidder, which is '
             . 'selling it rather than undoing it. Both operations act on the live in-memory auction, so players see '
             . 'the result immediately.',
-        'hint_short' => 'Delist or reprice one listing at a time; it applies immediately, and a listing with a bid cannot be changed.',
         'showing' => 'Showing :shown of :total',
         'filter_from' => 'From auction id',
         'auction_id' => 'Auction id',
         'startbid' => 'Start bid',
         'buyout' => 'Buyout',
         'current_bid' => 'Current bid',
-        'bidder' => 'Highest bidder',
+        'bidder' => 'Bidder',
         'expires' => 'Expires',
         'delist' => 'Delist',
         'reprice' => 'Reprice',
@@ -177,14 +180,15 @@ return [
     'sales' => [
         'title' => 'Sale log (entries the module listed)',
         'hint' => 'The module\'s "auction successful" hook writes one row per listing it created - the automatic seller and the GM listings both - covering a buyout and a winning bid at expiry. '
+            . 'Only sales the bot/GM took part in are recorded: listings the bot put up, and listings the bot itself won; player-to-player auctions are not in here. '
             . 'The core keeps no record of a finished auction (the auctionhouse row is deleted with the settlement) and its own log_money only covers sales of 500 gold and up, so this is the only place that answers '
-            . '"who bought which item, and for how much". Player-to-player auctions are not in here.',
-        'hint_short' => 'Read-only ledger of the sales of module-listed entries, with buyer and price.',
-        'only_module' => 'Only the sales the bot/GM took part in: listings the bot put up, and listings the bot itself won.',
-        'hidden' => 'Another :count sale(s) had the bot/GM as neither seller nor buyer; they are in neither the totals above nor the list below.',
-        'hidden_unknown' => ':count of those were written before the module started recording provenance, so nothing tells whether the module listed them for a named character or they were player-to-player sales.',
-        'hidden_unknown_hint' => 'The module marks its own listings with "deposit = 0", while the core charges a player AH_MINIMUM_DEPOSIT x Rate.Auction.Deposit - with that rate at 0 a player pays a deposit of 0 as well, so player-to-player sales ended up in this table too. Newer builds record whether the listing was theirs (module_listing) right on the row, which settles it; the old rows have no such column, so the page says "unknown" instead of guessing.',
-        'deposit_rate_zero' => 'This realm\'s worldserver.conf has Rate.Auction.Deposit = 0, which is exactly that cause: with the rate at 0 the module cannot tell a player listing apart.',
+            . '"who bought which item, and for how much".',
+        'hidden' => ':count more sale(s) did not involve the bot/GM and are not counted.',
+        'hidden_unknown' => ':count of those have no provenance',
+        'hidden_unknown_hint' => 'These are rows written before the module started recording provenance, so nothing tells whether the module listed them for a named character or they were player-to-player sales. '
+            . 'The module marks its own listings with "deposit = 0", while the core charges a player AH_MINIMUM_DEPOSIT x Rate.Auction.Deposit - with that rate at 0 a player pays a deposit of 0 as well, so player-to-player sales ended up in this table too. '
+            . 'Newer builds record whether the listing was theirs (module_listing) right on the row, which settles it; the old rows have no such column, so the page says "unknown" instead of guessing.',
+        'deposit_rate_zero' => 'This realm\'s worldserver.conf has Rate.Auction.Deposit = 0, which is exactly that cause.',
         'total' => 'Sales',
         'bot_sales' => 'Bot-listed sales',
         'buyouts' => 'Bought out',
@@ -260,7 +264,7 @@ return [
     ],
     'fields' => [
         'enabled' => 'Enabled',
-        'bid_only' => 'Bidding only (buyout mode off; same as "Disable buyout" above)',
+        'bid_only' => 'Buyout mode',
         'character_id' => 'Account id (dummy session)',
         'character_guid' => 'Auction character GUID',
         'max_auctions' => 'House listing cap',
@@ -304,8 +308,8 @@ return [
         'itemclass_title' => 'Class whitelist (what may be auto-listed)',
         'itemclass_hint' => 'mod_auctionator_itemclass_config: **this table IS the whitelist** - the automatic seller only lists class/subclass pairs that have a row here, and a type without one is never listed. The quota (max_count) is the per-item listing cap in a house: **0 means this class is never listed**, 2 means one item entry may have at most 2 listings. stack_count is how many items go into one listing; 0 falls back to the item\'s own max stack. The table is re-read every seller cycle, so a change applies on the next run (one minute) without a restart.',
         'itemclass_hint_short' => 'Quota 0 = never listed; changes apply within a minute, no restart.',
-        'itemclass_totals' => 'Showing :shown of :total row(s), :listed of them auto-listed',
-        'itemclass_class_state' => '(:listed of :rows subclasses auto-listed)',
+        'itemclass_totals' => ':total row(s), :listed auto-listed',
+        'itemclass_class_state' => '(:listed/:rows listed)',
         'class_quota' => 'Class quota',
         'apply_to_class' => 'Apply to whole class',
         'class_no_rows' => ':class has no rows at all, so the whole class is outside the whitelist (never listed). Pick a quota above 0 and press Apply to whole class to create a row for every subclass the module has a label for.',
@@ -314,8 +318,8 @@ return [
         'quality_hint' => 'mod_auctionator_quality_config: a quality marked **not listed** is never auto-listed, while a quality with **no row** is allowed - so an empty table behaves exactly like before this option existed. The seller re-reads it every cycle, so a change applies on the next run without a restart. Manual listings (the GM pick list and the GM add form) are not affected.',
         'quality_hint_short' => 'No row = allowed; a quality marked not listed is never auto-listed.',
         'quality' => 'Quality',
-        'quality_items' => 'item_template entries',
-        'quality_state' => 'Auto-listed',
+        'quality_items' => 'Items',
+        'quality_state' => 'State',
         'quality_default' => '(no row: allowed)',
         'quality_table_missing' => 'Table mod_auctionator_quality_config is missing, so the quality filter is unavailable. Run the module\'s data/sql/db-world/updates/2026_09_24_01_quality_config.sql against this realm\'s world database first.',
         'table_missing' => 'Table :table is missing; apply the module\'s SQL updates first.',
@@ -341,10 +345,10 @@ return [
         'gm_hint_short' => 'Each row lists with its own mode; price is per unit, whole stack = unit x stack.',
         'mode' => 'Listing mode',
         'mode_choose' => '— choose —',
-        'bid_price' => 'Start bid (copper/unit)',
-        'buyout_price' => 'Buyout (copper/unit)',
-        'buyout_price_short' => 'Buyout (copper/unit, 0 = none)',
-        'listing_totals' => 'Whole stack (start / buyout)',
+        'bid_price' => 'Start bid/unit',
+        'buyout_price' => 'Buyout/unit',
+        'buyout_price_short' => 'Buyout/unit (0 = none)',
+        'listing_totals' => 'Whole stack (start/buyout)',
         'totals_start' => 'Start',
         'totals_buyout' => 'Buyout',
         'legacy_note' => 'Prices are decided by Auctionator.Seller.BidOnly',
@@ -354,7 +358,7 @@ return [
         'stack' => 'Stack',
         'hours' => 'Hours',
         'house' => 'House',
-        'owner' => 'Owner GUID',
+        'owner' => 'Owner',
         'enabled' => 'Enabled',
         'enable' => 'Enable',
         'disable' => 'Disable',
@@ -386,9 +390,8 @@ return [
         'items' => 'Item ids (comma separated)',
         'add' => 'List (add)',
         'add_hint' => 'Automatic listings always last :hours hours; only GM listings accept a custom duration.',
-        'add_hint_short' => 'The seller\'s duration is fixed; only this form can set one.',
         'add_owner_hint' => 'Owner "bot" recycles the sale money; a character guid mails it to that character. "me" is not offered: the panel drives the worldserver over SOAP, where the console handler has no player session, so it would always be refused.',
-        'add_owner_hint_short' => '"bot" recycles the gold; a character GUID mails it to that character.',
+        'add_owner_hint_short' => 'Owner: bot = recycle the gold, character GUID = mail it there.',
         'market_title' => 'Market data maintenance',
         'marketimport' => 'Import CSV now',
         'marketscan' => 'Sample this realm\'s auction house → market prices',

@@ -121,8 +121,10 @@ $gmPriceCell = static function (int $copper) use ($formatMoney): string {
         . htmlspecialchars($formatMoney($copper), ENT_QUOTES, 'UTF-8') . '</span>';
 };
 // 行内价格输入框的换算提示（JS 按输入实时刷新，初始值由服务端渲染）。
+// 单独成行（.au-hint-line）：与输入框并排会把两列价格各撑宽约 90px，
+// 那部分宽度正是这张表溢出的来源。
 $copperHint = static function (string $field, int $copper) use ($formatMoney): string {
-    return '<span class="muted small" data-au-copper-hint="' . htmlspecialchars($field, ENT_QUOTES, 'UTF-8') . '">'
+    return '<span class="muted small au-hint-line" data-au-copper-hint="' . htmlspecialchars($field, ENT_QUOTES, 'UTF-8') . '">'
         . ($copper > 0 ? htmlspecialchars($formatMoney($copper), ENT_QUOTES, 'UTF-8') : '') . '</span>';
 };
 // guid -> 角色链接；角色行不存在（被删号）时退化成"角色 #N（已不存在）"，仍然可点。
@@ -152,6 +154,13 @@ $qualityLabel = static function (int $quality): string {
 // 样式也只有一份（app-core.css 的 .item-name-link），别在本模块再定义一套。
 // $canEditContent 决定给不给链接：没 content.view 就给同色的纯文本，而不是必然被拒的链接。
 //
+// 卡片标题：长解释挂成标题旁的 ⓘ，正文只保留必须当场看见的规则（"配额 0 = 不上架"这类），
+// 与标题或分区说明重复的解释一律进 ⓘ，不在正文里说第二遍。
+$cardTitle = static function (string $title, ?string $hint = null): string {
+    return '<h3>' . htmlspecialchars($title)
+        . ($hint !== null && trim($hint) !== '' ? panel_hint($hint) : '')
+        . '</h3>';
+};
 // 类别 / 子类改成下拉：让 GM 从"4 / 7"这种数字里认物品类型不现实，ItemMeta 本来就有本地化名。
 // 子类依赖类别，所以整张表交给前端做级联（服务端先渲染默认类别的那一份，禁 JS 也能用）。
 $classOptions = \Acme\Panel\Core\ItemMeta::classes();
@@ -159,6 +168,18 @@ $subclassMap = [];
 foreach (array_keys($classOptions) as $classIdForMap) {
     $subclassMap[$classIdForMap] = \Acme\Panel\Core\ItemMeta::subclassesOf($classIdForMap);
 }
+// 表格里的子类别名查面板的本地化表（app.item.meta.subclasses），与上面两个下拉同源；
+// 模块自己的标签表只有英文（"item enhancement" 这种），只在面板查不到时兜底。
+// 这里直接用 subclassName() 而不是从 $subclassMap 里取：模块表里可能有面板子类别枚举之外的
+// 旧行（武器 11/12 这种 Exotic 占位），它们的本地化名只在这张表里用得到。
+$subclassLabel = static function (int $class, int $subclass, string $moduleLabel): string {
+    $localized = \Acme\Panel\Core\ItemMeta::subclassName($class, $subclass);
+    if ($localized !== '#' . $subclass) {
+        return $localized;
+    }
+
+    return $moduleLabel !== '' ? $moduleLabel : '#' . $subclass;
+};
 // bonding 是"最低绑定门槛"，不是绑定类型枚举：0 = 不额外约束，1 = 拾取绑定（但 BoP 恒被排除），
 // 2 = 装备绑定及以上，3 = 使用绑定及以上。见模块的 conf/mod_auctionator.conf.dist。
 $bondingOptions = [
@@ -192,7 +213,7 @@ $bondingOptions = [
     <button type="button" role="tab" id="au-tab-stock" class="au-tab" data-au-tab="stock" aria-selected="false" aria-controls="au-panel-stock-1 au-panel-stock-2" tabindex="-1"><?= htmlspecialchars(__('app.auctionator.tabs.stock')) ?></button>
     <button type="button" role="tab" id="au-tab-filters" class="au-tab" data-au-tab="filters" aria-selected="false" aria-controls="au-panel-filters" tabindex="-1"><?= htmlspecialchars(__('app.auctionator.tabs.filters')) ?></button>
     <button type="button" role="tab" id="au-tab-settings" class="au-tab" data-au-tab="settings" aria-selected="false" aria-controls="au-panel-settings" tabindex="-1"><?= htmlspecialchars(__('app.auctionator.tabs.settings')) ?></button>
-    <button type="button" role="tab" id="au-tab-maintenance" class="au-tab" data-au-tab="maintenance" aria-selected="false" aria-controls="au-panel-maintenance-1 au-panel-maintenance-2" tabindex="-1"><?= htmlspecialchars(__('app.auctionator.tabs.maintenance')) ?></button>
+    <button type="button" role="tab" id="au-tab-maintenance" class="au-tab" data-au-tab="maintenance" aria-selected="false" aria-controls="au-panel-maintenance-1" tabindex="-1"><?= htmlspecialchars(__('app.auctionator.tabs.maintenance')) ?></button>
   </div>
 
   <div class="au-feedback panel-flash" id="auFeedback" hidden></div>
@@ -210,17 +231,18 @@ $bondingOptions = [
   <!-- ==== overview：本区机器人现在是什么状态 -->
   <section class="au-panel" data-au-panel="overview" id="au-panel-overview" role="tabpanel" aria-labelledby="au-tab-overview">
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.overview_lead')) ?></p>
-    <div class="au-grid au-grid--cards">
+    <?php // 三张只读统计卡在宽屏下一行摆开：各自的 kv 行很短，占一整行会让取值贴到卡片最右边 ?>
+    <div class="au-grid au-grid--cards au-grid--overview">
       <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.master.title')) ?></h3>
+        <?= $cardTitle(__('app.auctionator.master.title')) ?>
         <dl class="au-kv">
           <dt><?= htmlspecialchars(__('app.auctionator.fields.enabled')) ?></dt>
           <dd><span class="<?= $toneClass(((int) ($typed['Auctionator.Enabled'] ?? 0)) === 1 ? 'ok' : 'muted') ?>"><?= htmlspecialchars(((int) ($typed['Auctionator.Enabled'] ?? 0)) === 1 ? __('app.auctionator.state.on') : __('app.auctionator.state.off')) ?></span></dd>
-          <dt><?= htmlspecialchars(__('app.auctionator.fields.bid_only')) ?></dt>
+          <?php // 买断模式：只留短取值，语义与对应的 conf 键都在 ⓘ 里（卡片只占 1/3 行宽） ?>
+          <dt><?= htmlspecialchars(__('app.auctionator.fields.bid_only')) ?><?= panel_hint(__('app.auctionator.master.buyout_hint')) ?></dt>
           <dd>
             <?php $bidOnly = (int) ($typed['Auctionator.Seller.BidOnly'] ?? 0) === 1; ?>
             <span class="<?= $toneClass($bidOnly ? 'warn' : 'ok') ?>"><?= htmlspecialchars($bidOnly ? __('app.auctionator.state.buyout_off') : __('app.auctionator.state.buyout_on')) ?></span>
-            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.master.buyout_conf', ['key' => 'Auctionator.Seller.BidOnly', 'value' => $bidOnly ? '1' : '0'])) ?></span>
           </dd>
           <dt><?= htmlspecialchars(__('app.auctionator.fields.character_id')) ?></dt>
           <dd><?= htmlspecialchars((string) ($typed['Auctionator.CharacterId'] ?? '--')) ?></dd>
@@ -259,7 +281,7 @@ $bondingOptions = [
       </div>
 
       <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.listings.title')) ?></h3>
+        <?= $cardTitle(__('app.auctionator.listings.title')) ?>
         <?php if (!($listings['ok'] ?? false)): ?>
           <?php // 未部署区（not_deployed）与"读取失败"分开说，避免让人以为面板或库坏了 ?>
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listings.' . ((string) ($listings['error'] ?? '') === 'not_deployed' ? 'not_deployed' : 'unavailable'))) ?></p>
@@ -291,7 +313,7 @@ $bondingOptions = [
       </div>
 
       <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.market.title')) ?></h3>
+        <?= $cardTitle(__('app.auctionator.market.title')) ?>
         <?php if (!($market['ok'] ?? false)): ?>
           <p class="alert au-warning small">
             <?= htmlspecialchars(__('app.auctionator.market.' . match ((string) ($market['error'] ?? '')) {
@@ -326,7 +348,7 @@ $bondingOptions = [
     </div>
 
     <div class="au-card au-card--wide">
-      <h3><?= htmlspecialchars(__('app.auctionator.log.title')) ?></h3>
+      <?= $cardTitle(__('app.auctionator.log.title')) ?>
       <p class="muted small"><?= htmlspecialchars((string) ($paths['log_file'] ?? '')) ?></p>
       <?php if ($logEntries === []): ?>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.log.empty')) ?></p>
@@ -341,8 +363,7 @@ $bondingOptions = [
   <section class="au-panel" data-au-panel="live" id="au-panel-live" role="tabpanel" aria-labelledby="au-tab-live" hidden>
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.live_lead')) ?></p>
     <div class="au-card au-card--wide">
-      <h3><?= htmlspecialchars(__('app.auctionator.listing_detail.title')) ?></h3>
-      <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.hint_short')) ?><?= panel_hint(__('app.auctionator.listing_detail.hint')) ?></p>
+      <?= $cardTitle(__('app.auctionator.listing_detail.title'), __('app.auctionator.listing_detail.hint')) ?>
 
       <?php if (!($listings['ok'] ?? false)): ?>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.listings.' . ((string) ($listings['error'] ?? '') === 'not_deployed' ? 'not_deployed' : 'unavailable'))) ?></p>
@@ -381,7 +402,6 @@ $bondingOptions = [
                   <input type="checkbox" data-au-select-all aria-label="<?= htmlspecialchars(__('app.auctionator.listing_detail.select_all')) ?>">
                 </th>
                 <th><?= htmlspecialchars(__('app.auctionator.listing_detail.auction_id')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
                 <th><?= htmlspecialchars(__('app.auctionator.listing_detail.startbid')) ?></th>
@@ -413,8 +433,8 @@ $bondingOptions = [
                   <?php endif; ?>
                 </td>
                 <td><?= (int) ($row['id'] ?? 0) ?></td>
-                <td><?= (int) ($row['item'] ?? 0) ?></td>
-                <td><?= item_name_link(
+                <?php // 物品 ID 与物品名同格：单独一列只为放一个数字，多出来的宽度全是空白 ?>
+                <td><span class="muted small"><?= (int) ($row['item'] ?? 0) ?></span> <?= item_name_link(
                     (int) ($row['item'] ?? 0),
                     (string) ($row['name'] ?? ''),
                     isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
@@ -461,7 +481,7 @@ $bondingOptions = [
               </tr>
             <?php endforeach; ?>
             <?php if ($listingItems === []): ?>
-              <tr class="js-empty-row"><td colspan="12" class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.empty')) ?></td></tr>
+              <tr class="js-empty-row"><td colspan="11" class="muted small"><?= htmlspecialchars(__('app.auctionator.listing_detail.empty')) ?></td></tr>
             <?php endif; ?>
             </tbody>
           </table>
@@ -495,8 +515,7 @@ $bondingOptions = [
       // —— 核心不保留已结束的拍卖，它自己的 log_money 只覆盖 500 金以上的成交。只读。
     ?>
     <div class="au-card au-card--wide">
-      <h3><?= htmlspecialchars(__('app.auctionator.sales.title')) ?></h3>
-      <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hint_short')) ?><?= panel_hint(__('app.auctionator.sales.hint')) ?></p>
+      <?= $cardTitle(__('app.auctionator.sales.title'), __('app.auctionator.sales.hint')) ?>
 
       <?php if (!$supported): ?>
         <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.not_deployed')) ?></p>
@@ -520,7 +539,6 @@ $bondingOptions = [
           <dt><?= htmlspecialchars(__('app.auctionator.sales.window')) ?></dt>
           <dd><?= htmlspecialchars(((string) ($sales['oldest'] ?? '') ?: '--') . ' → ' . ((string) ($sales['newest'] ?? '') ?: '--')) ?></dd>
         </dl>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.only_module')) ?></p>
         <?php
           // 只说实话：被排除掉多少行，其中多少行的来源模块从来没记过。
           //
@@ -528,17 +546,22 @@ $bondingOptions = [
           // 它的判据是"押金 = 0"，而核心给玩家挂单算押金用的是
           // AH_MINIMUM_DEPOSIT × Rate.Auction.Deposit —— 该费率为 0 时玩家的押金也是 0。
           // 升级后写入的行带 module_listing，来源确定；旧行没有，就照实说"无法判断"。
+          //
+          // 只留一行"有多少条没算进来"，来龙去脉（押金判据、旧记录没有来源列）全在 ⓘ 里。
           $hiddenSales = (int) ($sales['hidden'] ?? 0);
           $hiddenUnknown = (int) ($sales['hidden_unknown'] ?? 0);
+          $depositRateZero = ($sales['deposit_marker_sound'] ?? null) === false;
         ?>
         <?php if ($hiddenSales > 0): ?>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hidden', ['count' => $hiddenSales])) ?></p>
-        <?php endif; ?>
-        <?php if ($hiddenUnknown > 0): ?>
-          <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.hidden_unknown', ['count' => $hiddenUnknown])) ?><?= panel_hint(__('app.auctionator.sales.hidden_unknown_hint')) ?></p>
-        <?php endif; ?>
-        <?php if (($sales['deposit_marker_sound'] ?? null) === false && $hiddenUnknown > 0): ?>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.deposit_rate_zero')) ?></p>
+          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.hidden', ['count' => $hiddenSales])) ?>
+            <?php if ($hiddenUnknown > 0): ?>
+              <span class="au-badge au-badge--warn"><?= htmlspecialchars(__('app.auctionator.sales.hidden_unknown', ['count' => $hiddenUnknown])) ?></span>
+              <?= panel_hint(
+                  __('app.auctionator.sales.hidden_unknown_hint')
+                  . ($depositRateZero ? ' ' . __('app.auctionator.sales.deposit_rate_zero') : '')
+              ) ?>
+            <?php endif; ?>
+          </p>
         <?php endif; ?>
 
         <div class="au-actions">
@@ -638,7 +661,7 @@ $bondingOptions = [
   <section class="au-panel" data-au-panel="settings" id="au-panel-settings" role="tabpanel" aria-labelledby="au-tab-settings" hidden>
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.settings_lead')) ?></p>
     <div class="au-card au-card--wide">
-      <h3><?= htmlspecialchars(__('app.auctionator.settings.title')) ?></h3>
+      <?= $cardTitle(__('app.auctionator.settings.title')) ?>
       <p class="muted small">
         <?= htmlspecialchars(__('app.auctionator.settings.path', ['path' => (string) ($paths['conf_file'] ?? '')])) ?>
         <?php if (!($conf['exists'] ?? false)): ?>
@@ -701,10 +724,11 @@ $bondingOptions = [
   <!-- ==== filters：机器人被允许卖什么 -->
   <section class="au-panel" data-au-panel="filters" id="au-panel-filters" role="tabpanel" aria-labelledby="au-tab-filters" hidden>
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.filters_lead')) ?></p>
-    <div class="au-grid au-grid--cards">
-      <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.policy.disabled_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.disabled_hint_short')) ?><?= panel_hint(__('app.auctionator.policy.disabled_hint')) ?></p>
+    <div class="au-grid au-grid--cards au-grid--filters">
+      <?php // 黑名单是长列表，独占一行（宽出来的宽度给物品名那列）；类别与品质并排，各自贴着表宽。 ?>
+      <div class="au-card au-card--wide">
+        <?= $cardTitle(__('app.auctionator.policy.disabled_title'), __('app.auctionator.policy.disabled_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.disabled_hint_short')) ?></p>
         <?php $totals = is_array($policy['totals'] ?? null) ? $policy['totals'] : []; ?>
         <?php if ($tables['disabled_items']): ?>
           <div class="au-actions">
@@ -761,9 +785,9 @@ $bondingOptions = [
         <?php endif; ?>
       </div>
 
-      <div class="au-card au-card--wide">
-        <h3><?= htmlspecialchars(__('app.auctionator.policy.itemclass_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint_short')) ?><?= panel_hint(__('app.auctionator.policy.itemclass_hint')) ?></p>
+      <div class="au-card">
+        <?= $cardTitle(__('app.auctionator.policy.itemclass_title'), __('app.auctionator.policy.itemclass_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_hint_short')) ?></p>
         <?php if ($tables['itemclass_config']): ?>
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.itemclass_totals', [
               'shown' => count($policy['itemclass'] ?? []),
@@ -797,6 +821,7 @@ $bondingOptions = [
               <button type="submit" class="btn btn-sm"><?= htmlspecialchars(__('app.auctionator.policy.save')) ?></button>
             </form>
           <?php endif; ?>
+          <?php // 这张表只有 6 列，同样收缩到表格本身，不在卡片右侧留一条空边框 ?>
           <div class="au-table-wrap">
             <table class="au-table" data-au-searchable>
               <thead>
@@ -849,7 +874,7 @@ $bondingOptions = [
                   <?php $rowListed = (int) ($row['max_count'] ?? 0) > 0; ?>
                   <tr data-au-itemclass="<?= (int) ($row['class'] ?? 0) ?>:<?= (int) ($row['subclass'] ?? 0) ?>">
                     <td></td>
-                    <td><?= htmlspecialchars((string) ($row['subclass_label'] ?? '')) ?> <span class="muted small">#<?= (int) ($row['subclass'] ?? 0) ?></span></td>
+                    <td class="au-cell-wrap"><?= htmlspecialchars($subclassLabel((int) ($row['class'] ?? 0), (int) ($row['subclass'] ?? 0), (string) ($row['subclass_label'] ?? ''))) ?> <span class="muted small">#<?= (int) ($row['subclass'] ?? 0) ?></span></td>
                     <td>
                       <?php if ($canManage && $supported): ?>
                         <input class="au-input au-input--tiny" type="number" min="0" max="3" data-au-field-name="bonding" value="<?= (int) ($row['bonding'] ?? 0) ?>">
@@ -882,14 +907,15 @@ $bondingOptions = [
       </div>
 
       <?php // 品质白名单：模块的候选查询直接读这张表，所以热生效、不必重启 ?>
-      <div class="au-card au-card--wide">
-        <h3><?= htmlspecialchars(__('app.auctionator.policy.quality_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_hint_short')) ?><?= panel_hint(__('app.auctionator.policy.quality_hint')) ?></p>
+      <div class="au-card">
+        <?= $cardTitle(__('app.auctionator.policy.quality_title'), __('app.auctionator.policy.quality_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.quality_hint_short')) ?></p>
         <?php if (!($tables['quality_config'] ?? false)): ?>
           <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.policy.quality_table_missing')) ?></p>
         <?php else: ?>
+          <?php // 4 列、每格几个字：允许折行，卡片就能贴到并排栅格给的那点宽度 ?>
           <div class="au-table-wrap">
-            <table class="au-table" data-au-searchable>
+            <table class="au-table au-table--wrap" data-au-searchable>
               <thead>
                 <tr>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.quality')) ?></th>
@@ -930,8 +956,8 @@ $bondingOptions = [
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.stock_lead')) ?></p>
     <div class="au-grid au-grid--cards">
       <div class="au-card au-card--wide">
-        <h3><?= htmlspecialchars(__('app.auctionator.policy.gm_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_hint_short')) ?><?= panel_hint(__('app.auctionator.policy.gm_hint')) ?></p>
+        <?= $cardTitle(__('app.auctionator.policy.gm_title'), __('app.auctionator.policy.gm_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_hint_short')) ?></p>
         <?php if ($tables['gm_list']): ?>
           <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.gm_totals', [
               'shown' => count($policy['gm_list'] ?? []),
@@ -1012,7 +1038,7 @@ $bondingOptions = [
             <table class="au-table" data-au-searchable>
               <thead>
                 <tr>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th>
+                  <?php // 物品 ID 与物品名同格，与挂单明细一致 ?>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></th>
                   <th><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></th>
@@ -1030,8 +1056,7 @@ $bondingOptions = [
               <?php foreach (($policy['gm_list'] ?? []) as $row): ?>
                 <?php $listing = $gmListing($row); ?>
                 <tr>
-                  <td><?= (int) ($row['item'] ?? 0) ?></td>
-                  <td><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                  <td><span class="muted small"><?= (int) ($row['item'] ?? 0) ?></span> <?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
                   <td>
                     <span class="au-badge au-badge--<?= $listing['mode'] === 'legacy' ? 'muted' : 'ok' ?>"><?= htmlspecialchars($modeLabel($listing['mode'])) ?></span>
                     <?php if ($listing['mode'] === 'legacy'): ?>
@@ -1061,7 +1086,7 @@ $bondingOptions = [
                 </tr>
               <?php endforeach; ?>
               <?php if (($policy['gm_list'] ?? []) === []): ?>
-                <tr class="js-empty-row"><td colspan="12" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.empty')) ?></td></tr>
+                <tr class="js-empty-row"><td colspan="11" class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.empty')) ?></td></tr>
               <?php endif; ?>
               </tbody>
             </table>
@@ -1071,18 +1096,19 @@ $bondingOptions = [
     </div>
   </section>
 
-  <!-- ==== maintenance（只读查询 / 运行时开关 / 市场数据维护）；上架与补货夹在中间，见下 -->
+  <!-- ==== maintenance：只读查询 / 运行时开关 / 市场数据维护 -->
   <section class="au-panel" data-au-panel="maintenance" id="au-panel-maintenance-1" role="tabpanel" aria-labelledby="au-tab-maintenance" hidden>
     <p class="au-panel__lead"><?= htmlspecialchars(__('app.auctionator.tabs.maintenance_lead')) ?></p>
+    <?php // 两张卡的控件都很小，并排两列就够，不必各占一整行（右边会空一大片） ?>
     <div class="au-grid au-grid--cards">
       <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.actions.read_title')) ?></h3>
+        <?= $cardTitle(__('app.auctionator.actions.read_title')) ?>
         <div class="au-actions">
           <button type="button" class="btn outline" data-au-action="status"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.status')) ?></button>
           <button type="button" class="btn outline" data-au-action="market"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.market')) ?></button>
         </div>
-        <h3><?= htmlspecialchars(__('app.auctionator.actions.runtime_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.runtime_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.runtime_hint')) ?></p>
+        <?= $cardTitle(__('app.auctionator.actions.runtime_title'), __('app.auctionator.actions.runtime_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.runtime_hint_short')) ?></p>
         <div class="au-actions">
           <select class="au-input" data-au-action-field="target">
             <?php foreach (['neutralseller', 'allianceseller', 'hordeseller', 'neutralbidder', 'alliancebidder', 'hordebidder', 'all'] as $target): ?>
@@ -1097,6 +1123,27 @@ $bondingOptions = [
           <button type="button" class="btn outline" data-au-action="auctionspercycle"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.auctionspercycle')) ?></button>
         </div>
       </div>
+
+      <div class="au-card">
+        <?= $cardTitle(__('app.auctionator.actions.market_title'), __('app.auctionator.actions.market_hint')) ?>
+        <?php // 采样本区拍卖行：聚合完全在模块里的一条 SQL 里做，面板只负责触发（SOAP） ?>
+        <div class="au-actions">
+          <button type="button" class="btn primary" data-au-action="marketscan"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketscan')) ?></button>
+          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.marketscan_hint')) ?></span>
+        </div>
+        <div class="au-actions">
+          <button type="button" class="btn outline" data-au-action="marketimport"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketimport')) ?></button>
+          <label class="au-checkbox">
+            <input type="checkbox" data-au-action-field="force">
+            <span>force</span>
+          </label>
+        </div>
+        <div class="au-actions">
+          <input class="au-input" type="number" min="1" max="3650" value="30" data-au-action-field="days" title="<?= htmlspecialchars(__('app.auctionator.market.retention_days')) ?>">
+          <button type="button" class="btn outline warn" data-au-action="marketprune"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketprune')) ?></button>
+        </div>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.market_hint_short')) ?></p>
+      </div>
     </div>
   </section>
 
@@ -1104,8 +1151,8 @@ $bondingOptions = [
   <section class="au-panel" data-au-panel="stock" id="au-panel-stock-2" role="tabpanel" aria-labelledby="au-tab-stock" hidden>
     <div class="au-grid au-grid--cards">
       <div class="au-card au-card--wide">
-        <h3><?= htmlspecialchars(__('app.auctionator.actions.gm_title')) ?></h3>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.gm_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.gm_hint')) ?></p>
+        <?= $cardTitle(__('app.auctionator.actions.gm_title'), __('app.auctionator.actions.gm_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.gm_hint_short')) ?></p>
 
         <div class="au-actions">
           <select class="au-input" data-au-action-field="house" title="<?= htmlspecialchars(__('app.auctionator.policy.house')) ?>">
@@ -1157,46 +1204,18 @@ $bondingOptions = [
               <input class="au-input" type="number" min="0" name="price"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
             <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></span>
               <input class="au-input" type="number" min="1" name="stack" value="1"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
-            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></span>
+            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?><?= panel_hint(__('app.auctionator.actions.add_hint', ['hours' => (int) ($notes['listing_hours'] ?? 12)])) ?></span>
               <input class="au-input" type="number" min="1" max="720" name="hours" value="48"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
-            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?></span>
+            <label class="au-form__row"><span class="au-form__label"><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?><?= panel_hint(__('app.auctionator.actions.add_owner_hint')) ?></span>
               <input class="au-input" type="text" name="owner" placeholder="bot"<?= $canControl && $supported ? '' : ' disabled' ?>></label>
           </div>
           <p class="muted small" data-au-listing-preview></p>
           <div class="au-form__actions">
             <button type="submit" class="btn primary"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.add')) ?></button>
-            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.add_hint', ['hours' => (int) ($notes['listing_hours'] ?? 12)])) ?></span>
+            <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint_short')) ?></span>
           </div>
-          <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.add_owner_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.add_owner_hint')) ?></p>
         </form>
       </div>
-    </div>
-  </section>
-
-  <!-- ==== maintenance（续）：市场数据维护 -->
-  <section class="au-panel" data-au-panel="maintenance" id="au-panel-maintenance-2" role="tabpanel" aria-labelledby="au-tab-maintenance" hidden>
-    <div class="au-grid au-grid--cards">
-      <div class="au-card">
-        <h3><?= htmlspecialchars(__('app.auctionator.actions.market_title')) ?></h3>
-        <?php // 采样本区拍卖行：聚合完全在模块里的一条 SQL 里做，面板只负责触发（SOAP） ?>
-        <div class="au-actions">
-          <button type="button" class="btn primary" data-au-action="marketscan"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketscan')) ?></button>
-          <span class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.marketscan_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.marketscan_hint')) ?></span>
-        </div>
-        <div class="au-actions">
-          <button type="button" class="btn outline" data-au-action="marketimport"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketimport')) ?></button>
-          <label class="au-checkbox">
-            <input type="checkbox" data-au-action-field="force">
-            <span>force</span>
-          </label>
-        </div>
-        <div class="au-actions">
-          <input class="au-input" type="number" min="1" max="3650" value="30" data-au-action-field="days" title="<?= htmlspecialchars(__('app.auctionator.market.retention_days')) ?>">
-          <button type="button" class="btn outline warn" data-au-action="marketprune"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.actions.marketprune')) ?></button>
-        </div>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.actions.market_hint_short')) ?><?= panel_hint(__('app.auctionator.actions.market_hint')) ?></p>
-      </div>
-
     </div>
   </section>
 

@@ -13,18 +13,19 @@ return [
         'label' => '拍卖机器人页面分区',
         // 分区按「GM 要做的事」命名，每个 tab 顶部的 lead 一句话说明这里能干什么。
         // 旧名字（状态 / 挂单 / 配置 / 物品策略 / 操作）是按数据表切的，"东西找不到"就是从这儿来的。
+        // lead 只留一行。写不下的细节属于卡片标题旁的 ⓘ——正文里再说一遍就是废话。
         'overview' => '总览',
-        'overview_lead' => '本区机器人开着没有、挂了多少单、市场数据新不新，以及模块日志的尾部。这里都是只读的，要动手改东西去别的分区。',
+        'overview_lead' => '本区机器人状态、挂单量、市场数据新旧与日志尾部，全部只读。',
         'live' => '在售',
-        'live_lead' => '机器人此刻在卖的东西：逐条改价或下架；下面是已经卖掉的流水。',
+        'live_lead' => '机器人此刻在卖的东西，以及已经卖掉的流水。',
         'stock' => '上架与补货',
-        'stock_lead' => '精选清单决定机器人要长期反复卖哪些特殊物品；「补货」按清单一次性上架，同一分区后段的表单用来临时上架清单之外的物品。',
+        'stock_lead' => '精选清单决定机器人长期反复卖什么；补货按清单一次性上架，后面的表单临时上架清单外的东西。',
         'filters' => '筛选策略',
-        'filters_lead' => '决定机器人被允许卖什么：黑名单、类别白名单、品质开关。这三张表每个卖家周期都会重读，改完即生效。',
+        'filters_lead' => '决定机器人被允许卖什么：黑名单、类别白名单、品质开关。',
         'settings' => '配置',
-        'settings_lead' => '直接编辑本区的 mod_auctionator.conf：只改写动过的键，原文件留 .agmp.bak。保存后需重启 worldserver 才生效。',
+        'settings_lead' => '直接编辑本区的 mod_auctionator.conf，只改写动过的键。',
         'maintenance' => '维护',
-        'maintenance_lead' => '只读查询、只改内存的运行时开关，以及市场价的导入 / 采样 / 清理。命令输出固定在页面底部，任何分区触发的命令都落在那里。',
+        'maintenance_lead' => '只读查询、只改内存的运行时开关，以及市场价的导入 / 采样 / 清理。',
     ],
     // 共用的物品选择器（Panel.itemPicker）在两处的提示语：单选的表单和多选的"临时上架"表单
     'picker' => [
@@ -40,8 +41,9 @@ return [
         'off' => '关',
         'listed' => '上架',
         'not_listed' => '不上架',
-        'buyout_on' => '买断模式：开（有买断价，也可以竞拍）',
-        'buyout_off' => '买断模式：关（只保留竞价）',
+        // 买断模式在总览里只占一行，两种取值的完整语义放 master.buyout_hint（ⓘ）。
+        'buyout_on' => '开（可竞拍）',
+        'buyout_off' => '关（只竞拍）',
     ],
     // 物品类别（item_template.class）的中文名，用于两张筛选卡片；缺哪个就用模块标签表里的英文名。
     'types' => [
@@ -74,10 +76,11 @@ return [
         6 => '神器',
         7 => '传家宝',
     ],
+    // 拍卖行的中文名：不带 (2)/(6)/(7) 后缀——那是核心的枚举值，下拉框和表格列里只会白占宽度。
     'houses' => [
-        'alliance' => '联盟 (2)',
-        'horde' => '部落 (6)',
-        'neutral' => '中立 (7)',
+        'alliance' => '联盟',
+        'horde' => '部落',
+        'neutral' => '中立',
     ],
     // 金额单位：页面里所有铜币数值都按"金 / 银 / 铜"显示，原始铜币只留在 title 提示里
     // （输入框必须收铜币，所以那里另配一行换算显示）。
@@ -107,7 +110,6 @@ return [
         'buyout_title' => '买断模式（立即生效）',
         'buyout_on' => '开启买断',
         'buyout_off' => '关闭买断（只保留竞价）',
-        'buyout_conf' => '（:key = :value）',
         'buyout_hint' => '控制自动卖家新建条目的形态，同样两步：把 Auctionator.Seller.BidOnly 写进本区 conf（重启后仍保持），再向本区 worldserver 发 .auctionator buyout 0|1，卖家下一轮就按新值上架。开启买断 = BidOnly 0：条目带一口价，起拍价由 Auctionator.Seller.BidStartModifier 推导；关闭买断 = BidOnly 1：完全不设一口价，算出来的价格直接成为起拍价，只能靠竞拍成交（无人出价则过期回收）。只影响本区；条目策略里显式选了“一口价/竞拍”的 gm_list 行不受影响。',
         'buyout_hint_short' => '卖家下一轮生效；清单里指定模式的行不受影响。',
     ],
@@ -132,7 +134,6 @@ return [
             . '下架会把该条交给核心的到期流程：物品按邮件退回所有者，机器人自己的拍卖邮件会被回收（等于销毁）。'
             . '已经有人出价的挂单不能下架也不能改价——核心会和出价人结算，那等于卖掉而不是撤回。'
             . '这两个操作都在内存中的挂单上执行，玩家立刻看到结果。',
-        'hint_short' => '逐条下架或改价，立即生效；有出价的挂单不可改动。',
         'showing' => '显示 :shown 条，共 :total 条',
         'filter_from' => '从挂单 ID',
         'auction_id' => '挂单 ID',
@@ -170,14 +171,16 @@ return [
     'sales' => [
         'title' => '成交记录（模块上架的条目）',
         'hint' => '模块的"拍卖成功"钩子为每一条自己创建的挂单写一行：自动卖家与 GM 上架都包括，一口价买走和到期被最高出价买走都算。'
+            . '只记录机器人/GM 参与过的成交——机器人上架的，以及机器人自己拍下的；玩家与玩家之间的拍卖不在其中。'
             . '核心不会保留已结束的拍卖（auctionhouse 行随结算删除），它自己的 log_money 只在成交价 ≥ 500 金时记录，所以这里是唯一能回答'
-            . '"谁买走了哪个物品、花了多少"的地方。玩家与玩家之间的拍卖不在其中。',
-        'hint_short' => '只读流水：模块自己上架条目的成交，含买家与成交价。',
-        'only_module' => '只记录机器人/GM 参与过的成交：机器人上架的、以及机器人自己拍下的。',
-        'hidden' => '另有 :count 条成交里机器人/GM 既不是卖家也不是买家，未计入上面的统计，也不在下面的列表里。',
-        'hidden_unknown' => '其中 :count 条是模块升级前写入的旧记录，没有来源标记：无法判断它们是模块按「指定角色」代别人上架的，还是玩家之间的成交。',
-        'hidden_unknown_hint' => '模块用"押金 = 0"标记自己创建的上架，而核心给玩家挂单算押金用的是 AH_MINIMUM_DEPOSIT × Rate.Auction.Deposit：该费率为 0 时玩家的押金同样是 0，于是玩家之间的成交也会被记进这张表。新版本模块会把"这条上架是不是自己创建的"直接记进记录（module_listing），来源就确定了；旧记录没有这一列，只能如实说无法判断。',
-        'deposit_rate_zero' => '本区 worldserver.conf 的 Rate.Auction.Deposit = 0，正是上一条的来源：该费率为 0 时模块区分不出玩家挂单。',
+            . '"谁买走了哪个物品、花了多少"的地方。',
+        'hidden' => '另有 :count 条成交与机器人/GM 无关，未计入。',
+        'hidden_unknown' => '其中 :count 条来源无法判断',
+        'hidden_unknown_hint' => '这些是模块升级前写入的旧记录，没有来源标记：判断不出它们是模块按「指定角色」代别人上架的，还是玩家之间的成交。'
+            . '模块用"押金 = 0"标记自己创建的上架，而核心给玩家挂单算押金用的是 AH_MINIMUM_DEPOSIT × Rate.Auction.Deposit：'
+            . '该费率为 0 时玩家的押金同样是 0，于是玩家之间的成交也会被记进这张表。新版本模块会把"这条上架是不是自己创建的"'
+            . '直接记进记录（module_listing），来源就确定了；旧记录没有这一列，只能如实说无法判断。',
+        'deposit_rate_zero' => '本区 worldserver.conf 的 Rate.Auction.Deposit 就是 0，正是上一条的来源。',
         'total' => '成交笔数',
         'bot_sales' => '机器人上架成交',
         'buyouts' => '一口价成交',
@@ -253,7 +256,7 @@ return [
     ],
     'fields' => [
         'enabled' => '启用',
-        'bid_only' => '纯竞价（关闭买断模式；等于界面上的“关闭买断”）',
+        'bid_only' => '买断模式',
         'character_id' => '账号 ID（虚拟会话）',
         'character_guid' => '拍卖角色 GUID',
         'max_auctions' => '该拍卖行挂单上限',
@@ -297,8 +300,8 @@ return [
         'itemclass_title' => '类别白名单（自动上架范围）',
         'itemclass_hint' => 'mod_auctionator_itemclass_config：**这张表就是白名单**——自动卖家只会上架这里存在的“类别/子类别”组合，不在表里的类型一律不上架。配额（max_count）是该类物品在同一拍卖行的挂单上限：**填 0 就是这一类永不上架**，填 2 表示同一件物品最多挂 2 条。堆叠（stack_count）是每条挂几个，填 0 表示用物品自身的最大堆叠。每个周期重新读库，改完下一个周期（1 分钟）生效，不用重启。',
         'itemclass_hint_short' => '配额 0 = 该类永不上架；改完立即生效，无需重启。',
-        'itemclass_totals' => '当前显示 :shown / 共 :total 行，其中 :listed 行在自动上架',
-        'itemclass_class_state' => '（:listed / :rows 个子类别在自动上架）',
+        'itemclass_totals' => '共 :total 行，:listed 行在自动上架',
+        'itemclass_class_state' => '（:listed/:rows 已上架）',
         'class_quota' => '整类配额',
         'apply_to_class' => '应用到整类',
         'class_no_rows' => '“:class”目前没有任何行，所以这一类完全不在白名单里（不会上架）。选一个大于 0 的配额再点“应用到整类”，会按模块自带的标签表补齐该类所有子类别。',
@@ -307,8 +310,8 @@ return [
         'quality_hint' => 'mod_auctionator_quality_config：**不上架**的品质，自动卖家永不上架；**没有行**的品质按“允许”处理，所以这张表为空时行为和以前完全一样。卖家每个周期都会重读它，改完下一轮就生效，不用重启。条目策略里手动上架（GM 精选清单 / GM 上架）不受这里限制。',
         'quality_hint_short' => '无行 = 允许；标为不上架的品质永不上架。',
         'quality' => '品质',
-        'quality_items' => 'item_template 条目数',
-        'quality_state' => '自动上架',
+        'quality_items' => '物品数',
+        'quality_state' => '状态',
         'quality_default' => '（无行，按允许处理）',
         'quality_table_missing' => '缺少 mod_auctionator_quality_config 表，品质筛选暂时不可用。请先对本区 world 库执行模块的 data/sql/db-world/updates/2026_09_24_01_quality_config.sql。',
         'table_missing' => '缺少数据表 :table，请先执行模块自带的 SQL 更新。',
@@ -334,10 +337,10 @@ return [
         'gm_hint_short' => '每行按自己的模式上架；价格填单价，整组 = 单价 × 堆叠。',
         'mode' => '上架模式',
         'mode_choose' => '— 请选择 —',
-        'bid_price' => '起拍单价（铜/个）',
-        'buyout_price' => '买断单价（铜/个）',
-        'buyout_price_short' => '买断单价（铜/个，0 = 不设）',
-        'listing_totals' => '整组挂单（起拍 / 买断）',
+        'bid_price' => '起拍单价/个',
+        'buyout_price' => '买断单价/个',
+        'buyout_price_short' => '买断单价/个（0 = 不设）',
+        'listing_totals' => '整组（起拍/买断）',
         'totals_start' => '起拍',
         'totals_buyout' => '买断',
         'legacy_note' => '价格由 Auctionator.Seller.BidOnly 决定',
@@ -347,7 +350,7 @@ return [
         'stack' => '堆叠',
         'hours' => '时长（小时）',
         'house' => '拍卖行',
-        'owner' => '收款角色 GUID',
+        'owner' => '收款角色',
         'enabled' => '启用',
         'enable' => '启用',
         'disable' => '停用',
@@ -379,9 +382,8 @@ return [
         'items' => '物品 ID（逗号分隔）',
         'add' => '上架（add）',
         'add_hint' => '自动卖家的条目时长固定为 :hours 小时；只有 GM 上架可以指定时长。',
-        'add_hint_short' => '自动卖家的时长固定，只有这里能自定义。',
         'add_owner_hint' => '收款角色填 bot 表示金币回收；填角色 GUID 表示金币邮寄给该角色。面板通过 SOAP 控制台发送命令，没有玩家会话，所以“me”不可用（会被 worldserver 拒绝），故不提供。',
-        'add_owner_hint_short' => '填 bot = 金币回收；填角色 GUID = 邮寄给该角色。',
+        'add_owner_hint_short' => '收款角色：bot = 金币回收，角色 GUID = 邮寄给该角色。',
         'market_title' => '市场数据维护',
         'marketimport' => '立即导入 CSV',
         'marketscan' => '采样本区拍卖行 → 生成市场价',
