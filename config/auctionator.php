@@ -94,6 +94,9 @@ return [
         'Auctionator.Seller.BidStartModifier' => ['group' => 'seller_common', 'type' => 'float', 'label' => 'bid_start_modifier', 'min' => 0, 'max' => 1],
         'Auctionator.Seller.PreferMarketItems' => ['group' => 'seller_common', 'type' => 'bool', 'label' => 'prefer_market_items'],
         'Auctionator.Seller.ExcludeUnverifiedItems' => ['group' => 'seller_common', 'type' => 'bool', 'label' => 'exclude_unverified_items'],
+        // 自动卖家的物品等级上限（0 = 不限）。也在"物品筛选"页上做成即时控件（写这个键 + 发
+        // ".auctionator maxitemlevel"），本页只是同一个键的常规入口（改这里要重启才生效）。
+        'Auctionator.Seller.MaxItemLevel' => ['group' => 'seller_common', 'type' => 'int', 'label' => 'max_item_level', 'min' => 0, 'max' => 10000, 'default' => 0],
         'Auctionator.Seller.MinPriceModifier' => ['group' => 'seller_common', 'type' => 'float', 'label' => 'min_price_modifier', 'min' => 0, 'max' => 1000],
         'Auctionator.Seller.MaxPriceModifier' => ['group' => 'seller_common', 'type' => 'float', 'label' => 'max_price_modifier', 'min' => 0, 'max' => 1000],
 

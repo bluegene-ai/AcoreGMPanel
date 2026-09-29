@@ -1,9 +1,11 @@
 /**
- * mod-auctionator（拍卖机器人）管理页：请求 /auctionator/api/{status,config,item,action,power}，
+ * mod-auctionator（拍卖机器人）管理页：请求 /auctionator/api/{status,config,item,action,power,buyout,maxitemlevel}，
  * 写入走 Panel.api（带 CSRF 与基路径），成功后刷新页面以免服务端快照过期。
  *
  * /auctionator/api/power 是单区总开关：只写本区 mod_auctionator.conf 并向本区 worldserver 发
  * ".auctionator start|stop"，不影响其它区。
+ *
+ * /auctionator/api/buyout 与 /auctionator/api/maxitemlevel 同构：写本区 conf 的键 + 发对应子命令。
  */
 (function () {
   if (document.body.dataset.module !== 'auctionator') return;
@@ -116,6 +118,8 @@
     action: ['overview', 'live', 'stock', 'filters'],
     switch: ['overview', 'settings'],
     config: ['overview', 'settings'],
+    // 等级上限既显示在"物品筛选"页的控件上，又是设置页里的同一个 conf 键，两处一起换
+    itemlevel: ['overview', 'filters', 'settings'],
   };
 
   async function refreshPanels(group) {
@@ -889,6 +893,40 @@
     refreshPanels('switch');
   }
 
+  // ---- 物品等级上限（本区，只作用于自动卖家） ----
+  /**
+   * 写本区 Auctionator.Seller.MaxItemLevel 并发 ".auctionator maxitemlevel <值|off>"（0 = 不限）。
+   */
+  async function runMaxItemLevel(value, trigger) {
+    const level = value > 0 ? String(value) : '';
+    const confirmMessage = level
+      ? tt('confirm.max_item_level', { level: level },
+          'Stop the automatic seller from listing items above item level :level?')
+      : t('confirm.max_item_level_off', 'Remove the item level limit?');
+    if (confirmMessage && !(await confirmAction({ message: confirmMessage, danger: false }))) return;
+
+    const locked = beginWork(trigger);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/maxitemlevel', { value: value });
+    } finally {
+      endWork(locked);
+    }
+
+    const output = json && json.payload ? json.payload.output : '';
+    if (output) printOutput(output);
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.max_item_level_failure', 'The item level limit could not be applied.'));
+      // conf 可能已写入而命令未送到：失败也要刷新，否则「当前生效」停在旧值。
+      refreshPanels('itemlevel');
+      return;
+    }
+
+    show('success', json.message || t('feedback.action_success', 'Command executed.'));
+    refreshPanels('itemlevel');
+  }
+
   // ---- 页面增强：服务端每次渲染后都要跑一遍 ----
   /**
    * 这些不是"事件绑定"（绑定全部走委托，局部刷新后自然继续有效），而是对服务端渲染出来的
@@ -975,6 +1013,15 @@
     if (form.matches('[data-au-policy]')) {
       event.preventDefault();
       submitPolicyForm(form, event.submitter || form.querySelector('[type="submit"]'));
+      return;
+    }
+
+    if (form.matches('[data-au-max-item-level]')) {
+      event.preventDefault();
+      const input = form.querySelector('[name="value"]');
+      const parsed = input ? parseInt(input.value, 10) : 0;
+      const value = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      runMaxItemLevel(value, event.submitter || form.querySelector('[type="submit"]'));
     }
   });
 

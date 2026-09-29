@@ -265,6 +265,7 @@ return static function (Router $router): void {
             $router->post('/auctionator/api/power', [AuctionatorController::class, 'apiPower']);
             
             $router->post('/auctionator/api/buyout', [AuctionatorController::class, 'apiBuyout']);
+            $router->post('/auctionator/api/maxitemlevel', [AuctionatorController::class, 'apiMaxItemLevel']);
         });
     });
 };

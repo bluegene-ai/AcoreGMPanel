@@ -754,6 +754,114 @@ class AuctionatorController extends Controller
     }
 
     /**
+     * 自动卖家的物品等级上限（按区，立即生效）：写本区 Auctionator.Seller.MaxItemLevel，再发
+     * ".auctionator maxitemlevel <值|off>"。0 = 不限。与 apiBuyout 一样，返回值区分"已落库"与"已生效"。
+     */
+    public function apiMaxItemLevel(Request $request): Response
+    {
+        $this->requireControlCapability();
+        $this->maybeSwitchServer($request);
+
+        if (($refusal = $this->unsupportedServerResponse()) !== null) {
+            return $refusal;
+        }
+
+        $serverId = ServerContext::currentId();
+        $paths = $this->realmPaths();
+
+        $fields = (array) Config::get('auctionator.fields', []);
+        if (!isset($fields['Auctionator.Seller.MaxItemLevel'])) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.auctionator.errors.max_item_level_field_missing'),
+            ], 500);
+        }
+
+        $parsed = $this->validateField(
+            'Auctionator.Seller.MaxItemLevel',
+            (array) $fields['Auctionator.Seller.MaxItemLevel'],
+            $request->input('value', 0)
+        );
+        if ($parsed['error'] !== '') {
+            return $this->json(['success' => false, 'message' => $parsed['error']], 422);
+        }
+
+        $maxItemLevel = (int) $parsed['value'];
+
+        $confWritten = false;
+        $confError = '';
+        try {
+            $file = new AuctionatorConfigFile($paths['conf_file']);
+            $written = $file->write(['Auctionator.Seller.MaxItemLevel' => $maxItemLevel], $fields);
+            if ($written['ok']) {
+                $confWritten = true;
+            } else {
+                $confError = (string) $written['error'];
+            }
+        } catch (Throwable $exception) {
+            $confError = $exception->getMessage();
+        }
+
+        // 0 sends the self-explanatory "off" form of the command; both are the same value.
+        $command = '.auctionator maxitemlevel ' . ($maxItemLevel === 0 ? 'off' : (string) $maxItemLevel);
+        $result = SoapCommandRunner::execute($command, ['server_id' => $serverId]);
+        $commandOk = (bool) ($result['success'] ?? false);
+
+        Audit::log('auctionator', 'max_item_level', $command, [
+            'server_id' => $serverId,
+            'max_item_level' => $maxItemLevel,
+            'conf_file' => $paths['conf_file'],
+            'conf_written' => $confWritten,
+            'conf_error' => $confError,
+            'command_ok' => $commandOk,
+            'output' => (string) ($result['output'] ?? ''),
+        ]);
+
+        if ($commandOk && $confWritten) {
+            $message = Lang::get('app.auctionator.feedback.max_item_level_saved', [
+                'server' => $this->serverLabel(),
+                'level' => $maxItemLevel === 0
+                    ? Lang::get('app.auctionator.policy.max_item_level_off')
+                    : (string) $maxItemLevel,
+            ]);
+        } elseif ($commandOk) {
+            $message = Lang::get('app.auctionator.feedback.power_runtime_only', [
+                'message' => $confError !== ''
+                    ? $confError
+                    : Lang::get('app.auctionator.errors.config_unreadable'),
+            ]);
+        } else {
+            $message = Lang::get('app.auctionator.feedback.max_item_level_offline', [
+                'server' => $this->serverLabel(),
+                'message' => $this->firstNonEmptyString([
+                    (string) ($result['message'] ?? ''),
+                    (string) ($result['output'] ?? ''),
+                    Lang::get('app.auctionator.errors.command_failed'),
+                ]),
+                'state' => $confWritten
+                    ? Lang::get('app.auctionator.feedback.power_conf_saved')
+                    : Lang::get('app.auctionator.feedback.power_conf_failed'),
+            ]);
+        }
+
+        return $this->json([
+            'success' => $commandOk,
+            'message' => $message,
+            'payload' => [
+                'max_item_level' => $maxItemLevel,
+                'command' => $command,
+                'command_ok' => $commandOk,
+                'conf_written' => $confWritten,
+                'conf_error' => $confError,
+                'conf_file' => $paths['conf_file'],
+                'restart_required' => !$commandOk,
+                'output' => (string) ($result['output'] ?? ''),
+                'snapshot' => $this->snapshot(),
+            ],
+        ], $commandOk ? 200 : 422);
+    }
+
+    /**
      * 当前区服显示名（用于反馈文案），取不到时退回区服索引。
      */
     private function serverLabel(): string

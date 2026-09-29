@@ -906,6 +906,28 @@ $bondingOptions = [
         <?php endif; ?>
       </div>
 
+      <?php // 物品等级上限：conf 键 + 命令两步一个按钮（与买断开关同构） ?>
+      <div class="au-card">
+        <?= $cardTitle(__('app.auctionator.policy.max_item_level_title'), __('app.auctionator.policy.max_item_level_hint')) ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.policy.max_item_level_hint_short')) ?></p>
+        <?php $maxItemLevelValue = (int) ($typed['Auctionator.Seller.MaxItemLevel'] ?? 0); ?>
+        <form class="au-inline-form" data-au-max-item-level>
+          <input class="au-input au-input--tiny" type="number" min="0" max="10000" step="1" name="value"
+                 value="<?= $maxItemLevelValue ?>"
+                 aria-label="<?= htmlspecialchars(__('app.auctionator.policy.max_item_level_title')) ?>"
+                 title="<?= htmlspecialchars((string) 'Auctionator.Seller.MaxItemLevel', ENT_QUOTES, 'UTF-8') ?>"
+                 <?= $canControl && $supported ? '' : 'disabled' ?>>
+          <button type="submit" class="btn btn-sm"<?= $canControl && $supported ? '' : ' disabled' ?>><?= htmlspecialchars(__('app.auctionator.policy.max_item_level_apply')) ?></button>
+        </form>
+        <p class="muted small">
+          <?= htmlspecialchars(__('app.auctionator.policy.max_item_level_current', [
+              'level' => $maxItemLevelValue === 0
+                  ? __('app.auctionator.policy.max_item_level_off')
+                  : (string) $maxItemLevelValue,
+          ])) ?>
+        </p>
+      </div>
+
       <?php // 品质白名单：模块的候选查询直接读这张表，所以热生效、不必重启 ?>
       <div class="au-card">
         <?= $cardTitle(__('app.auctionator.policy.quality_title'), __('app.auctionator.policy.quality_hint')) ?>
