@@ -63,6 +63,8 @@ return static function (Router $router): void {
         $router->get('/aegis/api/player', [AegisController::class, 'apiPlayer']);
         $router->get('/aegis/api/log', [AegisController::class, 'apiLog']);
         $router->get('/boss', [BossController::class, 'index']);
+        $router->get('/boss/pools', [BossController::class, 'pools']);
+        $router->get('/boss/skill-prescreen', [BossController::class, 'skillPrescreen']);
         $router->get('/account/view', [AccountController::class, 'show']);
         $router->get('/account/api/list', [AccountController::class, 'apiList']);
         $router->get('/account/api/ip-accounts', [AccountController::class, 'apiAccountsByIp']);
@@ -89,6 +91,8 @@ return static function (Router $router): void {
             $router->post('/boss/api/ext-config', [BossController::class, 'apiExtConfigSave']);
             $router->post('/boss/api/ext-config/copy', [BossController::class, 'apiExtConfigCopy']);
             $router->post('/boss/api/reward-simulate', [BossController::class, 'apiRewardSimulate']);
+            $router->post('/boss/api/pools', [BossController::class, 'apiPools']);
+            $router->post('/boss/api/skill-prescreen/run', [BossController::class, 'apiSkillPrescreenRun']);
             $router->post('/boss/api/class-map/autofill', [BossController::class, 'apiClassMapAutofill']);
             $router->post('/account/api/set-gm', [AccountController::class, 'apiSetGm']);
             $router->post('/soap/api/execute', [SoapWizardController::class, 'apiExecute']);

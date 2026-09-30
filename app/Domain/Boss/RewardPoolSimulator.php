@@ -1,7 +1,7 @@
 <?php
 /**
  * File: app/Domain/Boss/RewardPoolSimulator.php
- * Purpose: 离线模拟 boss.lua 的击杀奖池结算（§OnBossDied 里的 6 个独立奖池），
+ * Purpose: 离线模拟 boss.lua 的击杀奖池结算（§OnBossDied 的动态奖池列表），
  */
 
 declare(strict_types=1);
@@ -15,14 +15,15 @@ use Throwable;
 /**
  * 奖池结算模拟器。
  *
- * 算法逐条镜像 Release/lua_scripts/acore-boss-smartai/boss.lua：
- *   - 触发：每个「已启用 + 奖品非空」的池 roll once，random(1,100) <= chance（Lua 用 math.random(100)）。
+ * 算法逐条镜像 boss.lua 的奖池结算：
+ *   - 触发：每个「已启用 + 池里有内容（奖品或金币）」的池 roll once，random(1,100) <= chance。
  *   - 获奖名单：winner_mode=all → 全部有效参战；count → min(winner_count, 参战数) 人，
  *     按 SelectWeightedRewardWinners 抽（不放回）。权重 = max(0.01, score)，
  *     threshold = randomFloat() * totalWeight 沿累积和找第一个 >= threshold 的人（weighted）；
  *     mode=random 时退化成 math.random(#pool) 的等概率抽取（对应 Lua 的 randomRewardMode == "random"）。
  *   - 奖品：每位获奖者从"他能用"的候选里等概率抽 1 件（PickRewardPoolItemFor）；
- *     候选为空 → 本次不发（绝不发不能用的奖品）。
+ *     候选为空且该池不发金币 → 本次不发（绝不发不能用的奖品）。
+ *   - 金币：命中池的每位获奖者随机得到 [gold_min, gold_max] 铜；区间为 0 则不发。
  *   - 可用性（class_filter=1）：物品在 classItemMap 里 → 只按该映射判职业；
  *     不在映射里 → 退回核心式检查（world 库 item_template 的 AllowableClass 位掩码 +
  *     RequiredLevel 对比等级）。AllowableClass 为 0 或 -1 = 全职业；行缺失 / 查不动 = 按可用处理。
@@ -42,25 +43,22 @@ use Throwable;
  *     'participants' => [
  *         ['guid'=>int,'name'=>string,'class_id'=>int,'score'=>float,
  *          'items_per_round'=>float,'win_rate'=>float,'pools'=>[1,3]], ...
- *     ],  // 顺序 = 调用方传入的顺序；pools = 中过奖的池号（升序）；win_rate = 中过奖的轮数 / 轮数
+ *     ],  // 顺序 = 调用方传入的顺序；pools = 中过奖的位号（升序）；win_rate = 中过奖的轮数 / 轮数
  *     'pools' => [
- *         1 => ['enabled'=>bool,'chance'=>int,'trigger_rate'=>float,'winner_mode'=>string,
- *               'winner_count'=>int,'items'=>int,'winners_per_round'=>float,
+ *         1 => ['pool_id'=>int,'name'=>string,'sort_order'=>int,'enabled'=>bool,'chance'=>int,
+ *               'trigger_rate'=>float,'winner_mode'=>string,'winner_count'=>int,'items'=>int,
+ *               'gold_min'=>int,'gold_max'=>int,'winners_per_round'=>float,'gold_per_round'=>float,
  *               'top_winners'=>[['name'=>string,'class_id'=>int,'hits'=>float], ...]], ...
- *     ],  // 键 = 池号 1..6（含未启用的池）；hits = 该玩家在该池的平均中奖次数 / 轮
+ *     ],  // 键 = 位号（含未启用的池）；hits = 该玩家在该池的平均中奖次数 / 轮
  *     'last_round' => [
- *         ['pool'=>1,'triggered'=>bool,
- *          'grants'=>[['name'=>string,'class_id'=>int,'item_id'=>int,'item_name'=>string], ...]], ...
- *     ],  // 固定 6 条（池 1..6），只为最后一轮
+ *         ['pool'=>1,'name'=>string,'triggered'=>bool,
+ *          'grants'=>[['name'=>string,'class_id'=>int,'item_id'=>int,'item_name'=>string,'gold'=>int], ...]], ...
+ *     ],  // 每个池一条，只为最后一轮
  *     'notes' => [string, ...],  // 中文提示（世界库不可用这类降级说明）
  *   ]
  */
 class RewardPoolSimulator
 {
-    
-    private const POOL_COUNT = 6;
-
-    
     private const DEFAULT_WEIGHTS = [
         'damage' => 100,
         'healing' => 80,
@@ -107,7 +105,7 @@ class RewardPoolSimulator
     /**
      * 模拟 $rounds 轮击杀结算。
      *
-     * @param array<string,mixed> $pools         面板存的原始 ext 配置数组（reward_pool_N_{enabled,chance,winner_mode,winner_count,class_filter,items_text}）
+     * @param array<int,array<string,mixed>> $pools boss_reward_pools 的行（按 sort_order, pool_id 升序；软删除行会被忽略）
      * @param array<int,array<string,mixed>> $participants 每位参战者：
      *        ['guid'=>int,'name'=>string,'classId'=>int,'level'=>int,'damage'=>int,'healing'=>int,
      *         'threat'=>int,'presence'=>int,'is_killer'=>bool]
@@ -134,7 +132,7 @@ class RewardPoolSimulator
         $contributors = $this->prepareParticipants($participants, $weights);
         $classIndex = $this->buildClassItemIndex($classItemMap);
         $specs = $this->normalizePools($pools);
-        $mode = $this->resolveMode($weights, $pools);
+        $mode = $this->resolveMode($weights);
         $topWinnersLimit = max(0, (int) ($this->options['top_winners'] ?? self::DEFAULT_TOP_WINNERS));
         $participantCount = count($contributors);
 
@@ -145,13 +143,11 @@ class RewardPoolSimulator
         
         $poolStats = [];
         foreach ($specs as $index => $spec) {
-            if ($spec['enabled'] && $spec['items'] === []) {
-                
-                $this->note(sprintf('奖池%d 已启用但没有奖品，跳过（不参与触发判定）', $index));
+            if ($spec['enabled'] && $spec['items'] === [] && $spec['gold_max'] <= 0) {
+                $this->note(sprintf('奖池#%d 已启用但既没有奖品也没有金币，跳过（不参与触发判定）', $index));
             }
 
-            // 名额 ≥ 参战人数 = 该池退化成"全员发放"（与 all 模式等价，抽签结果必然和保底池同一批人）。
-            // 脚本侧每条击杀日志也会打同样的 ⚠ 告警，两边口径保持一致。
+            $label = $spec['name'] !== '' ? $spec['name'] : ('#' . $index);
             if (
                 $spec['enabled']
                 && $spec['winner_mode'] !== 'all'
@@ -159,21 +155,28 @@ class RewardPoolSimulator
                 && $spec['winner_count'] >= $participantCount
             ) {
                 $this->note(sprintf(
-                    '奖池%d 的获奖人数（%d）≥ 参战人数（%d）：该池会发给全体参赛者，与"全部有效参战"等价，名单会和保底池重复',
+                    '奖池#%d（%s）的获奖人数（%d）≥ 参战人数（%d）：该池会发给全体参赛者，与"全部有效参战"等价',
                     $index,
+                    $label,
                     $spec['winner_count'],
                     $participantCount
                 ));
             }
 
             $poolStats[$index] = [
+                'pool_id' => $spec['pool_id'],
+                'name' => $spec['name'],
+                'sort_order' => $spec['sort_order'],
                 'enabled' => $spec['enabled'],
                 'chance' => $spec['chance'],
                 'winner_mode' => $spec['winner_mode'],
                 'winner_count' => $spec['winner_count'],
                 'items' => count($spec['items']),
+                'gold_min' => $spec['gold_min'],
+                'gold_max' => $spec['gold_max'],
                 'triggered_rounds' => 0,
                 'grants' => 0,
+                'gold_total' => 0,
                 'winners' => [],
             ];
         }
@@ -184,12 +187,12 @@ class RewardPoolSimulator
             $roundResult = [];
 
             foreach ($specs as $index => $spec) {
-                $entry = ['pool' => $index, 'triggered' => false, 'grants' => []];
+                $entry = ['pool' => $index, 'name' => $spec['name'], 'triggered' => false, 'grants' => []];
 
-                
+                // 触发条件与脚本一致：已开启 + 池里有内容（奖品或金币）+ 整池掷一次通过。
                 if (
                     $spec['enabled']
-                    && $spec['items'] !== []
+                    && ($spec['items'] !== [] || $spec['gold_max'] > 0)
                     && $this->randInt(1, 100) <= $spec['chance']
                 ) {
                     $entry['triggered'] = true;
@@ -197,21 +200,30 @@ class RewardPoolSimulator
 
                     $touched = [];
                     foreach ($this->selectRecipients($spec, $contributors, $mode) as $position) {
-                        $itemId = $this->pickPoolItem($spec, $contributors[$position], $classIndex);
-                        if ($itemId === null) {
-                            continue; 
+                        $itemId = $spec['items'] === []
+                            ? null
+                            : $this->pickPoolItem($spec, $contributors[$position], $classIndex);
+                        $gold = $spec['gold_max'] > 0
+                            ? $this->randInt($spec['gold_min'], $spec['gold_max'])
+                            : 0;
+
+                        // 奖品取不到（该池里没有他能用的）又没有金币 → 本次跳过，不换人。
+                        if ($itemId === null && $gold <= 0) {
+                            continue;
                         }
 
                         $entry['grants'][] = [
                             'name' => $contributors[$position]['name'],
                             'class_id' => $contributors[$position]['class_id'],
-                            'item_id' => $itemId,
+                            'item_id' => $itemId ?? 0,
                             'item_name' => '', // 最后一轮跑完后一次性补名，避免逐轮查名
+                            'gold' => $gold,
                         ];
 
                         $grantTotal[$position]++;
                         $touched[$position] = true;
                         $poolStats[$index]['grants']++;
+                        $poolStats[$index]['gold_total'] += $gold;
                         $poolStats[$index]['winners'][$position] =
                             ($poolStats[$index]['winners'][$position] ?? 0) + 1;
                         $poolsWon[$position][$index] = true;
@@ -263,13 +275,19 @@ class RewardPoolSimulator
             }
 
             $poolOutput[$index] = [
+                'pool_id' => $stats['pool_id'],
+                'name' => $stats['name'],
+                'sort_order' => $stats['sort_order'],
                 'enabled' => $stats['enabled'],
                 'chance' => $stats['chance'],
                 'trigger_rate' => round($stats['triggered_rounds'] / $rounds, 4),
                 'winner_mode' => $stats['winner_mode'],
                 'winner_count' => $stats['winner_count'],
                 'items' => $stats['items'],
+                'gold_min' => $stats['gold_min'],
+                'gold_max' => $stats['gold_max'],
                 'winners_per_round' => round($stats['grants'] / $rounds, 4),
+                'gold_per_round' => round($stats['gold_total'] / $rounds, 2),
                 'top_winners' => $top,
             ];
         }
@@ -438,16 +456,13 @@ class RewardPoolSimulator
 
     /**
      * 抽取模式（对应 Lua 的 REWARD_PROBABILITIES.randomRewardMode）：
-     * $weights['mode'] 优先，其次 $pools['random_reward_mode']（调用方把主配置并进来时用得上），
-     * 再次构造参数 random_reward_mode，默认 weighted。
+     * $weights['mode'] 优先，其次构造参数 random_reward_mode，默认 weighted。
      *
      * @param array<string,mixed> $weights
-     * @param array<string,mixed> $pools
      */
-    private function resolveMode(array $weights, array $pools): string
+    private function resolveMode(array $weights): string
     {
         $mode = $weights['mode']
-            ?? $pools['random_reward_mode']
             ?? $this->options['random_reward_mode']
             ?? 'weighted';
 
@@ -459,29 +474,44 @@ class RewardPoolSimulator
     
 
     /**
-     * 把面板的原始 ext 数组归一成 1..6 的池描述（规则 = boss.lua NormalizeRewardPools）：
+     * 把奖池表行归一成池描述（规则 = boss.lua NormalizeRewardPools）：
      * chance 截到 0..100，winner_count 截到 1..100，winner_mode 只认 all/count，
-     * class_filter 缺省视为 true（Lua: pool.classFilter ~= false），items 取文本里所有正整数并去重。
+     * class_filter 缺省视为 true（Lua: pool.classFilter ~= false），items 取文本里所有正整数并去重，
+     * 金币区间取 max(min,max)。软删除行不参与模拟。
      *
-     * @param array<string,mixed> $pools
-     * @return array<int,array{enabled:bool,chance:int,winner_mode:string,winner_count:int,class_filter:bool,items:array<int,int>}>
+     * @param array<int,array<string,mixed>> $pools boss_reward_pools 的行（按 sort_order, pool_id 升序）
+     * @return array<int,array{pool_id:int,name:string,sort_order:int,enabled:bool,chance:int,winner_mode:string,winner_count:int,class_filter:bool,items:array<int,int>,gold_min:int,gold_max:int}>
      */
     private function normalizePools(array $pools): array
     {
         $specs = [];
 
-        for ($index = 1; $index <= self::POOL_COUNT; $index++) {
-            $prefix = 'reward_pool_' . $index . '_';
-            $classFilterKey = $prefix . 'class_filter';
-            $mode = strtolower(trim((string) ($pools[$prefix . 'winner_mode'] ?? '')));
+        foreach ($pools as $row) {
+            if (!is_array($row))
+                continue;
 
-            $specs[$index] = [
-                'enabled' => $this->toFlag($pools[$prefix . 'enabled'] ?? 0),
-                'chance' => $this->clampInt($pools[$prefix . 'chance'] ?? 0, 0, 100),
+            $poolId = (int) ($row['pool_id'] ?? 0);
+            if ($poolId <= 0 || $poolId > 31 || isset($specs[$poolId]))
+                continue;
+            if ((int) ($row['deleted_at'] ?? 0) > 0)
+                continue;
+
+            $mode = strtolower(trim((string) ($row['winner_mode'] ?? '')));
+            $goldMin = max(0, (int) ($row['gold_min_copper'] ?? 0));
+            $goldMax = max(0, (int) ($row['gold_max_copper'] ?? 0));
+
+            $specs[$poolId] = [
+                'pool_id' => $poolId,
+                'name' => trim((string) ($row['name'] ?? '')),
+                'sort_order' => (int) ($row['sort_order'] ?? 0),
+                'enabled' => $this->toFlag($row['enabled'] ?? 0),
+                'chance' => $this->clampInt($row['chance'] ?? 0, 0, 100),
                 'winner_mode' => $mode === 'all' ? 'all' : 'count',
-                'winner_count' => $this->clampInt($pools[$prefix . 'winner_count'] ?? 1, 1, 100),
-                'class_filter' => $this->toFlag($pools[$classFilterKey] ?? true, true),
-                'items' => $this->parseItemList((string) ($pools[$prefix . 'items_text'] ?? '')),
+                'winner_count' => $this->clampInt($row['winner_count'] ?? 1, 1, 100),
+                'class_filter' => $this->toFlag($row['class_filter'] ?? true, true),
+                'items' => $this->parseItemList((string) ($row['items_text'] ?? '')),
+                'gold_min' => min($goldMin, $goldMax),
+                'gold_max' => max($goldMin, $goldMax),
             ];
         }
 
@@ -755,7 +785,10 @@ class RewardPoolSimulator
         $ids = [];
         foreach ($lastRound as $entry) {
             foreach (($entry['grants'] ?? []) as $grant) {
-                $ids[(int) $grant['item_id']] = true;
+                $itemId = (int) $grant['item_id'];
+                if ($itemId > 0) {
+                    $ids[$itemId] = true;
+                }
             }
         }
 
@@ -764,7 +797,7 @@ class RewardPoolSimulator
         foreach ($lastRound as &$entry) {
             foreach ($entry['grants'] as &$grant) {
                 $itemId = (int) $grant['item_id'];
-                $grant['item_name'] = $names[$itemId] ?? ('#' . $itemId);
+                $grant['item_name'] = $itemId > 0 ? ($names[$itemId] ?? ('#' . $itemId)) : '';
             }
             unset($grant);
         }

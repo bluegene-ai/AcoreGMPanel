@@ -555,9 +555,9 @@ $bossTabs['log'] = __('app.boss.tabs.log');
           <section class="boss-config-section">
             <div class="boss-config-section__head">
               <h3><?= htmlspecialchars(__('app.boss.config.sections.rewards')) ?></h3>
-              <button type="button" class="btn outline" data-boss-goto="ext:reward_pools">
+              <a class="btn outline" href="<?= htmlspecialchars(url_with_server('/boss/pools'), ENT_QUOTES, 'UTF-8') ?>">
                 <?= htmlspecialchars(__('app.boss.config.goto_rewards')) ?>
-              </button>
+              </a>
             </div>
             <p class="muted boss-config-note">
               <?= htmlspecialchars(__('app.boss.config.hints.reward_pools_moved_short')) ?>

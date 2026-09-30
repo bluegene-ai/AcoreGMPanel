@@ -58,6 +58,26 @@
     }
   }
 
+  const esc = (panel && typeof panel.escapeHtml === 'function')
+    ? function(value){ return panel.escapeHtml(value); }
+    : function(value){
+        return String(value === undefined || value === null ? '' : value)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      };
+
+  // 铜 → 金币文案（10000 铜 = 1 金）
+  function goldAmount(copper){
+    const value = Math.round((Number(copper || 0) / 10000) * 100) / 100;
+    return t('ux.gold_amount', ':amount 金').replace(':amount', value.toFixed(2));
+  }
+
+  function goldText(min, max, avg){
+    if(Number(max || 0) <= 0) return '—';
+    const range = goldAmount(min) + ' ~ ' + goldAmount(max);
+    if(Number(avg || 0) <= 0) return range;
+    return range + '（' + t('ux.gold_avg', 'avg :amount').replace(':amount', goldAmount(avg)) + '）';
+  }
+
   function setBusy(disabled){
     [dom.spawnBtn, dom.killBtn, dom.clearBtn, dom.rebaseBtn, dom.configReloadBtn, dom.presetBtn, dom.difficultyBtn, dom.configSaveBtn, dom.extConfigSaveBtn].forEach(function(node){
       if(node) node.disabled = !!disabled;
@@ -586,102 +606,197 @@
 
   setupTableFilters();
 
-  /* ---- 奖池卡片联动：开关 / 人数模式 / 奖品数 → 卡片状态、总览条、目录 ---- */
-  function setupPoolCards(){
-    const cards = Array.prototype.slice.call(document.querySelectorAll('[data-boss-pool-card]'));
-    if(!cards.length) return;
+  /* ---- 奖池页：列表 + 新建/编辑/删除/重排（POST /boss/api/pools） ---- */
+  function setupRewardPools(){
+    const root = document.querySelector('[data-boss-pools]');
+    if(!root) return;
 
-    function summaryFor(index){
-      return document.querySelector('[data-boss-pool-summary-item="' + index + '"]');
+    const data = window.BOSS_POOLS_DATA || {};
+    const rows = data.rows || {};
+    const itemNames = data.item_names || {};
+    const writable = root.dataset.bossPoolsWritable === '1' && data.writable !== false;
+    const editor = root.querySelector('[data-boss-pool-editor]');
+    let editingId = 0;   // 0 = 新建
+
+    function field(name){
+      return root.querySelector('[data-boss-pool-input="' + name + '"]');
     }
 
-    function tocFor(index){
-      return document.querySelector('.boss-toc__item[data-boss-pool-jump="' + index + '"]');
+    function itemIdsOf(text){
+      const ids = [];
+      const seen = {};
+      String(text || '').split(/[^0-9]+/).forEach(function(token){
+        const id = parseInt(token, 10);
+        if(id > 0 && !seen[id]){ seen[id] = 1; ids.push(id); }
+      });
+      return ids;
     }
 
-    function countItems(text){
-      return String(text || '').split(/[\s,;]+/).filter(function(token){ return parseInt(token, 10) > 0; }).length;
+    function refreshItemPreview(){
+      if(!editor) return;
+      const textarea = field('items_text');
+      const ids = itemIdsOf(textarea ? textarea.value : '');
+      const countEl = editor.querySelector('[data-boss-pool-items-count]');
+      if(countEl) countEl.textContent = t('ux.pool_items', ':n item(s)').replace(':n', String(ids.length));
+      const preview = editor.querySelector('[data-boss-pool-items-preview]');
+      if(!preview) return;
+      preview.innerHTML = ids.length
+        ? ids.map(function(id){
+            return '<span class="badge">' + esc(String(id) + ' · ' + (itemNames[String(id)] || ('#' + id))) + '</span>';
+          }).join('')
+        : '<span class="muted">' + esc(t('ux.pool_no_items', 'No prizes yet')) + '</span>';
     }
 
-    function refreshCard(card){
-      const index = card.dataset.bossPoolCard;
-      const enabled = card.querySelector('[data-boss-pool-enabled]');
-      const mode = card.querySelector('[data-boss-pool-mode]');
-      const count = card.querySelector('[data-boss-pool-count]');
-      const chanceInput = card.querySelector('[data-boss-pool-chance]');
-      const items = card.querySelector('[data-boss-pool-items-input]');
-      const isOn = !enabled || enabled.checked;
+    // 「全部有效参战」时人数没有意义 → 置灰（与脚本语义一致）
+    function refreshModeState(){
+      const mode = field('winner_mode');
+      const count = field('winner_count');
+      if(!mode || !count) return;
+      const isAll = mode.value === 'all';
+      count.disabled = isAll;
+      const wrap = count.closest('[data-boss-pool-count-wrap]');
+      if(wrap) wrap.classList.toggle('is-disabled', isAll);
+    }
 
-      card.classList.toggle('is-off', !isOn);
+    function openEditor(poolId){
+      if(!editor || !writable) return;
+      const pool = poolId > 0 ? rows[String(poolId)] : null;
+      editingId = pool ? poolId : 0;
 
-      const stateEl = card.querySelector('[data-boss-pool-state]');
-      if(stateEl) stateEl.textContent = isOn ? t('ux.pool_state_on', 'On') : t('ux.pool_state_off', 'Off');
+      const title = editor.querySelector('[data-boss-pool-editor-title]');
+      if(title) title.textContent = pool
+        ? t('ux.pool_edit', 'Edit pool') + ' #' + poolId
+        : t('ux.pool_create', 'New pool');
+      const bit = editor.querySelector('[data-boss-pool-editor-bit]');
+      if(bit) bit.textContent = pool ? '#' + poolId : '';
 
-      // 人数模式 = 全部有效参战时，人数没有意义 → 置灰禁用（避免误填）
-      if(count && mode){
-        const countWrap = count.closest('[data-boss-pool-count-wrap]') || count.parentElement;
-        const countDisabled = mode.value === 'all';
-        count.disabled = countDisabled;
-        if(countWrap) countWrap.classList.toggle('is-disabled', countDisabled);
+      const values = pool || {
+        name: '', enabled: 1, chance: 100, winner_mode: 'count', winner_count: 1,
+        class_filter: 1, items_text: '', gold_min_copper: 0, gold_max_copper: 0, announce: 1
+      };
+      field('name').value = values.name || '';
+      field('chance').value = String(values.chance);
+      field('winner_mode').value = values.winner_mode === 'all' ? 'all' : 'count';
+      field('winner_count').value = String(values.winner_count);
+      field('gold_min_copper').value = String(values.gold_min_copper);
+      field('gold_max_copper').value = String(values.gold_max_copper);
+      field('items_text').value = values.items_text || '';
+      field('enabled').checked = Number(values.enabled) === 1;
+      field('class_filter').checked = Number(values.class_filter) === 1;
+      field('announce').checked = Number(values.announce) === 1;
+
+      editor.hidden = false;
+      refreshModeState();
+      refreshItemPreview();
+      editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function closeEditor(){
+      editingId = 0;
+      if(editor) editor.hidden = true;
+    }
+
+    async function send(action, body){
+      const json = await post('/boss/api/pools', Object.assign({ action: action }, body || {}));
+      if(!json || !json.success){
+        show('error', (json && json.message) || t('ux.pools_failed', 'Reward pool update failed'));
+        return null;
       }
-
-      const itemsCount = countItems(items ? items.value : '');
-      const itemsCountEl = card.querySelector('[data-boss-pool-items-count]');
-      if(itemsCountEl) itemsCountEl.textContent = t('ux.pool_items', ':n item(s)').replace(':n', String(itemsCount));
-
-      const summary = summaryFor(index);
-      if(summary){
-        summary.classList.toggle('is-off', !isOn);
-        const stateSlot = summary.querySelector('[data-boss-pool-summary-state]');
-        const chanceSlot = summary.querySelector('[data-boss-pool-summary-chance]');
-        const countSlot = summary.querySelector('[data-boss-pool-summary-count]');
-        const itemsSlot = summary.querySelector('[data-boss-pool-summary-items]');
-        if(stateSlot) stateSlot.textContent = isOn ? t('ux.pool_state_on', 'On') : t('ux.pool_state_off', 'Off');
-        if(chanceSlot) chanceSlot.textContent = String(parseInt(chanceInput ? chanceInput.value : '0', 10) || 0) + '%';
-        if(countSlot) {
-          countSlot.textContent = (mode && mode.value === 'all')
-            ? t('ux.winners_all', 'Every eligible player')
-            : t('ux.pool_winners', ':n winner(s)').replace(':n', String(parseInt(count ? count.value : '0', 10) || 0));
-        }
-        if(itemsSlot) itemsSlot.textContent = t('ux.pool_items', ':n item(s)').replace(':n', String(itemsCount));
-      }
-
-      const toc = tocFor(index);
-      if(toc) toc.classList.toggle('is-off', !isOn);
+      show('success', json.message || t('feedback.success', 'Done'));
+      // 奖池名/序号/物品名都由服务端渲染，写完直接重载页面
+      window.setTimeout(function(){ window.location.reload(); }, 700);
+      return json;
     }
 
-    function refreshAll(){
-      cards.forEach(refreshCard);
+    // 参与重排的位号（按当前表格顺序，软删除行不参与）
+    function currentOrder(){
+      return Array.prototype.slice.call(root.querySelectorAll('[data-boss-pool-row]'))
+        .map(function(row){ return parseInt(row.dataset.bossPoolRow, 10); })
+        .filter(function(id){ const pool = rows[String(id)]; return pool && Number(pool.deleted_at) === 0; });
     }
 
-    cards.forEach(function(card){
-      card.addEventListener('input', function(){ refreshCard(card); });
-      card.addEventListener('change', function(){ refreshCard(card); });
+    if(!writable) return;
+
+    const createBtn = root.querySelector('[data-boss-pool-create]');
+    if(createBtn) createBtn.addEventListener('click', function(){ openEditor(0); });
+
+    const saveBtn = root.querySelector('[data-boss-pool-save]');
+    if(saveBtn) saveBtn.addEventListener('click', async function(){
+      const payload = {
+        name: field('name').value,
+        enabled: field('enabled').checked ? 1 : 0,
+        chance: parseInt(field('chance').value, 10) || 0,
+        winner_mode: field('winner_mode').value,
+        winner_count: parseInt(field('winner_count').value, 10) || 1,
+        class_filter: field('class_filter').checked ? 1 : 0,
+        items_text: field('items_text').value,
+        gold_min_copper: parseInt(field('gold_min_copper').value, 10) || 0,
+        gold_max_copper: parseInt(field('gold_max_copper').value, 10) || 0,
+        announce: field('announce').checked ? 1 : 0
+      };
+      saveBtn.disabled = true;
+      if(editingId > 0){ payload.pool_id = editingId; }
+      await send(editingId > 0 ? 'save' : 'create', payload);
+      saveBtn.disabled = false;
     });
 
-    // 总览条 / 目录 → 跳到对应卡片并高亮
-    document.addEventListener('click', function(event){
-      const jump = event.target.closest('[data-boss-pool-jump]');
-      if(!jump) return;
-      const card = document.querySelector('[data-boss-pool-card="' + jump.dataset.bossPoolJump + '"]');
-      if(!card) return;
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.style.outline = '2px solid rgba(220,168,82,.65)';
-      window.setTimeout(function(){ card.style.outline = ''; }, 1200);
+    const cancelBtn = root.querySelector('[data-boss-pool-cancel]');
+    if(cancelBtn) cancelBtn.addEventListener('click', closeEditor);
+
+    root.addEventListener('click', async function(event){
+      const target = event.target;
+
+      const edit = target.closest('[data-boss-pool-edit]');
+      if(edit){ openEditor(parseInt(edit.dataset.bossPoolEdit, 10)); return; }
+
+      const del = target.closest('[data-boss-pool-delete]');
+      if(del){
+        const poolId = parseInt(del.dataset.bossPoolDelete, 10);
+        const label = rows[String(poolId)] && rows[String(poolId)].name ? rows[String(poolId)].name : ('#' + poolId);
+        const confirmed = window.Panel && typeof Panel.confirm === 'function'
+          ? await Panel.confirm({ message: t('ux.pool_delete_confirm', 'Delete pool ":pool"? Its bit number stays reserved.').replace(':pool', label), danger: true })
+          : window.confirm(t('ux.pool_delete_confirm', 'Delete this pool?'));
+        if(!confirmed) return;
+        await send('delete', { pool_id: poolId });
+        return;
+      }
+
+      const up = target.closest('[data-boss-pool-up]');
+      const down = target.closest('[data-boss-pool-down]');
+      if(up || down){
+        const poolId = parseInt((up || down).dataset[up ? 'bossPoolUp' : 'bossPoolDown'], 10);
+        const order = currentOrder();
+        const index = order.indexOf(poolId);
+        if(index < 0) return;
+        const swapWith = up ? index - 1 : index + 1;
+        if(swapWith < 0 || swapWith >= order.length) return;
+        const moved = order[swapWith];
+        order[swapWith] = poolId;
+        order[index] = moved;
+        await send('reorder', { order: order });
+      }
     });
+
+    if(editor){
+      editor.addEventListener('input', function(event){
+        if(event.target === field('items_text')) refreshItemPreview();
+        if(event.target === field('winner_mode')) refreshModeState();
+      });
+      editor.addEventListener('change', function(event){
+        if(event.target === field('winner_mode')) refreshModeState();
+      });
+    }
 
     // 奖品名折叠/展开
-    document.addEventListener('click', function(event){
+    root.addEventListener('click', function(event){
       const toggle = event.target.closest('[data-boss-pool-items-toggle]');
       if(!toggle) return;
       const wrapper = toggle.closest('[data-boss-pool-items]');
       if(wrapper) wrapper.classList.toggle('is-open');
     });
-
-    refreshAll();
   }
 
-  setupPoolCards();
+  setupRewardPools();
 
   /* ---- 奖池工具：模拟一次击杀 / 跨区复制 ---- */
   function setupRewardTools(){
@@ -693,11 +808,6 @@
     const copyRun = document.querySelector('[data-boss-copy-run]');
     const copyResult = document.querySelector('[data-boss-copy-result]');
     if(!simBtn && !copyOpen) return;
-
-    function esc(value){
-      return String(value === undefined || value === null ? '' : value)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function pct(value){
       const number = Number(value || 0) * 100;
@@ -785,7 +895,7 @@
         const result = (json.payload && json.payload.result) || {};
         const lines = [];
         lines.push('<div><strong>' + esc(json.message || '') + '</strong></div>');
-        lines.push('<div class="muted">ext ' + esc(result.ext_columns || 0) + ' 列 / main ' + esc(result.main_columns || 0) + ' 列</div>');
+        lines.push('<div class="muted">ext ' + esc(result.ext_columns || 0) + ' 列 / pools ' + esc(result.pool_rows || 0) + ' 行 / main ' + esc(result.main_columns || 0) + ' 列</div>');
         if(result.skipped && result.skipped.length){
           lines.push('<div class="muted">' + esc(t('ux.copy_skipped', 'skipped: ')) + esc(result.skipped.join(', ')) + '</div>');
         }
@@ -819,14 +929,16 @@
           const top = (pool.top_winners || []).slice(0, 3).map(function(winner){
             return esc(winner.name) + ' ' + pct(winner.hits);
           }).join('、');
+          const label = pool.name ? (pool.name + '（#' + key + '）') : ('#' + key);
           rows.push(
             '<tr' + (pool.enabled ? '' : ' class="muted"') + '>'
-            + '<td>' + esc(key) + '</td>'
+            + '<td>' + esc(label) + '</td>'
             + '<td>' + (pool.enabled ? '✓' : '—') + '</td>'
             + '<td>' + esc(pool.chance) + '%</td>'
             + '<td>' + esc(pct(pool.trigger_rate)) + '</td>'
-            + '<td>' + esc(pool.winner_mode === 'all' ? t('ux.winners_all', 'all') : (pool.winner_count + ' 人')) + '</td>'
+            + '<td>' + esc(pool.winner_mode === 'all' ? t('ux.winners_all', 'all') : t('ux.pool_winners', ':n winner(s)').replace(':n', String(pool.winner_count))) + '</td>'
             + '<td>' + esc(pool.winners_per_round || 0) + '</td>'
+            + '<td>' + esc(goldText(pool.gold_min, pool.gold_max, pool.gold_per_round)) + '</td>'
             + '<td>' + (top || '<span class="muted">—</span>') + '</td>'
             + '</tr>'
           );
@@ -837,10 +949,18 @@
           if(!entry.triggered || !(entry.grants || []).length){
             return;
           }
+          const label = entry.name ? (entry.name + '（#' + entry.pool + '）') : ('#' + entry.pool);
           (entry.grants || []).forEach(function(grant){
-            roundLines.push('<li>' + esc(t('ux.simulate_pool', 'Pool')) + ' ' + esc(entry.pool) + ' → '
-              + esc(grant.name) + '（' + esc(className(grant.class_id)) + '）拿到 '
-              + esc(grant.item_id) + ' · ' + esc(grant.item_name) + '</li>');
+            const parts = [];
+            if(grant.item_id > 0){
+              parts.push(esc(grant.item_id) + ' · ' + esc(grant.item_name));
+            }
+            if(grant.gold > 0){
+              parts.push(esc(t('ux.simulate_gold', 'gold :gold').replace(':gold', goldAmount(grant.gold))));
+            }
+            roundLines.push('<li>' + esc(t('ux.simulate_pool', 'Pool')) + ' ' + esc(label) + ' → '
+              + esc(grant.name) + '（' + esc(className(grant.class_id)) + '）：'
+              + (parts.join('，') || '<span class="muted">—</span>') + '</li>');
           });
         });
 
@@ -860,6 +980,7 @@
           + '<th>' + esc(t('ux.simulate_col_trigger', 'Trigger rate')) + '</th>'
           + '<th>' + esc(t('ux.simulate_col_mode', 'Winners')) + '</th>'
           + '<th>' + esc(t('ux.simulate_col_avg', 'Avg winners')) + '</th>'
+          + '<th>' + esc(t('ux.simulate_col_gold', 'Avg gold')) + '</th>'
           + '<th>' + esc(t('ux.simulate_col_top', 'Most likely')) + '</th>'
           + '</tr></thead><tbody>' + rows.join('') + '</tbody></table>'
           + '<div class="boss-simulate__round"><strong>' + esc(t('ux.simulate_round', 'This round')) + '</strong>'
@@ -871,6 +992,66 @@
   }
 
   setupRewardTools();
+
+  /* ---- 技能预筛页：红/黄筛选 + 重算 ---- */
+  function setupSkillPrescreen(){
+    const root = document.querySelector('[data-boss-prescreen]');
+    if(!root) return;
+
+    const table = root.querySelector('[data-boss-prescreen-table]');
+    const runBtn = root.querySelector('[data-boss-prescreen-run]');
+    const resultBox = root.querySelector('[data-boss-prescreen-result]');
+
+    if(table){
+      root.addEventListener('click', function(event){
+        const chip = event.target.closest('[data-boss-prescreen-level]');
+        if(!chip) return;
+        const level = chip.dataset.bossPrescreenLevel;
+        Array.prototype.forEach.call(root.querySelectorAll('[data-boss-prescreen-level]'), function(node){
+          node.classList.toggle('is-active', node === chip);
+        });
+        Array.prototype.forEach.call(table.querySelectorAll('[data-boss-prescreen-row]'), function(row){
+          row.classList.toggle('boss-row--hidden', level !== 'all' && row.dataset.bossPrescreenRow !== level);
+        });
+      });
+    }
+
+    if(runBtn){
+      runBtn.addEventListener('click', async function(){
+        runBtn.disabled = true;
+        if(resultBox){
+          resultBox.hidden = false;
+          resultBox.innerHTML = '<span class="muted">' + esc(t('ux.prescreen_running', 'Checking…')) + '</span>';
+        }
+
+        const json = await post('/boss/api/skill-prescreen/run', {});
+        runBtn.disabled = false;
+
+        if(!json || !json.success){
+          const message = (json && json.message) || t('ux.prescreen_failed', 'Prescreen failed');
+          if(resultBox){
+            resultBox.innerHTML = '<div class="panel-flash panel-flash--error panel-flash--inline is-visible">' + esc(message) + '</div>';
+          }
+          show('error', message);
+          return;
+        }
+
+        show('success', json.message || t('feedback.success', 'Done'));
+        if(resultBox){
+          const summary = (json.payload && json.payload.result && json.payload.result.summary) || {};
+          resultBox.innerHTML = '<span class="muted">'
+            + esc(t('ux.prescreen_done', 'red :red / yellow :yellow / green :green')
+              .replace(':red', String(summary.red || 0))
+              .replace(':yellow', String(summary.yellow || 0))
+              .replace(':green', String(summary.green || 0)))
+            + '</span>';
+        }
+        window.setTimeout(function(){ window.location.reload(); }, 900);
+      });
+    }
+  }
+
+  setupSkillPrescreen();
 
   /* ---- 「职业过滤映射」自动补全：按奖池物品从核心 item_template 推导职业 ---- */
   function setupClassMapAutofill(){

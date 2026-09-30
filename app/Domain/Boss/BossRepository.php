@@ -29,12 +29,16 @@ class BossRepository extends MultiServerRepository
         'spawn_points_text', 'updated_at',
     ];
 
-    private string $customDbName;
-    private string $runtimeKey;
+    // 子类（RewardPoolRepository）复用同一套租户解析：库名 + state_key + 全限定表名。
+    protected string $customDbName;
+    protected string $runtimeKey;
     private string $configTable;
-    private string $extTable;
+    protected string $extTable;
     private int $decimalScale;
-    private ?array $tableAvailability = null;
+    protected ?array $tableAvailability = null;
+
+    /** 本区奖池位号 → 展示名（贡献表徽章解码用，按需加载一次）。 */
+    private ?array $rewardPoolLabels = null;
 
     /**
      * boss_activity_runtime 的列清单（面板读运行态用）。
@@ -107,6 +111,12 @@ class BossRepository extends MultiServerRepository
             'database' => $this->customDbName,
             'runtime_key' => $this->runtimeKey,
         ];
+    }
+
+    // 绑到同一个区的奖池仓储（跨区复制要按区各建一个）。
+    public function rewardPools(): RewardPoolRepository
+    {
+        return new RewardPoolRepository($this->serverId);
     }
 
     // 当前区服显示名，用于 :server 占位替换；取不到时退回区服索引。
@@ -772,20 +782,41 @@ class BossRepository extends MultiServerRepository
     }
 
     /**
-     * 把 6 个奖池的中奖位图展开成 [1, 3, 5] 这样的奖池序号列表（给视图渲染徽章用）。
+     * 把奖池中奖位图展开成展示名列表（给视图渲染徽章用）：位号 → 该区池名，
+     * 池已软删或库里查不到该位号时退回 `#id`（历史快照仍需可解释）。
      *
-     * @return array<int,int>
+     * @return array<int,string>
      */
     private function decodeRewardPoolMask(int $mask): array
     {
+        if ($mask === 0)
+            return [];
+
+        $labels = $this->rewardPoolLabels();
         $pools = [];
-        for ($index = 1; $index <= 6; $index++) {
-            if (($mask & (1 << ($index - 1))) !== 0) {
-                $pools[] = $index;
-            }
+        for ($index = 1; $index <= RewardPoolRepository::MAX_POOL_ID; $index++) {
+            if (($mask & (1 << ($index - 1))) === 0)
+                continue;
+
+            $pools[] = $labels[$index] ?? '#' . $index;
         }
 
         return $pools;
+    }
+
+    /** @return array<int,string> pool_id => 展示名（软删除的池由仓储加「已删除」后缀） */
+    private function rewardPoolLabels(): array
+    {
+        if ($this->rewardPoolLabels !== null)
+            return $this->rewardPoolLabels;
+
+        try {
+            return $this->rewardPoolLabels = (new RewardPoolRepository($this->serverId))->displayNames();
+        } catch (Throwable $exception) {
+            $this->logWarning('reward_pool_labels_failed', $exception);
+
+            return $this->rewardPoolLabels = [];
+        }
     }
 
     /**
@@ -1026,7 +1057,8 @@ class BossRepository extends MultiServerRepository
         return $missing;
     }
 
-    private function tableExists(string $table): bool
+    // 子类（RewardPoolRepository）复用表探测结果。
+    protected function tableExists(string $table): bool
     {
         if ($this->tableAvailability !== null && array_key_exists($table, $this->tableAvailability))
             return $this->tableAvailability[$table];
@@ -1082,7 +1114,8 @@ class BossRepository extends MultiServerRepository
     /**
      * 在 storage/logs 下落一条 warning，避免异常被完全吞掉（与既有 LogPath 约定一致）。
      */
-    private function logWarning(string $context, Throwable $exception): void
+    // 子类（RewardPoolRepository）共用同一条 warning 通道。
+    protected function logWarning(string $context, Throwable $exception): void
     {
         try {
             if (!class_exists(LogPath::class))
@@ -1299,7 +1332,8 @@ class BossRepository extends MultiServerRepository
         $warnings[] = $message;
     }
 
-    private function table(string $table): string
+    // 子类（RewardPoolRepository）用同一套库名限定拼表名。
+    protected function table(string $table): string
     {
         return '`' . $this->customDbName . '`.`' . $table . '`';
     }

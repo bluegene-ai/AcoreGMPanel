@@ -1,7 +1,7 @@
 <?php
 /**
  * File: app/Domain/Boss/BossConfigTransferService.php
- * Purpose: 把一个区服的 Boss 配置（扩展配置分组 + 可选主配置）复制到另一个区服，
+ * Purpose: 把一个区服的 Boss 配置（扩展配置分组 + 奖池表 + 可选主配置）复制到另一个区服，
  */
 
 declare(strict_types=1);
@@ -22,19 +22,21 @@ use Throwable;
  *   $service->copyExt(['reward_pools', 'schedule'], true);
  *
  * 读写都只用 BossRepository 的**公开**方法（无自建 SQL）：
- *   - 读源区服：`dashboard(0, 0)` → 它的 'ext' / 'config' 两行（唯一公开的读路径）
- *   - 写目标区服：`saveExtConfig()` / `saveConfig()`（仓储自己处理租户键与时间戳）
+ *   - 读源区服：`dashboard(0, 0)` → 它的 'ext' / 'config' 两行（唯一公开的读路径）；
+ *     奖池走 `rewardPools()->listPools(true)`
+ *   - 写目标区服：`saveExtConfig()` / `saveConfig()`；奖池走 `rewardPools()->importRows()`（保持 pool_id）
  * 不发 SOAP：热加载（.boss config reload）由调用方在复制完成后对**目标**区服执行。
  *
  * 返回结构：
  *   [
- *     'ok' => bool,                    // 至少复制了一列，且没有任何写入失败
+ *     'ok' => bool,                    // 至少复制了一列/一行，且没有任何写入失败
  *     'ext_columns' => int,            // 实际写入的扩展配置列数
  *     'main_columns' => int,           // 实际写入的主配置列数
+ *     'pool_rows' => int,              // 实际写入的奖池行数（位号原样保留）
  *     'ext_column_names' => string[],  // 实际写入的扩展配置列名（顺序 = extFieldSchema）
  *     'main_column_names' => string[], // 实际写入的主配置列名
- *     'groups' => string[],            // 实际复制的分组（ext 组名；主配置为 'main'）
- *     'skipped' => string[],           // 明确没碰的列/组（未请求、目标建表缺失、写入失败……）
+ *     'groups' => string[],            // 实际复制的分组（ext 组名；奖池为 'reward_pools'；主配置为 'main'）
+ *     'skipped' => string[],           // 明确没碰的列/组/表（未请求、目标建表缺失、写入失败……）
  *     'warnings' => string[],          // 中文告警
  *   ]
  *
@@ -63,6 +65,9 @@ class BossConfigTransferService
     private BossRepository $source;
     private BossRepository $target;
 
+    /** 奖池表的伪分组名：不是 ext 分组，复制时按位号原样搬运。 */
+    public const REWARD_POOLS_GROUP = 'reward_pools';
+
     /**
      * @param BossRepository $source 源区服仓储（serverId = 复制来源）
      * @param BossRepository $target 目标区服仓储（serverId = 复制目标）
@@ -77,10 +82,11 @@ class BossConfigTransferService
      * 复制扩展配置（可只复制部分分组），可选带上主配置。
      *
      * @param array<int,string> $groups 分组名：可以是 config/boss.php `ext_fields` 的组
-     *        （yells / taunts / ai / phase / patrol / minion / helper / class / tier /
-     *        skill_random / reward_pool_1..6 / schedule），也可以是 `ext_tabs` 的 Tab
-     *        （ai / patrol / support / skill_random / reward_pools / schedule —— 会自动展开成组）。
-     *        空数组 = 全部扩展配置组。
+     *        （yells / taunts / ai / phase / patrol / minion / helper / class_ai / class_reward /
+     *        tier / skill_random / recovery / reward / schedule），也可以是 `ext_tabs` 的 Tab
+     *        （ai / patrol / support / skill_random / recovery / reward / schedule —— 会自动展开成组），
+     *        或伪分组 `reward_pools`（boss_reward_pools 表，按位号原样复制）。
+     *        空数组 = 全部扩展配置组 + 奖池表。
      * @param bool $includeMainConfig 是否连主配置（boss_activity_config）一起复制
      * @return array<string,mixed> 见类 docblock
      */
@@ -91,13 +97,19 @@ class BossConfigTransferService
         $failures = 0;
         $copiedGroups = [];
 
+        $copyPools = $groups === [] || in_array(self::REWARD_POOLS_GROUP, $groups, true);
+        $extGroups = array_values(array_filter(
+            $groups,
+            static fn (string $group): bool => $group !== self::REWARD_POOLS_GROUP
+        ));
+
         
         $dashboard = $this->source->dashboard(0, 0);
         $extRow = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
         $configRow = is_array($dashboard['config'] ?? null) ? $dashboard['config'] : [];
 
         $groupColumns = $this->groupColumns();
-        $requested = $this->resolveRequestedGroups($groups, $groupColumns, $skipped, $warnings);
+        $requested = $this->resolveRequestedGroups($extGroups, $groupColumns, $skipped, $warnings);
 
         
         $schema = $this->source->extFieldSchema();
@@ -131,6 +143,13 @@ class BossConfigTransferService
 
         $extColumns = $this->writeExtConfig($extPayload, $requested, $skipped, $warnings, $failures, $copiedGroups);
 
+        $poolRows = $copyPools
+            ? $this->copyRewardPools($skipped, $warnings, $failures, $copiedGroups)
+            : 0;
+        if (!$copyPools) {
+            $skipped[] = self::REWARD_POOLS_GROUP . '（未请求：未勾选奖池表）';
+        }
+
         $mainColumns = [];
         if ($includeMainConfig === false) {
             $skipped[] = 'main.*（未请求：includeMainConfig=false）';
@@ -150,7 +169,7 @@ class BossConfigTransferService
             }
         }
 
-        $ok = $failures === 0 && ($extColumns !== [] || $mainColumns !== []);
+        $ok = $failures === 0 && ($extColumns !== [] || $mainColumns !== [] || $poolRows > 0);
         if ($failures === 0 && !$ok) {
             $warnings[] = '没有任何配置列被复制';
         }
@@ -159,12 +178,69 @@ class BossConfigTransferService
             'ok' => $ok,
             'ext_columns' => count($extColumns),
             'main_columns' => count($mainColumns),
+            'pool_rows' => $poolRows,
             'ext_column_names' => $extColumns,
             'main_column_names' => $mainColumns,
             'groups' => array_values(array_unique($copiedGroups)),
             'skipped' => $skipped,
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * 复制奖池表：**保留 pool_id**（位号与历史快照必须一致，不能重新分配）。
+     * 目标区已有同 (state_key, pool_id) 的行时按源区覆盖；源区已软删的行也一起搬（位号留痕）。
+     *
+     * @param array<int,string> $skipped
+     * @param array<int,string> $warnings
+     * @param array<int,string> $copiedGroups
+     * @return int 实际写入的行数
+     */
+    private function copyRewardPools(array &$skipped, array &$warnings, int &$failures, array &$copiedGroups): int
+    {
+        $sourceRepo = $this->source->rewardPools();
+        $targetRepo = $this->target->rewardPools();
+
+        if (!$sourceRepo->available()) {
+            $warnings[] = '源区服没有 boss_reward_pools 表（boss.lua 尚未升级），奖池未复制';
+            $skipped[] = self::REWARD_POOLS_GROUP . '（源区服缺表）';
+            $failures++;
+
+            return 0;
+        }
+
+        if (!$targetRepo->available()) {
+            $warnings[] = '目标区服没有 boss_reward_pools 表（boss.lua 尚未升级），奖池未写入';
+            $skipped[] = self::REWARD_POOLS_GROUP . '（目标区服缺表）';
+            $failures++;
+
+            return 0;
+        }
+
+        $rows = $sourceRepo->listPools(true);
+        if ($rows === []) {
+            $warnings[] = '源区服奖池表为空，奖池未复制';
+            $skipped[] = self::REWARD_POOLS_GROUP . '（源区服 0 行）';
+
+            return 0;
+        }
+
+        $written = $targetRepo->importRows($rows);
+        if ($written === 0) {
+            $warnings[] = '奖池写入失败，目标区服未写入任何池';
+            $skipped[] = self::REWARD_POOLS_GROUP . '（写入失败）';
+            $failures++;
+
+            return 0;
+        }
+
+        if ($written < count($rows)) {
+            $warnings[] = '部分奖池未写入（源区服 ' . count($rows) . ' 行 / 目标区服写入 ' . $written . ' 行）';
+        }
+
+        $copiedGroups[] = self::REWARD_POOLS_GROUP;
+
+        return $written;
     }
 
     /**

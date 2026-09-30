@@ -76,10 +76,6 @@
 .boss-check{flex-wrap:wrap;}
 .boss-check__hint{flex-basis:100%;}
 
-@media (max-width:1280px){
-  .boss-runtime-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .boss-config-grid,.boss-config-columns{grid-template-columns:1fr;}
-}
 
 
 /* ---- 运行状态：一条摘要带 + 4 列事实卡 + 单行 KPI ---- */
@@ -147,26 +143,6 @@
 .boss-row--hidden{display:none;}
 
 /* ---- 奖池页：左侧吸顶目录 + 右侧卡片；顶部总览条 + 一处共用说明 ---- */
-.boss-pool-layout{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:start;}
-.boss-toc{position:sticky;top:12px;display:flex;flex-direction:column;gap:6px;}
-.boss-toc__item{display:flex;align-items:center;gap:8px;background:#101b27;border:1px solid rgba(220,168,82,.16);
-  border-radius:8px;color:#e8d9bf;padding:7px 10px;font-size:12px;text-align:left;cursor:pointer;}
-.boss-toc__item:hover{background:#16232f;}
-.boss-toc__item.is-off{opacity:.55;}
-.boss-toc__dot{width:8px;height:8px;border-radius:50%;background:#6cc07a;flex:0 0 auto;}
-.boss-toc__item.is-off .boss-toc__dot{background:#919eab;}
-.boss-pool-summary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
-.boss-pool-summary__item{background:#101b27;border:1px solid rgba(220,168,82,.16);border-radius:999px;
-  padding:6px 12px;font-size:12px;color:#e8d9bf;display:flex;align-items:center;gap:8px;}
-.boss-pool-summary__item.is-off{opacity:.55;}
-.boss-pool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
-.boss-pool-card{display:flex;flex-direction:column;gap:14px;background:#101b27;border:1px solid rgba(220,168,82,.14);
-  border-radius:10px;padding:16px;min-width:0;}
-.boss-pool-card.is-off{opacity:.62;}
-.boss-pool-card__head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  border-bottom:1px dashed rgba(220,168,82,.18);padding-bottom:10px;}
-.boss-pool-card__title{display:flex;align-items:center;gap:10px;color:#fff2db;font-size:15px;font-weight:600;}
-.boss-pool-card__state{font-size:12px;color:#d7c3a1;}
 .boss-pool-items{display:flex;flex-direction:column;gap:8px;}
 .boss-pool-items__list{display:none;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;
   border:1px dashed rgba(220,168,82,.2);border-radius:8px;padding:8px;}
@@ -182,16 +158,23 @@
 .boss-simulate__round ul{margin:6px 0 0;padding-left:18px;}
 .boss-simulate__round li{margin-bottom:4px;}
 
+
+/* 奖池页（/boss/pools）：位号表 + 编辑表单 */
+.boss-pools-toolbar{justify-content:flex-end;flex-wrap:wrap;margin-bottom:14px;}
+.boss-pool-row--deleted{opacity:.6;}
+.boss-pool-row--deleted .boss-cell-title{text-decoration:line-through;}
+.boss-pool-row--off .boss-cell-title{color:#c9bda6;}
+.boss-pool-actions{display:flex;flex-wrap:wrap;gap:6px;}
+.boss-pool-actions .boss-chip[disabled]{opacity:.4;cursor:not-allowed;}
+.boss-pool-editor{grid-column:1 / -1;margin-top:16px;}
+
 @media (max-width:1280px){
   .boss-runtime-grid--4{grid-template-columns:repeat(2,minmax(0,1fr));}
   .boss-runtime-card--wide{grid-column:span 2;}
   .boss-kpi-row{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .boss-pool-layout{grid-template-columns:1fr;}
-  .boss-toc{position:static;flex-direction:row;flex-wrap:wrap;}
 }
 
 @media (max-width:980px){
-  .boss-pool-grid{grid-template-columns:1fr;}
   .boss-kpi-row{grid-template-columns:1fr;}
 }
 

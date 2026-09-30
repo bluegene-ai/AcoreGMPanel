@@ -29,13 +29,102 @@ final class GameNameResolver
      * DBC 文件里名字字段的起点下标、可用于探测语种的字符掩码字段（按 AzerothCore DBCStructure.h）。
      * 客户端把 16 个语种的字符串连续存放，但实际安装的 DBC 往往只填 1~2 个语种且不一定是标准顺序，
      * 所以语种槽位在运行时探测（见 dbcLocaleOffset）。
+     *
+     * 表尾四项（spellrange / spellradius / spellcasttimes / spellduration）没有名字字段，
+     * 是数值查表：'fields' 给出 字段名 => 下标（见 dbcLookup()），不参与 resolveMany/map。
      */
     private const DBC_SPECS = [
         'faction' => ['file' => 'Faction.dbc', 'idField' => 0, 'nameField' => 23, 'maskField' => 39, 'order' => self::DBC_LOCALE_ORDER],
         'skill' => ['file' => 'SkillLine.dbc', 'idField' => 0, 'nameField' => 3, 'maskField' => 19, 'order' => self::DBC_LOCALE_ORDER],
         'spell' => ['file' => 'Spell.dbc', 'idField' => 0, 'nameField' => 136, 'maskField' => 152, 'order' => self::DBC_LOCALE_ORDER],
         'achievement' => ['file' => 'Achievement.dbc', 'idField' => 0, 'nameField' => 4, 'maskField' => 20, 'order' => self::DBC_LOCALE_ORDER],
+        'spellrange' => [
+            'file' => 'SpellRange.dbc',
+            'idField' => 0,
+            'fields' => ['min_hostile' => 1, 'min_friendly' => 2, 'max_hostile' => 3, 'max_friendly' => 4, 'flags' => 5],
+            // RangeMin/RangeMax 在 DBC 里是 float（码），不按 uint32 读
+            'float_fields' => ['min_hostile', 'min_friendly', 'max_hostile', 'max_friendly'],
+        ],
+        'spellradius' => [
+            'file' => 'SpellRadius.dbc',
+            'idField' => 0,
+            'fields' => ['radius_min' => 1, 'radius_per_level' => 2, 'radius_max' => 3],
+            // 半径同样是 float（码）
+            'float_fields' => ['radius_min', 'radius_per_level', 'radius_max'],
+        ],
+        'spellcasttimes' => [
+            'file' => 'SpellCastTimes.dbc',
+            'idField' => 0,
+            'fields' => ['cast_time_ms' => 1],
+        ],
+        'spellduration' => [
+            'file' => 'SpellDuration.dbc',
+            'idField' => 0,
+            'fields' => ['duration' => 1, 'duration_max' => 3],
+        ],
     ];
+
+    /**
+     * Spell.dbc 的可按需字段（下标见 DBCStructure.h / 预筛方案 §3）。
+     * 只读调用方点名的那几个字段，不把 234 个字段常驻内存。
+     */
+    public const SPELL_FIELDS = [
+        'id' => 0,
+        'attributes' => 4,
+        'attributes_ex' => 5,
+        'attributes_ex2' => 6,
+        'attributes_ex3' => 7,
+        'attributes_ex4' => 8,
+        'attributes_ex5' => 9,
+        'attributes_ex6' => 10,
+        'attributes_ex7' => 11,
+        'stances' => 12,
+        'stances_not' => 14,
+        'targets' => 16,
+        'casting_time_index' => 28,
+        'duration_index' => 40,
+        'range_index' => 46,
+        'reagent_1' => 52,
+        'reagent_2' => 53,
+        'reagent_3' => 54,
+        'reagent_4' => 55,
+        'reagent_5' => 56,
+        'reagent_6' => 57,
+        'reagent_7' => 58,
+        'reagent_8' => 59,
+        'equipped_item_class' => 68,
+        'effect_1' => 71,
+        'effect_2' => 72,
+        'effect_3' => 73,
+        'effect_implicit_target_a_1' => 86,
+        'effect_implicit_target_a_2' => 87,
+        'effect_implicit_target_a_3' => 88,
+        'effect_implicit_target_b_1' => 89,
+        'effect_implicit_target_b_2' => 90,
+        'effect_implicit_target_b_3' => 91,
+        'effect_radius_index_1' => 92,
+        'effect_radius_index_2' => 93,
+        'effect_radius_index_3' => 94,
+        'effect_apply_aura_name_1' => 95,
+        'effect_apply_aura_name_2' => 96,
+        'effect_apply_aura_name_3' => 97,
+        'effect_item_type_1' => 107,
+        'effect_item_type_2' => 108,
+        'effect_item_type_3' => 109,
+        'effect_misc_value_1' => 110,
+        'effect_misc_value_2' => 111,
+        'effect_misc_value_3' => 112,
+        'spell_focus_object' => 118,
+        'totem_1' => 121,
+        'totem_2' => 122,
+        'totem_category_1' => 123,
+        'totem_category_2' => 124,
+        'spell_name' => 136,
+        'max_affected_targets' => 212,
+        'school_mask' => 225,
+    ];
+
+    private const DBC_ROW_CACHE_VERSION = 1;
 
     /** 客户端 16 个语种的标准顺序（DBC 里以此顺序连续存放字符串） */
     private const DBC_LOCALE_ORDER = [
@@ -46,6 +135,9 @@ final class GameNameResolver
 
     /** @var array<string, array<int, string>> 已就绪的 id => name 表 */
     private static array $maps = [];
+
+    /** @var array<string, array<int, array<string,int>>> 按需数值表（表 + 字段集合 + 规则版本） */
+    private static array $rowCache = [];
 
     /**
      * 批量解析，返回 id => name（未解析到的 id 不在结果里）。
@@ -129,6 +221,438 @@ final class GameNameResolver
     public static function flush(): void
     {
         self::$maps = [];
+        self::$rowCache = [];
+    }
+
+    /**
+     * 按需读数值表（SpellRange / SpellRadius / SpellCastTimes / SpellDuration 之一）。
+     *
+     * 只解出调用方点名的字段，并按「表 + 字段集合 + 规则版本」缓存到磁盘：
+     * 字段集合或 $version 变化即失效重读，与既有名字缓存同一套存储目录。
+     *
+     * @param string[] $fields DBC_SPECS[$type]['fields'] 里的键
+     * @return array<int,array<string,int|float>> id => [field => 值]（读不到文件/字段时返回空数组）
+     */
+    public static function dbcLookup(string $type, array $fields, string $version = ''): array
+    {
+        $type = strtolower(trim($type));
+        $spec = self::DBC_SPECS[$type] ?? null;
+        if ($spec === null || !isset($spec['fields'])) {
+            return [];
+        }
+
+        $unknown = array_diff($fields, array_keys($spec['fields']));
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException('unknown dbc fields for ' . $type . ': ' . implode(',', $unknown));
+        }
+
+        $fields = array_values(array_unique($fields));
+        if ($fields === []) {
+            return [];
+        }
+
+        $cacheKey = $type . '|' . implode(',', $fields) . '|' . $version;
+        if (array_key_exists($cacheKey, self::$rowCache)) {
+            return self::$rowCache[$cacheKey];
+        }
+
+        $fromDisk = self::loadRowsFromDisk($type, $fields, $version);
+        if ($fromDisk !== null) {
+            return self::$rowCache[$cacheKey] = $fromDisk;
+        }
+
+        $rows = self::buildRows($type, $fields);
+        self::persistRows($type, $fields, $version, $rows);
+
+        return self::$rowCache[$cacheKey] = $rows;
+    }
+
+    /**
+     * 按需读 Spell.dbc 的指定字段（只保留点名的 spellId）。
+     *
+     * @param int[] $ids
+     * @param string[] $fields SPELL_FIELDS 里的键
+     * @return array<int,array<string,int>> spellId => [field => 值]（DBC 里没有的 id 不在结果里）
+     */
+    public static function readSpellFacts(array $ids, array $fields, string $version = ''): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $unknown = array_diff($fields, array_keys(self::SPELL_FIELDS));
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException('unknown spell fields: ' . implode(',', $unknown));
+        }
+
+        $fields = array_values(array_unique($fields));
+        if ($fields === []) {
+            return [];
+        }
+
+        $cacheKey = 'spellfacts|' . implode(',', $fields) . '|' . $version;
+        $cached = self::$rowCache[$cacheKey] ?? null;
+        if ($cached === null) {
+            $fromDisk = self::loadSpellFactsFromDisk($fields, $version);
+            if ($fromDisk !== null) {
+                $cached = $fromDisk;
+            } else {
+                $cached = self::buildSpellFacts($fields);
+                self::persistSpellFacts($fields, $version, $cached);
+            }
+            self::$rowCache[$cacheKey] = $cached;
+        }
+
+        $out = [];
+        foreach ($ids as $id) {
+            if (isset($cached[$id])) {
+                $out[$id] = $cached[$id];
+            }
+        }
+
+        return $out;
+    }
+
+    /** Spell.dbc 的字符串槽（技能名）——名字缓存之外的单次读，用于名实比对。 */
+    public static function spellName(int $id): ?string
+    {
+        $names = self::spellNamesFromDbc([$id], 'spell-name-v1');
+
+        return $names[$id] ?? null;
+    }
+
+    /**
+     * 从 Spell.dbc 直接解析技能名（id => 名称），不经 world 库的 spell_dbc 覆盖表。
+     *
+     * 名实比对要与客户端 DBC 一致，而 world.spell_dbc 只是自定义覆盖（行数远少于 DBC），
+     * 所以这里单独读 DBC 并缓存整张名字表（与既有名字缓存同一目录，按 $version 失效）。
+     *
+     * @param int[] $ids
+     * @return array<int,string>
+     */
+    public static function spellNamesFromDbc(array $ids, string $version = ''): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $cacheKey = 'dbcspellnames|' . $version;
+        $all = self::$rowCache[$cacheKey] ?? null;
+        if ($all === null) {
+            $file = self::spellNameCacheFile($version);
+            $all = self::loadNameCache($file);
+            if ($all === null) {
+                $all = self::buildSpellNameMap();
+                self::writeNameCache($file, $all);
+            }
+            self::$rowCache[$cacheKey] = $all;
+        }
+
+        $out = [];
+        foreach ($ids as $id) {
+            if (isset($all[$id]) && $all[$id] !== '') {
+                $out[$id] = $all[$id];
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return array<int,string> */
+    private static function buildSpellNameMap(): array
+    {
+        $spec = self::DBC_SPECS['spell'];
+        $path = self::dbcDirectory() . DIRECTORY_SEPARATOR . $spec['file'];
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $reader = DbcReader::open($path);
+        if ($reader === null) {
+            return [];
+        }
+
+        $localeOffset = self::dbcLocaleOffset($reader, $spec, self::wantedDbcLocale());
+        $nameField = (int) $spec['nameField'] + $localeOffset;
+        $idField = (int) $spec['idField'];
+
+        $out = [];
+        foreach ($reader->records([$idField, $nameField]) as $record) {
+            $id = (int) ($record[$idField] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $name = $reader->string((int) ($record[$nameField] ?? 0));
+            if ($name !== null) {
+                $out[$id] = $name;
+            }
+        }
+
+        return $out;
+    }
+
+    private static function spellNameCacheFile(string $version): string
+    {
+        $base = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache'
+            . DIRECTORY_SEPARATOR . 'game_names';
+
+        return $base . DIRECTORY_SEPARATOR . 'dbc_spell_names_s' . self::serverId() . '_'
+            . substr(sha1($version), 0, 12) . '.json';
+    }
+
+    /** @return array<int,string>|null */
+    private static function loadNameCache(string $file): ?array
+    {
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($file);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || (int) ($decoded['v'] ?? 0) !== self::CACHE_VERSION) {
+            return null;
+        }
+
+        $names = $decoded['names'] ?? null;
+        if (!is_array($names)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($names as $id => $name) {
+            if (is_string($name) && $name !== '') {
+                $out[(int) $id] = $name;
+            }
+        }
+
+        return $out;
+    }
+
+    private static function writeNameCache(string $file, array $names): void
+    {
+        if ($names === []) {
+            return;
+        }
+
+        $dir = dirname($file);
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return;
+        }
+
+        $encoded = json_encode([
+            'v' => self::CACHE_VERSION,
+            'type' => 'spell_names_dbc',
+            'generated_at' => date('c'),
+            'names' => $names,
+        ], JSON_UNESCAPED_UNICODE);
+        if ($encoded === false) {
+            return;
+        }
+
+        $tmp = $file . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, $encoded) !== false) {
+            @rename($tmp, $file);
+        }
+    }
+
+    /**
+     * 逐条流式读取，只保留点名的 id 与字段（Spell.dbc 5 万多条也只物化需要的那些）。
+     *
+     * @param int[] $fields
+     * @return array<int,array<string,int>>
+     */
+    private static function buildSpellFacts(array $fields): array
+    {
+        $spec = self::DBC_SPECS['spell'];
+        $path = self::dbcDirectory() . DIRECTORY_SEPARATOR . $spec['file'];
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $reader = DbcReader::open($path);
+        if ($reader === null) {
+            return [];
+        }
+
+        $indexes = [];
+        foreach ($fields as $field) {
+            $indexes[$field] = (int) self::SPELL_FIELDS[$field];
+        }
+
+        // id 字段（下标 0）必须在读取集合里：它是记录的键
+        $wanted = array_values(array_unique(array_merge([(int) self::SPELL_FIELDS['id']], array_values($indexes))));
+
+        $out = [];
+        foreach ($reader->records($wanted) as $record) {
+            $id = (int) ($record[(int) self::SPELL_FIELDS['id']] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $row = [];
+            foreach ($indexes as $field => $index) {
+                $row[$field] = (int) ($record[$index] ?? 0);
+            }
+            $out[$id] = $row;
+        }
+
+        return $out;
+    }
+
+    /** @return array<int,array<string,int>> */
+    private static function buildRows(string $type, array $fields): array
+    {
+        $spec = self::DBC_SPECS[$type];
+        $path = self::dbcDirectory() . DIRECTORY_SEPARATOR . $spec['file'];
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $reader = DbcReader::open($path);
+        if ($reader === null) {
+            return [];
+        }
+
+        $indexes = [];
+        foreach ($fields as $field) {
+            $indexes[$field] = (int) $spec['fields'][$field];
+        }
+
+        $idField = (int) $spec['idField'];
+        $wanted = array_values(array_unique(array_merge([$idField], array_values($indexes))));
+        $floatFields = array_flip((array) ($spec['float_fields'] ?? []));
+
+        $out = [];
+        foreach ($reader->records($wanted) as $record) {
+            $id = (int) ($record[$idField] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $row = [];
+            foreach ($indexes as $field => $index) {
+                $raw = (int) ($record[$index] ?? 0);
+                $row[$field] = isset($floatFields[$field]) ? self::uint32ToFloat($raw) : $raw;
+            }
+            $out[$id] = $row;
+        }
+
+        return $out;
+    }
+
+    /** DBC 里的 float 字段是按 uint32 读出来的位模式，还原成 float（小端）。 */
+    private static function uint32ToFloat(int $bits): float
+    {
+        $unpacked = unpack('g', pack('V', $bits));
+
+        return (float) ($unpacked[1] ?? 0.0);
+    }
+
+    private static function loadSpellFactsFromDisk(array $fields, string $version): ?array
+    {
+        return self::decodeRowCache(self::rowCacheFile('spellfacts', $fields, $version));
+    }
+
+    private static function persistSpellFacts(array $fields, string $version, array $rows): void
+    {
+        self::writeRowCache(self::rowCacheFile('spellfacts', $fields, $version), [
+            'type' => 'spellfacts',
+            'fields' => $fields,
+            'rule_version' => $version,
+            'rows' => $rows,
+        ]);
+    }
+
+    private static function loadRowsFromDisk(string $type, array $fields, string $version): ?array
+    {
+        return self::decodeRowCache(self::rowCacheFile($type, $fields, $version));
+    }
+
+    private static function persistRows(string $type, array $fields, string $version, array $rows): void
+    {
+        self::writeRowCache(self::rowCacheFile($type, $fields, $version), [
+            'type' => $type,
+            'fields' => $fields,
+            'rule_version' => $version,
+            'rows' => $rows,
+        ]);
+    }
+
+    /**
+     * 数值表的缓存文件名：表名 + 字段集合哈希 + 规则版本哈希。
+     * 字段集合或规则版本一变就是另一个文件（旧的不会命中，也不会被误用）。
+     */
+    private static function rowCacheFile(string $type, array $fields, string $version): string
+    {
+        $key = substr(sha1($type . '|' . implode(',', $fields) . '|' . $version), 0, 12);
+        $base = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache'
+            . DIRECTORY_SEPARATOR . 'game_names';
+
+        return $base . DIRECTORY_SEPARATOR . 'rows_s' . self::serverId() . '_' . $type . '_' . $key . '.json';
+    }
+
+    /** @return array<int,array<string,int>>|null */
+    private static function decodeRowCache(string $file): ?array
+    {
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($file);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || (int) ($decoded['v'] ?? 0) !== self::DBC_ROW_CACHE_VERSION) {
+            return null;
+        }
+
+        $rows = $decoded['rows'] ?? null;
+        if (!is_array($rows)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($rows as $id => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $values = [];
+            foreach ($row as $field => $value) {
+                // float 字段（射程/半径）在缓存里保持浮点，别被压成整数
+                $values[(string) $field] = is_float($value) ? (float) $value : (int) $value;
+            }
+            $out[(int) $id] = $values;
+        }
+
+        return $out;
+    }
+
+    private static function writeRowCache(string $file, array $payload): void
+    {
+        $dir = dirname($file);
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return;
+        }
+
+        $payload['v'] = self::DBC_ROW_CACHE_VERSION;
+        $payload['generated_at'] = date('c');
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        if ($encoded === false) {
+            return;
+        }
+
+        $tmp = $file . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, $encoded) !== false) {
+            @rename($tmp, $file);
+        }
     }
 
     /**

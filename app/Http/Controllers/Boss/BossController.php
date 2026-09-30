@@ -12,11 +12,15 @@ use Acme\Panel\Core\Response;
 use Acme\Panel\Domain\Boss\BossRepository;
 use Acme\Panel\Domain\Boss\BossConfigTransferService;
 use Acme\Panel\Domain\Boss\BossTierOptions;
+use Acme\Panel\Domain\Boss\RewardPoolRepository;
 use Acme\Panel\Domain\Boss\RewardPoolSimulator;
+use Acme\Panel\Domain\Boss\SkillPrescreen;
+use Acme\Panel\Domain\Boss\SkillPrescreenStore;
 use Acme\Panel\Domain\Support\ScheduleWindows;
 use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\ServerContext;
 use Acme\Panel\Support\SoapCommandRunner;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
@@ -30,6 +34,8 @@ class BossController extends Controller
 
     private ?BossRepository $repo = null;
 
+    private ?RewardPoolRepository $poolRepo = null;
+
     private function repo(): BossRepository
     {
         if ($this->repo === null) {
@@ -39,9 +45,22 @@ class BossController extends Controller
         return $this->repo;
     }
 
+    private function poolRepo(): RewardPoolRepository
+    {
+        if ($this->poolRepo === null) {
+            $this->poolRepo = new RewardPoolRepository();
+        }
+
+        return $this->poolRepo;
+    }
+
     private function maybeSwitchServer(Request $request): void
     {
         $this->switchServerAndRebind($request, $this->repo());
+
+        if ($this->poolRepo !== null) {
+            $this->poolRepo->rebind(ServerContext::currentId());
+        }
     }
 
     private function requireDashboardCapability(): void
@@ -52,6 +71,12 @@ class BossController extends Controller
     private function requireActionCapability(): void
     {
         $this->requireCapability('boss.actions');
+    }
+
+    // 奖池写操作的能力位（比 boss.actions 更细，便于按账号放开"只改奖池"）。
+    private function requirePoolsWriteCapability(): void
+    {
+        $this->requireCapability('boss.pools.write');
     }
 
     public function index(Request $request): Response
@@ -110,6 +135,283 @@ class BossController extends Controller
             'meta' => [
                 'title' => __('app.boss.page_title'),
             ],
+        ]);
+    }
+
+    /**
+     * 奖池页（/boss/pools）：奖池表 + 增删改 + 重排 + 模拟 + 跨区复制。
+     *
+     * 奖池本体在 boss_reward_pools 表里（不是扩展配置列），所以单独一页；
+     * 扩展配置页只留「选人参数」与「职业过滤映射」。
+     */
+    public function pools(Request $request): Response
+    {
+        $this->requireDashboardCapability();
+        $this->maybeSwitchServer($request);
+
+        $server = ServerContext::server();
+        $dataSource = $this->repo()->dataSource();
+
+        return $this->pageView('boss.pools', $this->serverViewData([
+            'boss_pools' => $this->poolsViewData(),
+        ]), [
+            'module' => 'boss',
+            'capabilities' => [
+                'dashboard' => 'boss.dashboard',
+                'pools_write' => 'boss.pools.write',
+            ],
+            'header' => [
+                'intro' => __('app.boss.pools.intro'),
+                'note' => __('app.boss.scope_note', [
+                    'server' => (string) ($server['name'] ?? ''),
+                    'database' => (string) $dataSource['database'] . ' (state_key=' . (string) $dataSource['runtime_key'] . ')',
+                ]),
+            ],
+            'meta' => [
+                'title' => __('app.boss.pools.page_title'),
+            ],
+        ]);
+    }
+
+    // 奖池页数据：本区行 + 奖品名（下拉/预览用）。软删除行一起给，页面自己标「已删除」。
+
+    private function poolsViewData(): array
+    {
+        $repository = $this->poolRepo();
+        $rows = $repository->listPools(true);
+
+        $itemIds = [];
+        foreach ($rows as $row) {
+            foreach ($this->parseItemIds((string) ($row['items_text'] ?? '')) as $itemId) {
+                $itemIds[$itemId] = true;
+            }
+        }
+        $itemIds = array_keys($itemIds);
+
+        return [
+            'available' => $repository->available(),
+            'rows' => $rows,
+            'max_pool_id' => RewardPoolRepository::MAX_POOL_ID,
+            'next_pool_id' => $repository->nextPoolId(),
+            'item_names' => $this->repo()->itemNames($itemIds),
+            'tabs' => (array) Config::get('boss.ext_tabs', []),
+        ];
+    }
+
+    /**
+     * 奖池写接口（creates / save / delete / reorder），成功后热加载本区。
+     *
+     * 校验全部在仓储里（越界与位号上限都抛 InvalidArgumentException，文案已本地化），
+     * 所以这里只负责取参、分发与统一错误返回。
+     */
+    public function apiPools(Request $request): Response
+    {
+        $this->requirePoolsWriteCapability();
+        $this->maybeSwitchServer($request);
+
+        if (!$this->repo()->serverSupported()) {
+            return $this->json([
+                'success' => false,
+                'message' => $this->serverNotSupportedMessage(),
+            ], 422);
+        }
+
+        $action = $this->normalizedEnum($request, 'action', ['create', 'save', 'delete', 'reorder'], '');
+        if ($action === '') {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.pools.errors.invalid_action'),
+            ], 422);
+        }
+
+        $repository = $this->poolRepo();
+
+        try {
+            switch ($action) {
+                case 'create':
+                    $repository->create($this->poolPayload($request));
+                    $message = Lang::get('app.boss.pools.feedback.created');
+                    break;
+
+                case 'save':
+                    $poolId = $this->poolIdFromRequest($request);
+                    $repository->update($poolId, $this->poolPayload($request));
+                    $message = Lang::get('app.boss.pools.feedback.saved', ['pool' => (string) $poolId]);
+                    break;
+
+                case 'delete':
+                    $poolId = $this->poolIdFromRequest($request);
+                    if (!$repository->softDelete($poolId)) {
+                        throw new InvalidArgumentException(Lang::get('app.boss.pools.errors.not_found', [
+                            'pool' => (string) $poolId,
+                        ]));
+                    }
+                    $message = Lang::get('app.boss.pools.feedback.deleted', ['pool' => (string) $poolId]);
+                    break;
+
+                default:
+                    $order = $request->input('order', []);
+                    if (!is_array($order)) {
+                        throw new InvalidArgumentException(Lang::get('app.boss.pools.errors.reorder_empty'));
+                    }
+                    $repository->reorder($order);
+                    $message = Lang::get('app.boss.pools.feedback.reordered');
+                    break;
+            }
+        } catch (InvalidArgumentException $exception) {
+            return $this->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        try {
+            $reloadResult = $this->runBossCommand('.boss config reload');
+        } catch (Throwable $exception) {
+            $reloadResult = [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'output' => '',
+                'execution' => [],
+            ];
+        }
+
+        Audit::log('boss', 'save_reward_pools', 'boss_reward_pools', [
+            'server_id' => ServerContext::currentId(),
+            'action' => $action,
+            'success' => $reloadResult['success'],
+            'reload_message' => $reloadResult['message'] ?? '',
+        ]);
+
+        $reloadMessage = trim((string) ($reloadResult['message'] ?? ''))
+            ?: trim((string) ($reloadResult['output'] ?? ''));
+
+        return $this->json([
+            'success' => $reloadResult['success'],
+            'message' => $reloadResult['success']
+                ? $message
+                : Lang::get('app.boss.pools.feedback.saved_reload_failed', [
+                    'message' => $reloadMessage !== ''
+                        ? $reloadMessage
+                        : Lang::get('app.boss.errors.reload_failed'),
+                ]),
+            'payload' => [
+                'saved' => true,
+                'reload_success' => $reloadResult['success'],
+                'pools' => $repository->listPools(true),
+            ],
+        ], $reloadResult['success'] ? 200 : 422);
+    }
+
+    /** @return array<string,mixed> 只取本次提交过的奖池字段（未提交 = 不改）。 */
+    private function poolPayload(Request $request): array
+    {
+        $submitted = $request->all();
+        $payload = [];
+
+        foreach ([
+            'name', 'enabled', 'chance', 'winner_mode', 'winner_count', 'class_filter',
+            'items_text', 'gold_min_copper', 'gold_max_copper', 'announce', 'sort_order',
+        ] as $field) {
+            if (!array_key_exists($field, $submitted))
+                continue;
+
+            $value = $submitted[$field];
+
+            if (in_array($field, ['name', 'winner_mode', 'items_text'], true)) {
+                $payload[$field] = trim((string) $value);
+                continue;
+            }
+
+            $payload[$field] = is_bool($value) ? ($value ? 1 : 0) : (int) $value;
+        }
+
+        return $payload;
+    }
+
+    private function poolIdFromRequest(Request $request): int
+    {
+        $poolId = (int) $request->input('pool_id', 0);
+        if ($poolId <= 0) {
+            throw new InvalidArgumentException(Lang::get('app.boss.pools.errors.not_found', ['pool' => '0']));
+        }
+
+        return $poolId;
+    }
+
+    /**
+     * 技能池预筛页（/boss/skill-prescreen）：只读展示最近一次结果（含解析失败态），
+     * 重算由页面上的按钮触发（POST /boss/api/skill-prescreen/run）。
+     */
+    public function skillPrescreen(Request $request): Response
+    {
+        $this->requireDashboardCapability();
+        $this->maybeSwitchServer($request);
+
+        $server = ServerContext::server();
+        $store = new SkillPrescreenStore();
+        $result = $store->loadFresh();
+
+        return $this->pageView('boss.skill_prescreen', $this->serverViewData([
+            'boss_prescreen' => [
+                'result' => $result,
+                'store_path' => $store->path(),
+                'boss_lua_path' => (new SkillPrescreen())->bossLuaPath(),
+                'rule_version' => (new SkillPrescreen())->ruleVersion(),
+            ],
+        ]), [
+            'module' => 'boss',
+            'capabilities' => [
+                'dashboard' => 'boss.dashboard',
+                'pools_write' => 'boss.pools.write',
+            ],
+            'header' => [
+                'intro' => __('app.boss.prescreen.intro'),
+                'note' => __('app.boss.scope_note', [
+                    'server' => (string) ($server['name'] ?? ''),
+                    'database' => __('app.boss.prescreen.note_scope'),
+                ]),
+            ],
+            'meta' => [
+                'title' => __('app.boss.prescreen.page_title'),
+            ],
+        ]);
+    }
+
+    /** 重算预筛并落盘（结果同时给页面与 CLI 用）。 */
+    public function apiSkillPrescreenRun(Request $request): Response
+    {
+        $this->requirePoolsWriteCapability();
+        $this->maybeSwitchServer($request);
+
+        $store = new SkillPrescreenStore();
+        try {
+            $result = $store->runAndSave();
+        } catch (Throwable $exception) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.boss.prescreen.errors.run_failed', ['message' => $exception->getMessage()]),
+            ], 422);
+        }
+
+        if ((string) ($result['parse_error'] ?? '') !== '') {
+            return $this->json([
+                'success' => false,
+                'message' => __('app.boss.prescreen.failed', ['message' => (string) $result['parse_error']]),
+                'payload' => ['result' => $result],
+            ], 422);
+        }
+
+        $summary = (array) ($result['summary'] ?? []);
+
+        return $this->json([
+            'success' => true,
+            'message' => __('app.boss.prescreen.feedback.done', [
+                'red' => (string) (int) ($summary['red'] ?? 0),
+                'yellow' => (string) (int) ($summary['yellow'] ?? 0),
+                'green' => (string) (int) ($summary['green'] ?? 0),
+            ]),
+            'payload' => ['result' => $result],
         ]);
     }
 
@@ -459,8 +761,6 @@ class BossController extends Controller
             
             'presets' => $this->presetOptions(),
             
-            'item_names' => $this->extItemNames(is_array($config) ? $config : []),
-            
             'defaults' => $defaults,
             'changed' => $changed,
             
@@ -651,6 +951,7 @@ class BossController extends Controller
                 'ok' => false,
                 'ext_columns' => 0,
                 'main_columns' => 0,
+                'pool_rows' => 0,
                 'skipped' => [],
                 'warnings' => [$exception->getMessage()],
             ];
@@ -752,7 +1053,7 @@ class BossController extends Controller
         $simulator = new RewardPoolSimulator();
         try {
             $report = $simulator->simulate(
-                $extConfig,
+                $this->poolRepo()->listPools(false),
                 $participants,
                 $this->parseClassItemMap((string) ($extConfig['class_reward_items_text'] ?? '')),
                 [
@@ -794,14 +1095,11 @@ class BossController extends Controller
         $extConfig = is_array($dashboard['ext'] ?? null) ? $dashboard['ext'] : [];
         $existingMap = $this->parseClassItemMap((string) ($extConfig['class_reward_items_text'] ?? ''));
 
-        
+        // 物品来源是奖池表（每个池的奖品列表），不是扩展配置列。
         $itemIds = [];
-        for ($index = 1; $index <= 6; $index++) {
-            foreach (preg_split('/[\s,;]+/', (string) ($extConfig['reward_pool_' . $index . '_items_text'] ?? '')) ?: [] as $token) {
-                $itemId = (int) trim((string) $token);
-                if ($itemId > 0) {
-                    $itemIds[$itemId] = true;
-                }
+        foreach ($this->poolRepo()->listPools(false) as $pool) {
+            foreach ($this->parseItemIds((string) ($pool['items_text'] ?? '')) as $itemId) {
+                $itemIds[$itemId] = true;
             }
         }
         $itemIds = array_keys($itemIds);
@@ -1356,6 +1654,29 @@ class BossController extends Controller
         return max($minScaled, min($maxScaled, $scaled));
     }
 
+    /**
+     * 奖品文本 → 正整数物品 ID 列表（去重，保持出现顺序）= boss.lua ParsePositiveIntegerList。
+     *
+     * @return array<int,int>
+     */
+    private function parseItemIds(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+
+        preg_match_all('/\d+/', $text, $matches);
+        $ids = [];
+        foreach (($matches[0] ?? []) as $match) {
+            $itemId = (int) $match;
+            if ($itemId > 0) {
+                $ids[$itemId] = true;
+            }
+        }
+
+        return array_map('intval', array_keys($ids));
+    }
+
     private function normalizedIntegerListString(string $value, int $limit = 0): string
     {
         preg_match_all('/\d+/', $value, $matches);
@@ -1390,37 +1711,6 @@ class BossController extends Controller
         }
 
         return in_array($value, $allowed, true) ? $value : $fallback;
-    }
-
-    /**
-     * 奖池奖品（kind=itemlist）的 ID → 物品名 映射：把本区所有 itemlist 字段里的 ID 收集起来
-     * 一次性解析，供视图在输入框下面显示"这件奖品是什么"。
-     *
-     * @param array<string,mixed> $extConfig
-     * @return array<int,string> itemId => 物品名（查不到 = "#ID"）
-     */
-    private function extItemNames(array $extConfig): array
-    {
-        $ids = [];
-
-        foreach ($this->repo()->extFieldSchema() as $name => $spec) {
-            if ((string) ($spec['kind'] ?? 'text') !== 'itemlist') {
-                continue;
-            }
-
-            foreach (preg_split('/[\s,;]+/', (string) ($extConfig[$name] ?? '')) ?: [] as $token) {
-                $itemId = (int) trim((string) $token);
-                if ($itemId > 0) {
-                    $ids[$itemId] = true;
-                }
-            }
-        }
-
-        if ($ids === []) {
-            return [];
-        }
-
-        return $this->repo()->itemNames(array_keys($ids));
     }
 
     /**
