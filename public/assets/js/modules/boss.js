@@ -450,7 +450,7 @@
     event.returnValue = '';
   });
 
-  /* ---- 每字段"恢复默认"：由 data-boss-default 驱动（视图不用为 85 个字段各写一个按钮） ---- */
+  /* ---- 每字段"恢复默认"：由 data-boss-default 驱动（视图不用为 82 个字段各写一个按钮） ---- */
   function wireDefaultResets(form){
     if(!form) return;
     const chips = [];

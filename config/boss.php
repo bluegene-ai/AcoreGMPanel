@@ -114,7 +114,8 @@ return [
     
     'ext_tabs' => [
         'yells' => ['yells'],
-        'taunts' => ['taunts'],
+        // taunts_tail：列序要求这三条喊话排在描述表末尾，而 PHP 顶层键不可重复，故单列一组挂在本 Tab 下。
+        'taunts' => ['taunts', 'taunts_tail'],
         'ai' => ['ai', 'phase', 'class_ai'],
         'patrol' => ['patrol', 'minion'],
         'support' => ['helper', 'tier'],
@@ -122,6 +123,9 @@ return [
         'recovery' => ['recovery'],
         'reward' => ['class_reward', 'reward'],
         'schedule' => ['schedule'],
+        'feel' => ['feel_skill', 'feel_target'],
+        'mechanics' => ['enrage', 'wipe', 'marker'],
+        'announce' => ['announce'],
     ],
 
     // 扩展配置字段 schema（= boss.lua §3 BOSS_CONFIG_SCHEMA_EXT 的镜像，列名与**顺序**必须一致）
@@ -220,6 +224,50 @@ return [
             ['name' => 'activity_schedule_windows', 'kind' => 'schedule_windows', 'maxlength' => 255, 'hint' => true, 'hint_visible' => true],
             ['name' => 'activity_schedule_clear_on_close', 'kind' => 'bool', 'hint' => true],
         ],
+        // 以下七组为 boss.lua 描述表 55–82 列的镜像，顺序即契约（展平顺序必须与描述表逐列一致）。
+        'feel_skill' => [
+            ['name' => 'skill_instant_cast', 'kind' => 'bool'],
+            ['name' => 'combo_trigger_chance_pct', 'kind' => 'int', 'min' => 0, 'max' => 300],
+            ['name' => 'combo_global_cooldown_seconds', 'kind' => 'int', 'min' => 0, 'max' => 600],
+            ['name' => 'skill_pick_random_top', 'kind' => 'int', 'min' => 1, 'max' => 10],
+            ['name' => 'skill_condition_thresholds_text', 'kind' => 'keyedlines', 'rows' => 6, 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+            ['name' => 'skill_disabled_spells_text', 'kind' => 'keyedlines', 'rows' => 4, 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+        ],
+        'feel_target' => [
+            ['name' => 'target_random_spread_pct', 'kind' => 'int', 'min' => 0, 'max' => 100],
+            ['name' => 'threat_factor_enabled', 'kind' => 'bool'],
+            ['name' => 'target_score_weights_text', 'kind' => 'keyedlines', 'rows' => 8, 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+        ],
+        'enrage' => [
+            ['name' => 'soft_enrage_enabled', 'kind' => 'bool'],
+            ['name' => 'soft_enrage_seconds', 'kind' => 'int', 'min' => 30, 'max' => 7200],
+            ['name' => 'soft_enrage_interval_seconds', 'kind' => 'int', 'min' => 5, 'max' => 600],
+            ['name' => 'soft_enrage_spell_id', 'kind' => 'int', 'min' => 0, 'max' => 2000000, 'hint' => true],
+            ['name' => 'soft_enrage_speed_pct_per_stack', 'kind' => 'int', 'min' => 0, 'max' => 200],
+            ['name' => 'soft_enrage_max_stacks', 'kind' => 'int', 'min' => 1, 'max' => 100],
+        ],
+        'wipe' => [
+            ['name' => 'wipe_detect_enabled', 'kind' => 'bool'],
+            ['name' => 'wipe_grace_seconds', 'kind' => 'int', 'min' => 3, 'max' => 300],
+            ['name' => 'wipe_reset_health_pct', 'kind' => 'int', 'min' => 1, 'max' => 100],
+        ],
+        'announce' => [
+            ['name' => 'announce_spawn_enabled', 'kind' => 'bool'],
+            ['name' => 'announce_phase_enabled', 'kind' => 'bool'],
+            ['name' => 'announce_restore_enabled', 'kind' => 'bool'],
+            ['name' => 'announce_texts_text', 'kind' => 'keyedlines', 'rows' => 3, 'keep_default_when_empty' => true, 'hint' => true, 'hint_visible' => true],
+        ],
+        'marker' => [
+            ['name' => 'marker_warning_enabled', 'kind' => 'bool'],
+            ['name' => 'marker_warning_delay_seconds', 'kind' => 'int', 'min' => 0, 'max' => 10],
+            ['name' => 'marker_warning_spell_id', 'kind' => 'int', 'min' => 0, 'max' => 2000000, 'hint' => true],
+        ],
+        // 与 'taunts' 同属战斗嘲讽 Tab，因列序要求（末尾三列）单列一组，见 ext_tabs 注释。
+        'taunts_tail' => [
+            ['name' => 'taunt_soft_enrage_yells_text', 'kind' => 'lines', 'rows' => 4, 'hint' => true, 'hint_visible' => true],
+            ['name' => 'taunt_wipe_yells_text', 'kind' => 'lines', 'rows' => 3, 'hint' => true, 'hint_visible' => true],
+            ['name' => 'taunt_marker_warning_yells_text', 'kind' => 'lines', 'rows' => 3, 'hint' => true, 'hint_visible' => true],
+        ],
     ],
 
     
@@ -282,5 +330,33 @@ return [
         'activity_schedule_enabled' => 0,
         'activity_schedule_windows' => '',
         'activity_schedule_clear_on_close' => 1,
+        'skill_instant_cast' => false,
+        'combo_trigger_chance_pct' => 100,
+        'combo_global_cooldown_seconds' => 5,
+        'skill_pick_random_top' => 2,
+        'skill_condition_thresholds_text' => "multi_target=1\nmulti_melee=1\nmulti_melee_range=8\nlow_hp=50\ncritical_hp=20\nsurrounded=3\nmany_attackers=4\ndistant_target=12\nlow_hp_target=25\ngrouped_targets=2\ngrouped_range=8\nkiting_target_range=8",
+        'skill_disabled_spells_text' => '',
+        'target_random_spread_pct' => 25,
+        'threat_factor_enabled' => true,
+        'target_score_weights_text' => "base=50\ndist_near=30\ndist_far=20\ndist_near_range=5\ndist_far_range=20\nclass_healer=40\nclass_ranged=20\nclass_melee=10\nhp_low=25\nhp_mid=15\nhp_low_threshold=30\nhp_mid_threshold=50\ncasting=50\nprefer_type=50\nthreat=60\ninterrupt=100",
+        'soft_enrage_enabled' => false,
+        'soft_enrage_seconds' => 300,
+        'soft_enrage_interval_seconds' => 30,
+        'soft_enrage_spell_id' => 8599,
+        'soft_enrage_speed_pct_per_stack' => 5,
+        'soft_enrage_max_stacks' => 10,
+        'wipe_detect_enabled' => true,
+        'wipe_grace_seconds' => 12,
+        'wipe_reset_health_pct' => 100,
+        'announce_spawn_enabled' => true,
+        'announce_phase_enabled' => true,
+        'announce_restore_enabled' => true,
+        'announce_texts_text' => "spawn={BOSS_NAME} 已现身，集结讨伐！\nphase={BOSS_NAME} 进入第 {PHASE} 阶段！\nrestore={BOSS_NAME} 卷土重来（血量 {HEALTH_PCT}%）。",
+        'marker_warning_enabled' => true,
+        'marker_warning_delay_seconds' => 2,
+        'marker_warning_spell_id' => 0,
+        'taunt_soft_enrage_yells_text' => "时间到了，我不再留手！\n怒火在烧，你们撑不住多久了！\n越来越强了，感觉到了吗？\n这是最后一层怒火，受着吧！",
+        'taunt_wipe_yells_text' => "就这点本事？回去练练再来！\n全躺下了，真是无趣。\n没人站着了吗？那我继续睡了。",
+        'taunt_marker_warning_yells_text' => "{PLAYER_NAME}，盯上你了！\n别动，{PLAYER_NAME}，这一下是给你的！\n{PLAYER_NAME}，躲得掉算你厉害！",
     ],
 ];
