@@ -35,13 +35,15 @@ $gameNameCell = static function (string $type, int $id, string $class = '') use 
   // 内容 ID 直接深链到物品/任务管理页的编辑入口（目标页自行校验 content.view）；纯 GET 拼接，无额外查询
   $url = $canEditContent ? \Acme\Panel\Support\ContentLink::url($type, $id) : null;
   $title = '';
-  if ($url !== null && \Acme\Panel\Support\ContentLink::supports($type)) {
+  // 物品行的"点开去哪儿"由全站物品属性卡负责（item_tooltip_attrs），这里不再叠一个原生 title
+  if ($type !== 'item' && $url !== null && \Acme\Panel\Support\ContentLink::supports($type)) {
     $title = ' title="' . htmlspecialchars(
       __('app.character.show.manage_link.' . $type, ['id' => $id]),
       ENT_QUOTES,
       'UTF-8'
     ) . '"';
   }
+  $itemAttrs = $type === 'item' ? item_tooltip_attrs($id, $url !== null, null) : '';
 
   if ($name === null) {
     $inner = htmlspecialchars((string) $id);
@@ -51,11 +53,11 @@ $gameNameCell = static function (string $type, int $id, string $class = '') use 
   }
 
   if ($url !== null) {
-    return '<a class="char-name-cell char-name-cell--linked"' . $classAttr . $title
+    return '<a class="char-name-cell char-name-cell--linked"' . $classAttr . $title . $itemAttrs
       . ' href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $inner . '</a>';
   }
 
-  return '<span class="char-name-cell"' . $classAttr . '>' . $inner . '</span>';
+  return '<span class="char-name-cell"' . $classAttr . $itemAttrs . '>' . $inner . '</span>';
 };
 
 /** 声望数值 → 等级文案（-42000 以下到 42000 共 8 档） */

@@ -642,7 +642,7 @@
       if(!preview) return;
       preview.innerHTML = ids.length
         ? ids.map(function(id){
-            return '<span class="badge">' + esc(String(id) + ' · ' + (itemNames[String(id)] || ('#' + id))) + '</span>';
+            return '<span class="badge"' + ItemTooltip.attrs(id, null, false) + '>' + esc(String(id) + ' · ' + (itemNames[String(id)] || ('#' + id))) + '</span>';
           }).join('')
         : '<span class="muted">' + esc(t('ux.pool_no_items', 'No prizes yet')) + '</span>';
     }
@@ -953,7 +953,8 @@
           (entry.grants || []).forEach(function(grant){
             const parts = [];
             if(grant.item_id > 0){
-              parts.push(esc(grant.item_id) + ' · ' + esc(grant.item_name));
+              parts.push('<span class="item-name"' + ItemTooltip.attrs(grant.item_id, null, false) + '>'
+                + esc(grant.item_id + ' · ' + grant.item_name) + '</span>');
             }
             if(grant.gold > 0){
               parts.push(esc(t('ux.simulate_gold', 'gold :gold').replace(':gold', goldAmount(grant.gold))));

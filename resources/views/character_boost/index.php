@@ -157,7 +157,7 @@ include dirname(__DIR__) . '/components/page_header.php';
                             continue;
                         }
                       ?>
-                      <div><?= htmlspecialchars($name !== '' ? $name : ('#' . $entry)) ?> ×<?= $qty ?> <span class="cb-code-meta">(#<?= $entry ?>)</span></div>
+                      <div><span class="item-name"<?= item_tooltip_attrs($entry, false, null) ?>><?= htmlspecialchars($name !== '' ? $name : ('#' . $entry)) ?></span> ×<?= $qty ?> <span class="cb-code-meta">(#<?= $entry ?>)</span></div>
                     <?php endforeach; ?>
                   <?php endif; ?>
                 </td>

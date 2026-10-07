@@ -176,6 +176,8 @@ return static function (Router $router): void {
 
         $router->get('/item', [ItemController::class, 'index']);
         $router->get('/item/api/subclasses', [ItemController::class, 'apiSubclasses']);
+        // 悬停物品名的属性卡（除物品编辑页外全站共用）；只要求登录，见 ItemController::apiTooltip
+        $router->get('/item/api/tooltip', [ItemController::class, 'apiTooltip']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/item/api/create', [ItemController::class, 'apiCreate']);
             $router->post('/item/api/delete', [ItemController::class, 'apiDelete']);

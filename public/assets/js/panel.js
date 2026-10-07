@@ -1028,6 +1028,205 @@
   })();
 
 
+  /**
+   * 全站物品属性卡：任何带 data-item-entry 的元素（静态渲染或 JS 事后插入都一样，
+   * 因为用的是事件委托）在鼠标悬停/键盘聚焦时弹出物品属性，数据由 /item/api/tooltip 现取。
+   *
+   * 为什么放在 panel.js 而不是某个页面的模块：物品名出现在几乎所有页面（物品列表、任务奖励、
+   * 邮件附件、发放记录、Boss 奖池、背包、拍卖行…），而每个页面模块只在对应页面加载。
+   * 物品编辑页刻意不挂 data-item-entry——那一页表单里已经列出全部列。
+   *
+   * 服务端渲染挂属性用 PHP 的 item_tooltip_attrs()；JS 里拼 HTML 用 ItemTooltip.attrs()。
+   */
+  (function(){
+    if(window.ItemTooltip) return;
+
+    const SHOW_DELAY = 140;      // 鼠标扫过时不要闪出一堆卡片
+    const HIDE_DELAY = 60;
+    const ANCHOR_GAP = 6;
+    const VIEWPORT_MARGIN = 8;
+    const endpoint = '/item/api/tooltip';
+    const cache = new Map();     // "entry[:link]" -> html 字符串（'' 表示已知查不到）
+
+    let box = null;
+    let contentEl = null;
+    let anchorEl = null;
+    let showTimer = null;
+    let hideTimer = null;
+    let seq = 0;
+
+    function ensureBox(){
+      if(box && box.isConnected) return box;
+      box = document.createElement('div');
+      box.className = 'item-tooltip';
+      box.setAttribute('role', 'tooltip');
+      box.hidden = true;
+      contentEl = document.createElement('div');
+      contentEl.className = 'item-tooltip__content';
+      box.appendChild(contentEl);
+      document.body.appendChild(box);
+      return box;
+    }
+
+    function keyOf(el){
+      const entry = String(el.getAttribute('data-item-entry') || '').trim();
+      if(!entry) return '';
+      return entry + (el.hasAttribute('data-item-tooltip-link') ? ':link' : '');
+    }
+
+    function position(){
+      if(!box || !anchorEl || box.hidden) return;
+      const rect = anchorEl.getBoundingClientRect();
+      const size = box.getBoundingClientRect();
+      const maxLeft = window.innerWidth - VIEWPORT_MARGIN - size.width;
+      const maxTop = window.innerHeight - VIEWPORT_MARGIN - size.height;
+
+      let left = Math.min(rect.left, Math.max(VIEWPORT_MARGIN, maxLeft));
+      let top = rect.bottom + ANCHOR_GAP;
+      if(top > maxTop){
+        const above = rect.top - ANCHOR_GAP - size.height;
+        top = above >= VIEWPORT_MARGIN ? above : Math.max(VIEWPORT_MARGIN, maxTop);
+      }
+
+      box.style.left = Math.round(left) + 'px';
+      box.style.top = Math.round(top) + 'px';
+    }
+
+    function hide(){
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+      showTimer = null;
+      hideTimer = null;
+      anchorEl = null;
+      seq += 1;                  // 让在途响应失效
+      if(box) box.hidden = true;
+    }
+
+    async function fill(el, key, ticket){
+      const entry = key.split(':')[0];
+      const payload = await api.get(endpoint, {
+        entry: entry,
+        link: key.endsWith(':link') ? 1 : undefined
+      });
+
+      if(ticket !== seq || el !== anchorEl) return;           // 已经换目标或收起来了
+
+      const html = payload && payload.success === true && typeof payload.html === 'string'
+        ? payload.html
+        : '';
+      cache.set(key, html);
+
+      if(!html){ hide(); return; }
+      if(!contentEl) return;
+      contentEl.innerHTML = html;
+      position();
+    }
+
+    function show(el){
+      // 元素可能在 SHOW_DELAY 里被 AJAX 刷新掉了：锚点已脱开文档时直接放弃，
+      // 否则 getBoundingClientRect() 全是 0，卡片会飘到左上角。
+      if(!el || el.isConnected === false) return;
+      ensureBox();
+      const key = keyOf(el);
+      if(!key) return;
+
+      anchorEl = el;
+      seq += 1;
+      const ticket = seq;
+
+      const cached = cache.get(key);
+      if(cached !== undefined){
+        if(!cached){ hide(); return; }
+        contentEl.innerHTML = cached;
+        box.hidden = false;
+        position();
+        return;
+      }
+
+      contentEl.innerHTML = '<div class="item-tooltip__loading">…</div>';
+      box.hidden = false;
+      position();
+      fill(el, key, ticket).catch(()=>{ if(ticket === seq) hide(); });
+    }
+
+    function schedule(el){
+      if(!el || el === anchorEl) return;
+      clearTimeout(hideTimer);
+      hideTimer = null;
+      clearTimeout(showTimer);
+      showTimer = setTimeout(()=>{ showTimer = null; show(el); }, SHOW_DELAY);
+    }
+
+    function scheduleHide(){
+      clearTimeout(showTimer);
+      showTimer = null;
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hide, HIDE_DELAY);
+    }
+
+    function elementFrom(node){
+      const el = node && node.nodeType === 1 ? node : (node && node.parentElement);
+      if(!el || typeof el.closest !== 'function') return null;
+      const target = el.closest('[data-item-entry]');
+      if(!target) return null;
+      if(target.closest('[data-item-tooltip="off"]')) return null;
+      if(box && box.contains(target)) return null;
+      return target;
+    }
+
+    document.addEventListener('mouseover', (event)=>{
+      const el = elementFrom(event.target);
+      if(!el) return;
+      if(event.relatedTarget && el.contains(event.relatedTarget)) return;  // 元素内部移动
+      schedule(el);
+    }, true);
+
+    document.addEventListener('mouseout', (event)=>{
+      // 注意：这里不能因为 anchorEl 为空就 return —— 鼠标在 SHOW_DELAY 之内划走时
+      // 卡片还没显示（anchorEl 仍为 null），但 showTimer 已经排上了；必须让 scheduleHide()
+      // 去清掉它，否则 140ms 后卡片会自己冒出来且再也没有 mouseout 来收。
+      const el = elementFrom(event.target);
+      if(!el) return;
+      if(event.relatedTarget && el.contains(event.relatedTarget)) return;
+      scheduleHide();
+    }, true);
+
+    document.addEventListener('focusin', (event)=>{
+      const el = elementFrom(event.target);
+      if(el) show(el);
+    });
+
+    document.addEventListener('focusout', (event)=>{
+      if(anchorEl && elementFrom(event.target) === anchorEl) hide();
+    });
+
+    // 页面滚动/改尺寸后锚点位置就失效了，直接收起，避免卡片飘在错误的位置
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    document.addEventListener('keydown', (event)=>{ if(event.key === 'Escape') hide(); });
+
+    window.ItemTooltip = {
+      show,
+      hide,
+      /**
+       * 给 JS 里拼的物品名加属性（等价于 PHP 的 item_tooltip_attrs()）。
+       * @param {number|string} entry
+       * @param {number|null} [quality] 有值时顺带交给 GameMetaColorize 上色
+       * @param {boolean} [linkable] 元素本身可点击时传 true
+       */
+      attrs(entry, quality, linkable){
+        const id = parseInt(entry, 10);
+        if(!Number.isFinite(id) || id <= 0) return '';
+        let out = ' data-item-entry="' + id + '"';
+        const q = parseInt(quality, 10);
+        if(Number.isFinite(q) && q >= 0) out += ' data-item-quality="' + q + '"';
+        if(linkable) out += ' data-item-tooltip-link="1"';
+        return out;
+      }
+    };
+  })();
+
+
   (function(){
     if(window.Modal) return;
     const registry = new Map();

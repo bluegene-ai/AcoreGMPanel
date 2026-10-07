@@ -103,9 +103,42 @@ if (!function_exists('account_link')) {
     }
 }
 
+if (!function_exists('item_tooltip_attrs')) {
+    /**
+     * 物品属性卡的数据属性（除物品编辑页外，全站物品名都靠它挂上悬停提示）。
+     *
+     * 只输出属性，不管外层标签——调用方自己决定渲染成 <a>、<span> 还是 <td>：
+     *   - data-item-entry      必填，panel.js 用它去 /item/api/tooltip 取属性卡；
+     *   - data-item-quality    有品质时带上，panel.js 的 GameMetaColorize 会据此上色，
+     *                          所以调用方不必再手拼 item-quality-q* 类；
+     *   - data-item-tooltip-link 元素本身可点击时带上，属性卡底部会多一行"点开去哪儿"。
+     *
+     * @param int|string $entry    物品 entry
+     * @param bool       $linkable 该元素是否为可点击链接
+     * @param int|null   $quality  item_template.quality（0..7），null = 未知（不着色）
+     */
+    function item_tooltip_attrs(int|string $entry, bool $linkable = false, ?int $quality = null): string
+    {
+        $entry = (int) $entry;
+        if ($entry <= 0) {
+            return '';
+        }
+
+        $attrs = ' data-item-entry="' . $entry . '"';
+        if ($quality !== null) {
+            $attrs .= ' data-item-quality="' . (int) $quality . '"';
+        }
+        if ($linkable) {
+            $attrs .= ' data-item-tooltip-link="1"';
+        }
+
+        return $attrs;
+    }
+}
+
 if (!function_exists('item_name_link')) {
     /**
-     * 物品名 → 物品管理页的编辑入口，并按 item_template.quality 上色。
+     * 物品名 → 物品管理页的编辑入口，并按 item_template.quality 上色，同时挂上属性卡。
      *
      * 这是"物品名 = 可点的物品链接"的项目统一实现：任何列表要显示物品名都调这个函数，
      * 不要各自拼 class。配套的样式只有一处，在 public/assets/css/app-core.css 的
@@ -114,7 +147,8 @@ if (!function_exists('item_name_link')) {
      * - $linkable = false（调用方没有 content.view）时输出同色的纯文本，不给必然被拒的链接；
      * - $name 为空时退化成 "#entry"，至少不丢信息；
      * - $quality 为 null（自定义模板没有 Quality）时不着色，而不是猜一个"粗糙"；
-     * - 悬停提示把"哪个品质"和"点开去哪儿"都写出来：颜色本身对色觉障碍者不可读。
+     * - 悬停提示交给全站的物品属性卡（app/Support/ItemTooltip.php，经 /item/api/tooltip 取回）：
+     *   原来那行只有"品质 + 点开去哪儿"的原生 title 被它取代，信息更多且不必手写文案。
      *
      * @param int|string $entry    物品 entry
      * @param string|null $name    item_template.name，空则显示 #entry
@@ -137,29 +171,16 @@ if (!function_exists('item_name_link')) {
 
         $url = $linkable ? ContentLink::url('item', $entry, $serverId) : null;
 
-        $title = [];
-        if ($quality !== null) {
-            $title[] = __('app.item.tooltip.quality', [
-                'quality' => ItemQuality::label($quality, false),
-                'value' => $quality,
-            ]);
-        }
-        if ($url !== null) {
-            $title[] = __('app.item.link.manage', ['id' => $entry]);
-        }
-        $titleAttr = $title === []
-            ? ''
-            : ' title="' . htmlspecialchars(implode(' · ', $title), ENT_QUOTES, 'UTF-8') . '"';
-
         $class = 'item-name-link' . ($quality !== null ? ' ' . ItemQuality::css($quality) : '');
         $inner = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
+        $attrs = item_tooltip_attrs($entry, $url !== null, $quality);
 
         if ($url !== null) {
-            return '<a class="' . $class . '"' . $titleAttr
+            return '<a class="' . $class . '"' . $attrs
                 . ' href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . $inner . '</a>';
         }
 
-        return '<span class="' . $class . '"' . $titleAttr . '>' . $inner . '</span>';
+        return '<span class="' . $class . '"' . $attrs . '>' . $inner . '</span>';
     }
 }
 

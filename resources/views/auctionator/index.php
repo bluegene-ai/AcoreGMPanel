@@ -768,7 +768,7 @@ $bondingOptions = [
               <?php foreach (($policy['disabled'] ?? []) as $row): ?>
                 <tr>
                   <td><?= (int) ($row['item'] ?? 0) ?></td>
-                  <td><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                  <td><span<?= item_tooltip_attrs((int) ($row['item'] ?? 0), false, null) ?>><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></span></td>
                   <td class="au-table__actions">
                     <?php if ($canManage && $supported): ?>
                       <button type="button" class="btn btn-xs outline danger" data-au-policy="disabled_remove" data-au-item="<?= (int) ($row['item'] ?? 0) ?>"><?= htmlspecialchars(__('app.auctionator.policy.remove')) ?></button>
@@ -1078,7 +1078,7 @@ $bondingOptions = [
               <?php foreach (($policy['gm_list'] ?? []) as $row): ?>
                 <?php $listing = $gmListing($row); ?>
                 <tr>
-                  <td><span class="muted small"><?= (int) ($row['item'] ?? 0) ?></span> <?= htmlspecialchars((string) ($row['name'] ?? '')) ?></td>
+                  <td><span class="muted small"><?= (int) ($row['item'] ?? 0) ?></span> <span<?= item_tooltip_attrs((int) ($row['item'] ?? 0), false, null) ?>><?= htmlspecialchars((string) ($row['name'] ?? '')) ?></span></td>
                   <td>
                     <span class="au-badge au-badge--<?= $listing['mode'] === 'legacy' ? 'muted' : 'ok' ?>"><?= htmlspecialchars($modeLabel($listing['mode'])) ?></span>
                     <?php if ($listing['mode'] === 'legacy'): ?>

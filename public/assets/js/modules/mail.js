@@ -621,7 +621,8 @@
       const title = qty ? `${name} x${qty}` : name;
       const href = entry ? panelUrl('/item?edit_id=' + entry) : '#';
       const qualityClass = item.item_quality_class ? ' ' + item.item_quality_class : '';
-      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" class="item-link${qualityClass}">#${entry} ${escapeHtml(title)}</a>`;
+      // 附件名挂全站物品属性卡（ItemTooltip），原生 title 交给它
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" class="item-link${qualityClass}"${ItemTooltip.attrs(entry, null, true)}>#${entry} ${escapeHtml(title)}</a>`;
     }).join('');
   }
 

@@ -175,7 +175,7 @@
               <?php if(!empty($lg['items'])): ?>
                 <div class="small muted"><?= __('app.mass_mail.index.sections.logs.table.items_label', ['value' => htmlspecialchars($lg['items'])]) ?></div>
               <?php elseif(!empty($lg['item_id'])): ?>
-                <div class="small muted"><?= __('app.mass_mail.index.sections.logs.table.item_prefix', ['id' => (int)$lg['item_id']]) ?><?= $lg['item_name']? __('app.mass_mail.index.sections.logs.table.item_name_separator').htmlspecialchars($lg['item_name']):'' ?><?php if(!empty($lg['quantity'])): ?> <?= __('app.mass_mail.index.sections.logs.table.item_quantity_prefix') ?><?= (int)$lg['quantity'] ?><?php endif; ?></div>
+                <div class="small muted"><?= __('app.mass_mail.index.sections.logs.table.item_prefix', ['id' => (int)$lg['item_id']]) ?><?php if($lg['item_name']): ?><?= __('app.mass_mail.index.sections.logs.table.item_name_separator') ?><span class="item-name"<?= item_tooltip_attrs((int)$lg['item_id'], false, null) ?>><?= htmlspecialchars($lg['item_name']) ?></span><?php endif; ?><?php if(!empty($lg['quantity'])): ?> <?= __('app.mass_mail.index.sections.logs.table.item_quantity_prefix') ?><?= (int)$lg['quantity'] ?><?php endif; ?></div>
               <?php endif; ?>
               <?php if(!empty($lg['amount'])):
                 $c=(int)$lg['amount'];

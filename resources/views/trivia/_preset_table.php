@@ -11,10 +11,13 @@ $capabilities = is_array($triviaCapabilities ?? null)
     : ($__pageCapabilities ?? ['manage' => false]);
 $canManage = (bool) ($capabilities['manage'] ?? false);
 
+// 物品名带 data-item-entry，悬停属性卡由全站 ItemTooltip 接管；这里拿不到品质，故不着色。
 $itemLabel = static function (int $entry) use ($itemNames): string {
     $name = trim((string) ($itemNames[$entry] ?? ''));
+    $label = $name !== '' ? $name . ' (#' . $entry . ')' : '#' . $entry;
 
-    return $name !== '' ? $name . ' (#' . $entry . ')' : '#' . $entry;
+    return '<span class="item-name"' . item_tooltip_attrs($entry, false, null) . '>'
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
 };
 ?>
 <?php if ($presets === []): ?>
@@ -60,7 +63,7 @@ $itemLabel = static function (int $entry) use ($itemNames): string {
             <?php if ($itemText === []): ?>
               <span class="tv-muted"><?= htmlspecialchars(__('app.trivia.fields.none')) ?></span>
             <?php else: ?>
-              <?= htmlspecialchars(implode('、', $itemText)) ?>
+              <?= implode('、', $itemText) ?>
             <?php endif; ?>
           </td>
           <td><?= htmlspecialchars((int) ($preset['money'] ?? 0) > 0

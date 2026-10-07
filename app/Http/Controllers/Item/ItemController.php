@@ -8,7 +8,7 @@ namespace Acme\Panel\Http\Controllers\Item;
 
 use Acme\Panel\Core\{Controller,Request,Response,ItemMeta,Lang,Url};
 use Acme\Panel\Domain\Item\ItemRepository;
-use Acme\Panel\Support\{LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{ItemTooltip,LogPath,ServerContext,ServerList};
 use Acme\Panel\Support\Auth;
 
 class ItemController extends Controller
@@ -150,6 +150,39 @@ class ItemController extends Controller
     public function apiFetch(Request $request): Response
     { $this->requireViewCapability(); $state = $this->prepareItemEntryState($request); if($state['entry']<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.invalid_id')],422); $row=$this->repo->find($state['entry']); if(!$row) return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.not_found')],404); return $this->json(['success'=>true,'item'=>$row]); }
 
+
+    /**
+     * 物品属性卡（悬停物品名时弹出的那个）。除物品编辑页外，面板所有页面的物品名都走这里。
+     *
+     * 刻意只要求登录、不要求 content.view：物品名出现在邮件、发放记录、Boss 奖池等页面，
+     * 那些页面的用户未必有物品管理权限；要求 content.view 会让这些页面的悬停提示静默变成 403。
+     */
+    public function apiTooltip(Request $request): Response
+    {
+        $this->requireLogin();
+
+        $entry = max(0, (int) $request->input('entry', 0));
+        if ($entry <= 0) {
+            return $this->json(['success' => false, 'message' => Lang::get('app.item.api.errors.invalid_id')], 422);
+        }
+
+        $linkHint = (string) $request->input('link', '') !== '';
+
+        try {
+            $html = ItemTooltip::html($entry, ServerContext::currentId(), $linkHint);
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => Lang::get('app.item.api.errors.tooltip_failed')], 500);
+        }
+
+        if ($html === null) {
+            return $this->json([
+                'success' => false,
+                'message' => Lang::get('app.item.tooltip.labels.not_found', ['id' => $entry]),
+            ], 404);
+        }
+
+        return $this->json(['success' => true, 'entry' => $entry, 'html' => $html]);
+    }
 
     public function apiSubclasses(Request $request): Response
     {

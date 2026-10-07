@@ -166,8 +166,8 @@ foreach ($poolRows as $poolRow) {
                     <?php if ($poolItems === []): ?>
                       <span class="muted"><?= htmlspecialchars(__('app.boss.pools.no_items')) ?></span>
                     <?php else: ?>
-                      <?php foreach ($poolItems as $poolItemId): ?>
-                        <span class="badge"><?= htmlspecialchars($poolItemId . ' · ' . (string) ($poolItemNames[$poolItemId] ?? ('#' . $poolItemId))) ?></span>
+                      <?php foreach ($poolItems as $poolItemId): $poolItemId = (int) $poolItemId; ?>
+                        <span class="badge"<?= item_tooltip_attrs($poolItemId, false, null) ?>><?= htmlspecialchars($poolItemId . ' · ' . (string) ($poolItemNames[$poolItemId] ?? ('#' . $poolItemId))) ?></span>
                       <?php endforeach; ?>
                     <?php endif; ?>
                   </div>

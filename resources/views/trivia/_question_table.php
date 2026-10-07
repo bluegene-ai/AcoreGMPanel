@@ -12,24 +12,32 @@ $capabilities = is_array($triviaCapabilities ?? null)
     : ($__pageCapabilities ?? ['manage' => false]);
 $canManage = (bool) ($capabilities['manage'] ?? false);
 
+// 物品名带 data-item-entry，鼠标悬停由全站属性卡接管（见 bootstrap/helpers.php 的 item_tooltip_attrs()）。
+// 这里只有 entry→名称的映射、没有品质，所以不着色，只挂提示。
 $itemLabel = static function (int $entry) use ($itemNames): string {
     $name = trim((string) ($itemNames[$entry] ?? ''));
+    $label = $name !== '' ? $name . ' (#' . $entry . ')' : '#' . $entry;
 
-    return $name !== '' ? $name . ' (#' . $entry . ')' : '#' . $entry;
+    return '<span class="item-name"' . item_tooltip_attrs($entry, false, null) . '>'
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
 };
 
 $rewardText = static function (array $question) use ($itemLabel): string {
     $parts = [];
     if ((string) ($question['reward_preset'] ?? '') !== '') {
-        $parts[] = (string) $question['reward_preset'];
+        $parts[] = htmlspecialchars((string) $question['reward_preset'], ENT_QUOTES, 'UTF-8');
     }
     foreach (($question['reward_items_parsed'] ?? []) as $item) {
         $parts[] = $itemLabel((int) $item['entry']) . ' ×' . (int) $item['count'];
     }
     if ((int) ($question['reward_money'] ?? 0) > 0) {
-        $parts[] = function_exists('format_money_gsc')
-            ? format_money_gsc((int) $question['reward_money'])
-            : ((int) $question['reward_money'] . 'c');
+        $parts[] = htmlspecialchars(
+            function_exists('format_money_gsc')
+                ? format_money_gsc((int) $question['reward_money'])
+                : ((int) $question['reward_money'] . 'c'),
+            ENT_QUOTES,
+            'UTF-8'
+        );
     }
 
     return $parts === [] ? '' : implode(' + ', $parts);
@@ -99,7 +107,7 @@ $rewardText = static function (array $question) use ($itemLabel): string {
             <span class="tv-answer"><?= htmlspecialchars($optionLabel($answerIndex)) ?>.
               <?= htmlspecialchars((string) ($question['answer_text'] ?? '')) ?></span>
           </td>
-          <td><?= $reward === '' ? '<span class="tv-muted">' . htmlspecialchars(__('app.trivia.fields.inherit_default')) . '</span>' : htmlspecialchars($reward) ?></td>
+          <td><?= $reward === '' ? '<span class="tv-muted">' . htmlspecialchars(__('app.trivia.fields.inherit_default')) . '</span>' : $reward ?></td>
           <td>
             <span class="tv-badge tv-badge--<?= ($question['enabled'] ?? true) ? 'ok' : 'muted' ?>">
               <?= htmlspecialchars(($question['enabled'] ?? true)

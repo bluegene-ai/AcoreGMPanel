@@ -120,13 +120,14 @@ $buildSortUrl = function(string $col) use ($filters,$curSort,$toggleDir) {
                         <?php if($fixedItems): ?>
                             <div class="muted small quest-reward-section-label"><?= htmlspecialchars(__('app.quest.index.table.reward_items_fixed')) ?></div>
                             <?php foreach($fixedItems as $itm):
-                                $qualityClass = isset($itm['quality']) && $itm['quality'] !== null ? ' item-quality-q'.(int)$itm['quality'] : '';
+                                $itemQuality = isset($itm['quality']) && $itm['quality'] !== null ? (int)$itm['quality'] : null;
+                                $qualityClass = $itemQuality !== null ? ' item-quality-q'.$itemQuality : '';
                                 $itemName = htmlspecialchars($itm['name'] ?? ('#'.($itm['id'] ?? '?')), ENT_QUOTES, 'UTF-8');
                                 $itemQty = (int)($itm['quantity'] ?? 0);
                                 $itemId = (int)($itm['id'] ?? 0);
                             ?>
                                 <div class="flex gap-1 quest-reward-row">
-                                    <span class="item-name<?= $qualityClass ?>" title="<?= htmlspecialchars(__('app.quest.index.table.reward_item_title', ['id'=>$itemId])) ?>"><?= $itemName ?></span>
+                                    <span class="item-name<?= $qualityClass ?>"<?= item_tooltip_attrs($itemId, false, $itemQuality) ?>><?= $itemName ?></span>
                                     <span class="muted small">x<?= $itemQty ?></span>
                                 </div>
                             <?php endforeach; ?>
@@ -134,13 +135,14 @@ $buildSortUrl = function(string $col) use ($filters,$curSort,$toggleDir) {
                         <?php if($choiceItems): ?>
                             <div class="muted small quest-reward-section-label quest-reward-section-label--spaced"><?= htmlspecialchars(__('app.quest.index.table.reward_items_choice')) ?></div>
                             <?php foreach($choiceItems as $itm):
-                                $qualityClass = isset($itm['quality']) && $itm['quality'] !== null ? ' item-quality-q'.(int)$itm['quality'] : '';
+                                $itemQuality = isset($itm['quality']) && $itm['quality'] !== null ? (int)$itm['quality'] : null;
+                                $qualityClass = $itemQuality !== null ? ' item-quality-q'.$itemQuality : '';
                                 $itemName = htmlspecialchars($itm['name'] ?? ('#'.($itm['id'] ?? '?')), ENT_QUOTES, 'UTF-8');
                                 $itemQty = (int)($itm['quantity'] ?? 0);
                                 $itemId = (int)($itm['id'] ?? 0);
                             ?>
                                 <div class="flex gap-1 quest-reward-row">
-                                    <span class="item-name<?= $qualityClass ?>" title="<?= htmlspecialchars(__('app.quest.index.table.reward_item_title', ['id'=>$itemId])) ?>"><?= $itemName ?></span>
+                                    <span class="item-name<?= $qualityClass ?>"<?= item_tooltip_attrs($itemId, false, $itemQuality) ?>><?= $itemName ?></span>
                                     <span class="muted small">x<?= $itemQty ?></span>
                                 </div>
                             <?php endforeach; ?>

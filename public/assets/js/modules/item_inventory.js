@@ -429,10 +429,11 @@
       const fallbackName = '#' + (row.entry || '');
       const rawName = (row.name || '').trim();
       const displayName = rawName || fallbackName;
-      const nameHtml = `<span class="item-quality ${qualityClass(qIdx)}">${esc(displayName)}</span>`;
+      const nameHtml = `<span class="item-quality ${qualityClass(qIdx)}"${ItemTooltip.attrs(row.entry, qIdx, false)}>${esc(displayName)}</span>`;
       // Deep link into the item editor; keeps the current realm via the panel href.
+      // 悬停提示交给全站物品属性卡（ItemTooltip），所以不再拼原生 title。
       const entryCell = panelEditUrl && row.entry > 0
-        ? `<a class="ii-entry-link" href="${esc(panelEditUrl + row.entry)}" title="${esc(translate('items.open_in_editor', 'Open in items management'))}">${esc(row.entry)}</a>`
+        ? `<a class="ii-entry-link" href="${esc(panelEditUrl + row.entry)}"${ItemTooltip.attrs(row.entry, null, true)}>${esc(row.entry)}</a>`
         : esc(row.entry);
       const filterName = displayName.toLowerCase();
       const location = row.location_label || '-';
@@ -535,8 +536,8 @@
       const stackable = typeof row.stackable === 'number' && row.stackable > 1 ? row.stackable : '-';
       const editorHref = panelEditUrl && row.entry > 0 ? panelEditUrl + row.entry : null;
       const nameCell = editorHref
-        ? `<a class="ii-entry-link" href="${esc(editorHref)}" title="${esc(translate('item.search.open_in_editor', 'Open in items management'))}">${esc(row.name || row.name_en || ('#' + row.entry))}</a>`
-        : esc(row.name || row.name_en || ('#' + row.entry));
+        ? `<a class="ii-entry-link" href="${esc(editorHref)}"${ItemTooltip.attrs(row.entry, null, true)}>${esc(row.name || row.name_en || ('#' + row.entry))}</a>`
+        : `<span${ItemTooltip.attrs(row.entry, null, false)}>${esc(row.name || row.name_en || ('#' + row.entry))}</span>`;
       return `<tr data-entry="${row.entry}">`
         + `<td>${esc(row.entry)}</td>`
         + `<td>${nameCell}</td>`
@@ -600,11 +601,14 @@
     if (!state.ownershipItem) {
       titleEl.textContent = translate('owners.title_empty', 'Select an item');
       summaryEl.textContent = translate('owners.subtitle_empty', 'Search an item to view ownership');
+      titleEl.removeAttribute('data-item-entry');
       return;
     }
 
     const name = state.ownershipItem.name || state.ownershipItem.name_en || ('#' + state.ownershipItem.entry);
     titleEl.textContent = `${name} (#${state.ownershipItem.entry})`;
+    // 标题本身也挂上属性卡：这里唯一能拿到 entry 的位置。
+    titleEl.setAttribute('data-item-entry', String(state.ownershipItem.entry));
 
     const summary = state.ownershipSummary || { characters: 0, instances: 0, count: 0, pages: 0, page: 1 };
     summaryEl.textContent = translate(

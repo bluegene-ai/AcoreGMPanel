@@ -338,6 +338,32 @@ a.item-name-link:hover{text-decoration-style:solid;}
    平时无下划线、悬停才出现，与引入本规则之前完全一致。 */
 a.item-name-link.quality-badge{text-decoration:none;}
 a.item-name-link.quality-badge:hover{text-decoration:underline;text-decoration-style:solid;}
+
+/* ==== 物品属性卡（悬停物品名弹出；除物品编辑页外全站生效） ====
+   标记由 panel.js 的 ItemTooltip 生成、内容由 app/Support/ItemTooltip.php 渲染。
+   position:fixed 是刻意的：卡片挂在 <body> 下，用视口坐标定位，不会被任何 overflow:hidden
+   的表格/滚动容器裁掉。pointer-events:none 让它永远不抢鼠标，悬停判定只落在物品名上。 */
+.item-tooltip{position:fixed;z-index:2000;pointer-events:none;max-width:340px;min-width:200px;
+	padding:10px 12px;border-radius:8px;border:1px solid rgba(140,180,225,.28);
+	background:linear-gradient(180deg,rgba(12,20,32,.98),rgba(8,13,22,.98));
+	box-shadow:0 18px 44px rgba(2,8,16,.6);color:var(--c-text);font-size:12.5px;line-height:1.55;
+	text-align:left;white-space:normal;word-break:break-word;}
+.item-tooltip[hidden]{display:none;}
+.item-tooltip__content{display:flex;flex-direction:column;gap:6px;}
+.item-tooltip__loading{color:#8fa8b7;letter-spacing:2px;text-align:center;padding:4px 0;}
+.item-tooltip__name{font-size:13.5px;font-weight:600;line-height:1.4;}
+.item-tooltip__section{display:flex;flex-direction:column;gap:3px;}
+.item-tooltip__section--stats{gap:2px;}
+.item-tooltip__line{display:flex;gap:10px;align-items:baseline;justify-content:space-between;}
+.item-tooltip__line--bare .item-tooltip__label{color:#c7d0d9;}
+.item-tooltip__line--muted .item-tooltip__value{color:#9cb0c4;}
+.item-tooltip__label{color:#8fa8b7;white-space:nowrap;}
+.item-tooltip__value{color:#dfe6ee;text-align:right;}
+.item-tooltip__stat{color:#7ee08a;}
+.item-tooltip__sep{height:1px;background:rgba(148,177,208,.16);margin:1px 0;}
+.item-tooltip__desc{color:#c9d6e2;font-style:italic;}
+.item-tooltip__footer{margin-top:2px;padding-top:6px;border-top:1px solid rgba(148,177,208,.12);
+	color:#7b8a97;font-size:11.5px;line-height:1.45;}
 /* Mail bulk bar layout refinements */
 .mail-bulk-bar .bulk-stats .muted{color:#8b96a1;font-size:12px;}
 .mail-bulk-bar .bulk-stats{white-space:nowrap;}

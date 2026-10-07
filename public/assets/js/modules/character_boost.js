@@ -176,8 +176,9 @@
 
     if(items.length){
       const list = items.map((item) => {
-        const label = item.name ? (esc(item.name) + ' ×' + esc(item.quantity || 1))
-          : ('#' + esc(item.entry) + ' ×' + esc(item.quantity || 1));
+        const name = item.name ? esc(item.name) : ('#' + esc(item.entry));
+        const label = `<span class="item-name"${ItemTooltip.attrs(item.entry, null, false)}>${name}</span>`
+          + ' ×' + esc(item.quantity || 1);
         return '<li>' + label + '</li>';
       }).join('');
       rows.push('<div class="cb-preview__row cb-preview__row--block"><span>'

@@ -86,7 +86,7 @@ $rewardTableSourceLabels = is_array($raf_log_source_labels ?? null)
                   $itemQualityClass = $itemQuality === null ? '' : ' item-quality-q' . (int) $itemQuality;
                   ?>
                   <li class="raf-reward-item">
-                    <span class="raf-reward-item__name<?= $itemQualityClass ?>">
+                    <span class="raf-reward-item__name<?= $itemQualityClass ?>"<?= item_tooltip_attrs($itemEntry, false, $itemQuality !== null ? (int) $itemQuality : null) ?>>
                       <?= htmlspecialchars($itemName !== '' ? $itemName : ('#' . $itemEntry)) ?>
                     </span>
                     <span class="raf-reward-item__count">×<?= (int) ($logItem['count'] ?? 0) ?></span>

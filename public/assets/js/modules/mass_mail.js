@@ -707,7 +707,10 @@
         details+=`<div class="small muted">${esc(itemsLabel.replace(':value', String(r.items)))}</div>`;
       } else if(r.item_id){
         const itemLabel=translate('logs.item_label','Item: #:id',{ id:r.item_id });
-        const namePart=r.item_name ? `${nameSeparator}${esc(r.item_name)}` : '';
+        // 物品名挂全站属性卡（ItemTooltip），所以这里必须让它以 HTML 而不是转义文本落进单元格
+        const namePart=r.item_name
+          ? `${nameSeparator}<span class="item-name"${ItemTooltip.attrs(r.item_id, null, false)}>${esc(r.item_name)}</span>`
+          : '';
         const qtyPart=r.quantity ? `${qtyPrefix}${r.quantity}` : '';
         details+=`<div class="small muted">${esc(itemLabel)}${namePart}${qtyPart}</div>`;
       }

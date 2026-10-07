@@ -78,7 +78,7 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
   $classCn = ItemMeta::className($classId);
   $subCn = ItemMeta::subclassName($classId,$subId);
       ?>
-  <td><a href="?<?= http_build_query(['edit_id'=>$row['entry']]+$_GET) ?>" class="item-name-link quality-badge <?= $qClass ?>" title="<?= htmlspecialchars(__('app.item.tooltip.quality', ['quality' => $qName, 'value' => $q])) ?>"><?= htmlspecialchars($row['name']??'') ?></a></td>
+  <td><a href="?<?= http_build_query(['edit_id'=>$row['entry']]+$_GET) ?>" class="item-name-link quality-badge <?= $qClass ?>"<?= item_tooltip_attrs((int)$row['entry'], true, $q) ?>><?= htmlspecialchars($row['name']??'') ?></a></td>
   <td><span class="quality-badge <?= $qClass ?>" title="<?= htmlspecialchars($qName) ?>"><?= htmlspecialchars($qName) ?></span></td>
   <td title="class=<?= $classId ?>"><?= htmlspecialchars($classCn) ?> <small class="muted">(<?= $classId ?>)</small></td>
   <td title="class=<?= $classId ?> subclass=<?= $subId ?>"><?= htmlspecialchars($subCn) ?> <small class="muted">(<?= $subId ?>)</small></td>
