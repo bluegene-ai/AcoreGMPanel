@@ -181,4 +181,7 @@
 @media (max-width:980px){
   .boss-top-grid,.boss-bottom-grid,.boss-action-grid,.boss-stats-grid,.boss-runtime-grid{grid-template-columns:1fr;}
   .boss-tabs__nav{overflow-x:auto;flex-wrap:nowrap;}
+  /* 只让导航横向滚动还不够：pill 会被 flex 压缩成一个个圆，文字被挤成竖排。
+     固定自身宽度 + 不换行，标签才保持一行可读，超出的部分由上面的 overflow-x 滑。 */
+  .boss-tab{flex:0 0 auto;white-space:nowrap;}
 }

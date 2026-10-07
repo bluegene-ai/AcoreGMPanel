@@ -1227,6 +1227,48 @@
   })();
 
 
+  /**
+   * 移动端导航折叠：窄屏下侧栏变成顶部一条 + 汉堡按钮（样式见 app-core.css 的 ≤960px 块）。
+   * 纯类切换，不写内联样式，宽窄屏各自的表现都在 CSS 里；桌面端按钮本身 display:none，点了也没副作用。
+   * 用事件委托，页面局部刷新后按钮依然有效。
+   */
+  (function(){
+    if(window.PanelNav) return;
+
+    function sidebarOf(button){
+      return button && typeof button.closest === 'function' ? button.closest('.sidebar--shell') : null;
+    }
+
+    function setOpen(sidebar, open){
+      if(!sidebar) return;
+      sidebar.classList.toggle('is-open', open);
+      const button = sidebar.querySelector('[data-sidebar-toggle]');
+      if(button) button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    document.addEventListener('click', (event)=>{
+      const button = event.target && event.target.closest ? event.target.closest('[data-sidebar-toggle]') : null;
+      if(!button) return;
+      event.preventDefault();
+      const sidebar = sidebarOf(button);
+      setOpen(sidebar, !(sidebar && sidebar.classList.contains('is-open')));
+    });
+
+    // 点了导航项就跳走了，但页面内锚点/被拦下的跳转不会重载：顺手收起，避免菜单一直占着屏幕
+    document.addEventListener('click', (event)=>{
+      const link = event.target && event.target.closest ? event.target.closest('#panelNavigation a') : null;
+      if(!link) return;
+      setOpen(sidebarOf(link), false);
+    });
+
+    window.PanelNav = {
+      open(sidebar){ setOpen(sidebar || document.getElementById('panelSidebar'), true); },
+      close(sidebar){ setOpen(sidebar || document.getElementById('panelSidebar'), false); },
+      toggle(sidebar){ const el = sidebar || document.getElementById('panelSidebar'); setOpen(el, !(el && el.classList.contains('is-open'))); }
+    };
+  })();
+
+
   (function(){
     if(window.Modal) return;
     const registry = new Map();

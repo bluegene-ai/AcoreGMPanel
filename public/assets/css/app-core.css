@@ -14,6 +14,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'He
 .layout-shell-bg:before{content:"";position:fixed;inset:-10% auto auto -6%;width:44vw;height:44vw;background:radial-gradient(circle,rgba(76,145,226,.12),rgba(76,145,226,0) 70%);pointer-events:none;filter:blur(10px);opacity:.92;}
 .layout-shell-bg:after{content:"";position:fixed;right:-10vw;top:-6vh;width:38vw;height:38vw;background:radial-gradient(circle,rgba(58,190,170,.1),rgba(58,190,170,0) 72%);pointer-events:none;filter:blur(8px);opacity:.88;}
 .layout-grid{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+/* 网格列的 min-width 默认是 auto（=min-content），一张宽表就能把整列撑得比视口还宽，
+   连带侧栏和汉堡按钮跑到屏幕外。放开收缩，超宽由表面的横向滚动去处理。 */
+.layout-grid > main{min-width:0;}
 .layout-grid--shell{position:relative;z-index:1;gap:22px;min-height:calc(100vh - 24px);}
 aside.sidebar{background:#0d1216;border-right:1px solid var(--c-border);padding:20px 16px;position:sticky;top:0;align-self:start;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:16px;}
 .sidebar--shell{background:linear-gradient(180deg,rgba(13,27,43,.94),rgba(11,19,30,.92));border:1px solid rgba(94,168,255,.12);border-radius:22px;box-shadow:0 28px 70px rgba(4,13,22,.42);padding:26px 18px;height:calc(100vh - 28px);top:14px;backdrop-filter:blur(10px);}
@@ -25,6 +28,18 @@ aside.sidebar li{margin:0;}
 aside.sidebar a{display:block;padding:8px 10px;border-radius:4px;font-size:14px;background:#141b22;color:var(--c-text);}aside.sidebar a.active,aside.sidebar a:hover{background:var(--c-accent);color:#0d1b24;}
 aside.sidebar .sidebar-metrics{margin-top:auto;font-size:11px;color:#7b8a97;border-top:1px solid rgba(255,255,255,.07);padding-top:12px;line-height:1.5;display:flex;flex-direction:column;gap:2px;}
 aside.sidebar .sidebar-metrics strong{color:#c7d0d9;font-weight:600;font-size:12px;}
+/* 侧栏标题块：桌面端与原先把 h2/p 直接放进 .sidebar__brand 的观感一致；移动端才与汉堡按钮并排 */
+.sidebar__title{display:flex;flex-direction:column;gap:8px;min-width:0;}
+/* 导航折叠按钮：桌面端不出现，只在 ≤960px 且 <html> 带 js 标记时显示（见文末移动端块） */
+.sidebar-toggle{display:none;align-items:center;gap:8px;flex:0 0 auto;padding:8px 12px;border-radius:12px;
+	border:1px solid rgba(94,168,255,.28);background:rgba(20,32,48,.9);color:var(--c-text);
+	font:inherit;font-size:13px;line-height:1;cursor:pointer;}
+.sidebar-toggle:hover{background:rgba(30,48,70,.95);border-color:rgba(94,168,255,.45);}
+.sidebar-toggle:focus-visible{outline:2px solid var(--c-accent);outline-offset:2px;}
+.sidebar-toggle__icon{position:relative;display:block;width:16px;height:2px;background:currentColor;}
+.sidebar-toggle__icon:before,.sidebar-toggle__icon:after{content:"";position:absolute;left:0;width:16px;height:2px;background:currentColor;}
+.sidebar-toggle__icon:before{top:-5px;}
+.sidebar-toggle__icon:after{top:5px;}
 main.container{max-width:1240px;margin:0 auto;padding:var(--space);}footer.site-footer{padding:24px 0 42px;text-align:center;font-size:12px;color:#91a0af;position:relative;z-index:1;}
 .app-shell-main{padding:0 0 18px;}
 .app-shell-panel{position:relative;background:linear-gradient(180deg,rgba(12,22,36,.94),rgba(8,14,24,.92));border:1px solid rgba(94,168,255,.12);border-radius:28px;padding:28px 30px 34px;box-shadow:0 30px 90px rgba(4,13,22,.44);overflow:hidden;backdrop-filter:blur(12px);}
@@ -234,7 +249,61 @@ textarea:focus{outline:none;border-color:rgba(74,165,255,.72);box-shadow:0 0 0 3
 .badge{display:inline-block;padding:2px 6px;font-size:12px;border-radius:4px;background:#24303a;color:#9fb1c0;}
 .flash{padding:10px 14px;border-radius:var(--radius);background:#1e2c38;border:1px solid #314559;margin:14px 0;}
 .grid-cols-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
-@media (max-width:960px){.layout-shell-bg{padding:16px 12px 0;}.layout-grid{grid-template-columns:1fr;}.layout-grid--shell{gap:16px;min-height:auto;}.sidebar--shell{border-right:none;border-bottom:1px solid rgba(94,168,255,.12);display:flex;flex-direction:row;align-items:center;gap:12px;overflow-x:auto;overflow-y:visible;position:relative;height:auto;align-self:stretch;top:0;padding:18px 14px;border-radius:18px;}.sidebar--shell .sidebar__brand{min-width:220px;}.sidebar--shell ul{display:flex;flex-direction:row;flex-wrap:nowrap;gap:0;}.sidebar--shell li{margin-right:8px;margin-bottom:0;}.sidebar--shell .sidebar-metrics{display:none;}main.container{padding:0;}.app-shell-main{padding:0 0 12px;}.app-shell-panel{padding:22px 18px 26px;border-radius:20px;}.page-header{align-items:flex-start;gap:12px;}.layout-warning-banner{margin:0 0 14px;}}
+/* ==== 移动端（≤960px）====
+   左侧 220px 侧栏在窄屏改成"顶部一条 + 可折叠导航"：内容不必先滚过一整屏菜单。
+   ⚠️ 选择器一律写成 aside.sidebar--shell / aside.sidebar--shell ul 这种带 aside 的形态：
+   基座规则是 aside.sidebar（0,1,1）与 aside.sidebar ul（0,1,2），原来这里只写 .sidebar--shell（0,1,0）
+   特异性不够，position/height/flex-direction/ul 的 display 全被基座压回去，于是窄屏上侧栏仍是
+   100vh 的竖排菜单——菜单占满首屏、正文被顶到折叠线以下。
+   html.js 门控"默认收起"：JS 失效时导航保持今天的展开形态，不会把菜单弄丢。 */
+@media (max-width:960px){
+	.layout-shell-bg{padding:16px 12px 0;}
+	.layout-grid{grid-template-columns:1fr;}
+	.layout-grid--shell{gap:14px;min-height:auto;}
+	aside.sidebar--shell{
+		border-right:none;
+		border-bottom:1px solid rgba(94,168,255,.12);
+		display:flex;
+		flex-direction:column;
+		align-items:stretch;
+		gap:0;
+		overflow:visible;
+		position:relative;
+		top:0;
+		height:auto;
+		align-self:stretch;
+		padding:14px 16px;
+		border-radius:18px;
+	}
+	aside.sidebar--shell .sidebar__brand{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;}
+	aside.sidebar--shell .sidebar__intro{display:none;}
+	html.js .sidebar-toggle{display:inline-flex;}
+	html.js aside.sidebar--shell ul{display:none;}
+	html.js aside.sidebar--shell.is-open ul{
+		display:grid;
+		grid-template-columns:repeat(2,minmax(0,1fr));
+		gap:6px;
+		margin-top:12px;
+	}
+	aside.sidebar--shell li{margin:0;}
+	aside.sidebar--shell a{padding:9px 10px;font-size:13px;text-align:center;}
+	aside.sidebar--shell .sidebar-metrics{display:none;}
+	/* margin:0 auto 会让网格项失去 stretch（自动外边距下不拉伸），于是 main 按自己的
+	   min-content 定宽——一张宽表就能把它撑到 455px，整页跟着横向溢出。
+	   窄屏不需要居中留白，margin:0 让 main 老老实实等于栅格轨道宽度。 */
+	main.container{margin:0;padding:0;}
+	.app-shell-main{padding:0 0 12px;}
+	.app-shell-panel{padding:18px 14px 22px;border-radius:20px;}
+	.page-header{align-items:flex-start;gap:12px;}
+	.layout-warning-banner{margin:0 0 14px;}
+	/* 宽表（物品列表、日志、拍卖行…）在窄屏改成"表内横向滑动"：
+	   display:block 让匿名表格盒子可以比容器宽，从而由 overflow-x 接管，
+	   而不是被 .app-shell-panel 的 overflow:hidden 直接裁掉右边的列。
+	   不加包裹层也能覆盖所有页面里直接放在面板下的表格。 */
+	.app-shell-panel > table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;}
+	/* 表头文字竖排（"品\n质"）比横向滑动更难读：让它保持一行，宽度交给上面的滚动 */
+	.app-shell-panel > table th{white-space:nowrap;}
+}
 .page-header__actions .btn.primary{background:var(--c-accent);color:#fff;}
 /* Utility classes */
 .m-0{margin:0!important}.mt-1{margin-top:4px!important}.mt-2{margin-top:8px!important}.mt-3{margin-top:12px!important}.mt-4{margin-top:16px!important}
@@ -486,7 +555,7 @@ a.item-name-link.quality-badge:hover{text-decoration:underline;text-decoration-s
 .layout-topbar__actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .language-switch,.server-switch{display:inline-flex;align-items:center;gap:8px;flex-wrap:nowrap;}
 .server-switch{margin:0;}
-.language-switch__label,.server-switch__label{font-size:13px;color:#8ea2b2;margin-right:4px;}
+.language-switch__label,.server-switch__label{font-size:13px;color:#8ea2b2;margin-right:4px;white-space:nowrap;}
 .language-switch__select{min-width:148px;padding:0 10px;}
 .server-switch__select{min-width:164px;padding:0 10px;}
 .header-online-badge{background:#1e2d3a;color:#9ecbff;padding:0 10px;border-radius:11px;font-size:12px;display:inline-flex;align-items:center;gap:8px;min-height:var(--control-height);}
@@ -522,10 +591,20 @@ a.item-name-link.quality-badge:hover{text-decoration:underline;text-decoration-s
 }
 
 @media (max-width:720px){
-	.layout-topbar__actions{flex-direction:column;justify-content:flex-start;align-items:stretch;}
-	.language-switch,.server-switch{width:100%;}
-	.language-switch__select,.server-switch__select{width:100%;}
-	.header-online-badge{justify-content:space-between;width:100%;margin-left:0;}
+	/* 顶部工具条压成"两个下拉并排 + 在线数一行"：竖排三块会把正文顶到折叠线以下 */
+	.layout-topbar__actions{
+		display:grid;
+		grid-template-columns:repeat(2,minmax(0,1fr));
+		gap:8px;
+		align-items:center;
+		width:100%;
+	}
+	.language-switch,.server-switch{width:100%;min-width:0;gap:6px;}
+	.server-switch{grid-column:1;}
+	.language-switch{grid-column:2;}
+	.language-switch__select,.server-switch__select{width:100%;min-width:0;flex:1 1 auto;}
+	.language-switch__label,.server-switch__label{margin-right:0;}
+	.header-online-badge{grid-column:1 / -1;justify-content:space-between;width:100%;margin-left:0;}
 	.markdown-wrapper{padding:18px 16px;}
 	.markdown-body table{min-width:0;display:block;overflow:auto;}
 }

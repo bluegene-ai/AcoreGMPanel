@@ -30,6 +30,9 @@ use Acme\Panel\Support\ModuleAssets;
 <meta charset="UTF-8">
 <title><?= htmlspecialchars((string)($__layoutHead['title'] ?? __('app.app.title_suffix'))) ?></title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<?php // 移动端把导航收成可折叠面板：先给 <html> 打 js 标记，样式据此决定"默认收起"。
+      // 没有它时导航保持展开（今天的形态），JS 失效也不会把菜单弄丢。 ?>
+<script>document.documentElement.classList.add('js');</script>
 <?php if((string)($__layoutHead['description'] ?? '') !== ''): ?>
 <meta name="description" content="<?= htmlspecialchars((string)$__layoutHead['description'], ENT_QUOTES, 'UTF-8') ?>">
 <?php endif; ?>
@@ -48,12 +51,22 @@ use Acme\Panel\Support\ModuleAssets;
 <?php $warningBannerClass = 'layout-warning-banner'; ?>
 <?php include dirname(__DIR__) . '/components/warning_banner.php'; ?>
 <div class="layout-grid layout-grid--shell">
-<aside class="sidebar sidebar--shell">
+<aside class="sidebar sidebar--shell" id="panelSidebar">
   <div class="sidebar__brand">
-    <h2><?= htmlspecialchars(__('app.app.name')) ?></h2>
-    <p class="sidebar__intro"><?= htmlspecialchars(__('app.app.title_suffix')) ?></p>
+    <div class="sidebar__title">
+      <h2><?= htmlspecialchars(__('app.app.name')) ?></h2>
+      <p class="sidebar__intro"><?= htmlspecialchars(__('app.app.title_suffix')) ?></p>
+    </div>
+    <?php // 只在移动端显示（CSS 控制）：窄屏下导航默认收起，内容不必先滚过一整屏菜单 ?>
+    <button type="button" class="sidebar-toggle" data-sidebar-toggle
+            aria-expanded="false" aria-controls="panelNavigation"
+            aria-label="<?= htmlspecialchars(__('app.common.menu_toggle')) ?>"
+            title="<?= htmlspecialchars(__('app.common.menu_toggle')) ?>">
+      <span class="sidebar-toggle__icon" aria-hidden="true"></span>
+      <span class="sidebar-toggle__label"><?= htmlspecialchars(__('app.common.menu')) ?></span>
+    </button>
   </div>
-  <ul>
+  <ul id="panelNavigation">
     <?php foreach($__layoutNavigationItems as $__navItem): ?>
       <?php
         $__layoutIsAuthenticated = \Acme\Panel\Support\Auth::check();

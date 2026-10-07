@@ -37,6 +37,8 @@ return array (
     'online_total_label' => 'Online / Total',
     'online_total_title' => 'Online players / total characters on this realm',
     'language' => 'Language',
+    'menu' => 'Menu',
+    'menu_toggle' => 'Toggle navigation',
     'languages' => 
     array (
       'zh_CN' => 'Chinese (Simplified)',

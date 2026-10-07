@@ -37,6 +37,8 @@ return array (
     'online_total_label' => '在线 / 总数',
     'online_total_title' => '当前在线玩家 / 该服务器的总角色数',
     'language' => '语言',
+    'menu' => '菜单',
+    'menu_toggle' => '展开/收起导航',
     'languages' => 
     array (
       'zh_CN' => '简体中文',
