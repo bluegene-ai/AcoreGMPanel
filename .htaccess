@@ -12,12 +12,21 @@ Options -Indexes
   # 未设置时，下面的相对重写规则通常也能工作；如遇到路径异常再手动启用。
   #RewriteBase /acoremanage/
 
+  # 点开头的路径一律拒绝：.git/ 整份历史、.env、.htaccess 等都不该经 HTTP 暴露。
+  # 必须在下面的「真实文件放行」之前，否则 .git/config 这类真实文件会被放行。
+  RewriteRule (^|/)\. - [R=404,L]
+
   # SOAP 模块走前端控制器，避免被敏感目录规则阻断
   RewriteRule ^soap(?:/.*)?$ public/index.php [L]
   RewriteRule ^favicon\.ico$ - [L]
 
-  # 阻止直接访问源码 / 配置 / 日志 / 资源模板等敏感路径
-  RewriteRule ^(app|config|vendor|tests|cli|includes|resources|deprecated|errors|soap)(/|$) - [R=404,L]
+  # 阻止直接访问源码 / 配置 / 运行期数据 / 本地工具等敏感路径。
+  # 清单必须覆盖真实存在于仓库根的每一类敏感目录：
+  #   app config vendor  = 源码与配置（含 config/generated 的凭据）
+  #   storage            = 会话文件、日志、缓存、整页快照（会话文件泄露 = 直接接管会话）
+  #   tools scripts bootstrap routes docs = 本地校验脚本、引导文件、路由表、设计文档
+  # 漏任一项，下面的 RewriteCond -f 都会把它当成普通静态文件放行。
+  RewriteRule ^(app|config|vendor|tests|cli|includes|resources|deprecated|errors|soap|storage|tools|scripts|bootstrap|routes|docs)(/|$) - [R=404,L]
 
   # 直接映射 /assets/* 到 public/assets/*
   RewriteRule ^assets/(.*)$ public/assets/$1 [L]
@@ -34,8 +43,8 @@ Options -Indexes
   RewriteRule ^ public/index.php [L]
 </IfModule>
 
-# 禁止访问 composer / git / 环境文件
-<FilesMatch "^(composer\.json|composer\.lock|\.env|\.gitignore|\.htaccess)$">
+# 禁止访问 composer / 环境文件 / 点文件（第二道防线：与上面的重写规则相互独立）
+<FilesMatch "^(composer\.json|composer\.lock|composer\.phar|\.env|\.env\..*|\.gitignore|\.gitattributes|\.editorconfig|\.htaccess|\.htpasswd|\.DS_Store)$">
   Require all denied
 </FilesMatch>
 

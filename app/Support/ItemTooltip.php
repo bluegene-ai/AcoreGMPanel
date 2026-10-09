@@ -36,6 +36,25 @@ use Throwable;
 
 final class ItemTooltip
 {
+    /**
+     * 属性卡渲染实际用到的列（约 56 列，item_template 共 138 列）。
+     *
+     * 这是逐条悬停触发的热路径，只取渲染需要的列；缺列的取值由 int()/float() 兜成 0，
+     * 渲染逻辑不依赖未列出的字段。
+     */
+    private const COLUMNS = [
+        'entry', 'name', 'Quality', 'ItemLevel', 'class', 'subclass', 'InventoryType', 'bonding',
+        'maxcount', 'BuyPrice', 'SellPrice', 'description',
+        'dmg_min1', 'dmg_max1', 'dmg_type1', 'dmg_min2', 'dmg_max2', 'dmg_type2', 'delay',
+        'armor', 'block',
+        'holy_res', 'fire_res', 'nature_res', 'frost_res', 'shadow_res', 'arcane_res',
+        'RequiredLevel', 'RequiredSkill', 'RequiredSkillRank', 'ContainerSlots', 'stackable',
+        'stat_type1', 'stat_value1', 'stat_type2', 'stat_value2', 'stat_type3', 'stat_value3',
+        'stat_type4', 'stat_value4', 'stat_type5', 'stat_value5', 'stat_type6', 'stat_value6',
+        'stat_type7', 'stat_value7', 'stat_type8', 'stat_value8', 'stat_type9', 'stat_value9',
+        'stat_type10', 'stat_value10',
+    ];
+
     /** 每个请求内最多解析一次 locales_item 的列集合（表可能根本不存在）。 */
     private static ?array $localeColumns = null;
 
@@ -83,7 +102,7 @@ final class ItemTooltip
         }
 
         $pdo = self::world($serverId);
-        $stmt = $pdo->prepare('SELECT * FROM item_template WHERE entry = :entry LIMIT 1');
+        $stmt = $pdo->prepare('SELECT `'.implode('`,`', self::COLUMNS).'` FROM item_template WHERE entry = :entry LIMIT 1');
         $stmt->execute([':entry' => $entry]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 

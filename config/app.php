@@ -7,7 +7,7 @@
 return [
   'name' => 'Acore GM Panel',
   'env' => 'local',
-  'debug' => true,
+  'debug' => false,
   'version' => '0.1.0',
   'timezone' => 'Asia/Shanghai',
   'locale' => 'zh_CN',

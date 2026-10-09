@@ -26,6 +26,29 @@
   const FEEDBACK_SELECTOR='#creature-feedback';
   const panelFeedback=(window.Panel && window.Panel.feedback && typeof window.Panel.feedback.show==='function') ? window.Panel.feedback : null;
 
+  /** 列表局部重绘：删除一条生物只改表格，滚动位置与筛选条件都留着。 */
+  function refreshCreatureList(){
+    const panel = window.Panel || {};
+    if(typeof panel.reloadRegion !== 'function'){ window.location.reload(); return; }
+    panel.reloadRegion('table.creature-table', window.location.href).then((ok)=>{ if(!ok) reloadKeeping(); });
+  }
+
+  /** 模型编辑发生在弹窗里，影响的不止一张表：整页重取但保留滚动位置。 */
+  function reloadKeeping(){
+    const panel = window.Panel || {};
+    if(typeof panel.reload === 'function'){ panel.reload(); return; }
+    window.location.reload();
+  }
+
+  /**
+   * 异常 → 可读文案：原始异常（含请求 URL 与堆栈）只进控制台，界面上说「网络中断，请重试」。
+   * 服务端给出的 message 走各自的 res.message 分支，不经过这里。
+   */
+  function readableError(err){
+    if(err && err.message) console.error('[creature] request failed', err);
+    return translate('errors.network','Network error, please retry');
+  }
+
   const panelLocale=window.Panel || {};
   const moduleLocaleFn=typeof panelLocale.moduleLocale==='function'
     ? panelLocale.moduleLocale.bind(panelLocale)
@@ -130,7 +153,7 @@
           creatureNotify(res?.message||translate('create.failure','Failed to create creature'),'error',{duration:5000});
         }
       }catch(err){
-        const reason=err?.message||err;
+        const reason=readableError(err);
         creatureNotify(translate('create.failure_with_reason','Creation failed: :reason',{reason}), 'error',{duration:5000});
       }
     });
@@ -152,7 +175,7 @@
       }
     }catch(err){
       if(box) box.textContent=translate('logs.load_failed_placeholder','-- Load failed --');
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('logs.load_failed_with_reason','Failed to load logs: :reason',{reason}),'error',{duration:5000});
     }
   }
@@ -216,12 +239,12 @@
       const res=await apiPost('/creature/api/delete',{entry:id});
       if(res && res.success){
   creatureNotify(translate('list.delete_success','Creature deleted'),'success',{duration:1500});
-        setTimeout(()=>location.reload(),500);
+        refreshCreatureList();
       } else {
         creatureNotify(res?.message||translate('list.delete_failed','Failed to delete creature'),'error',{duration:5000});
       }
     }catch(err){
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('list.delete_failed_with_reason','Failed to delete creature: :reason',{reason}),'error',{duration:5000});
     }
   },{capture:true});
@@ -318,9 +341,7 @@
   btnCopy?.addEventListener('click',()=>{
     const txt=sqlPreview ? (sqlPreview.tagName==='TEXTAREA'?sqlPreview.value:sqlPreview.textContent) : '';
     if(!txt) return;
-    navigator.clipboard.writeText(txt)
-      .then(()=>creatureNotify(translate('diff.copy_sql_success','SQL copied'),'success'))
-      .catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error'));
+    Panel.copy(txt, { feedback: (ok)=> creatureNotify(ok ? translate('diff.copy_sql_success','SQL copied') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') });
   });
 
   function renderExecStructured(kind,res,elapsedMs,executedSql){
@@ -362,8 +383,8 @@
         const act=btn.getAttribute('data-exec-act');
         if(act==='clear'){ sqlExecBox.innerHTML=''; sqlExecBox.classList.add('creature-hidden'); }
         else if(act==='hide'){ sqlExecBox.classList.add('creature-hidden'); }
-        else if(act==='copy-json'){ navigator.clipboard.writeText(jsonStr).then(()=>creatureNotify(translate('exec.copy_json_success','JSON copied'),'success')).catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error')); }
-        else if(act==='copy-sql' && executedSql){ navigator.clipboard.writeText(executedSql).then(()=>creatureNotify(translate('exec.copy_sql_success','SQL copied'),'success')).catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error')); }
+        else if(act==='copy-json'){ Panel.copy(jsonStr, { feedback: (ok)=> creatureNotify(ok ? translate('exec.copy_json_success','JSON copied') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') }); }
+        else if(act==='copy-sql' && executedSql){ Panel.copy(executedSql, { feedback: (ok)=> creatureNotify(ok ? translate('exec.copy_sql_success','SQL copied') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') }); }
       });
     });
   }
@@ -398,7 +419,7 @@
       return res;
     }catch(err){
       const elapsed=(performance.now()-started).toFixed(1);
-      const msg=err?.message||String(err);
+      const msg=readableError(err);
       const prefix=errorPrefix ?? translate('exec.default_error','Execution failed');
       creatureNotify(translate('exec.failure_with_reason',':prefix: :reason',{prefix,reason:msg}),'error',{duration:5000});
       const failRes={success:false,message:msg};
@@ -479,10 +500,14 @@
             const copiedLabel=translate('verify.copied','Copied');
             copyBtn.textContent=copyLabel;
             copyBtn.onclick=()=>{
-              navigator.clipboard.writeText(sql).then(()=>{
-                copyBtn.textContent=copiedLabel;
-                setTimeout(()=>copyBtn.textContent=copyLabel,1500);
-              }).catch(()=>creatureNotify(translate('common.copy_failed','Copy failed'),'error'));
+              Panel.copy(sql, { feedback: (ok)=>{
+                if(ok){
+                  copyBtn.textContent=copiedLabel;
+                  setTimeout(()=>copyBtn.textContent=copyLabel,1500);
+                } else {
+                  creatureNotify(translate('common.copy_failed','Copy failed'),'error');
+                }
+              } });
             };
           }
         } else {
@@ -492,7 +517,7 @@
         openModal('#modal-verify');
       }
     }catch(err){
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('verify.failure_with_reason','Verification failed: :reason',{reason}),'error',{duration:5000});
     }
   }
@@ -531,10 +556,10 @@
     if(act==='edit-model') body.idx=parseInt(idx,10);
     try{
       const res=await apiPost('/creature/api/'+(act==='add-model'?'add-model':'edit-model'),body);
-      if(res?.success){ creatureNotify(translate('models.save_success','Model saved successfully'),'success'); location.reload(); }
+      if(res?.success){ creatureNotify(translate('models.save_success','Model saved successfully'),'success'); reloadKeeping(); }
       else { creatureNotify(res?.message||translate('models.save_failed','Failed to save model'),'error',{duration:5000}); }
     }catch(err){
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('models.save_failed_with_reason','Failed to save model: :reason',{reason}),'error',{duration:5000});
     }
   });
@@ -557,10 +582,10 @@
       const cid=tableModels.getAttribute('data-creature');
       const idx=del.closest('tr').dataset.idx;
       apiPost('/creature/api/delete-model',{creature_id:cid,idx}).then(res=>{
-        if(res?.success){ creatureNotify(translate('models.delete_success','Model deleted'),'success'); location.reload(); }
+        if(res?.success){ creatureNotify(translate('models.delete_success','Model deleted'),'success'); reloadKeeping(); }
         else { creatureNotify(res?.message||translate('models.delete_failed','Failed to delete model'),'error',{duration:5000}); }
       }).catch(err=>{
-        const reason=err?.message||err;
+        const reason=readableError(err);
         creatureNotify(translate('models.delete_failed_with_reason','Failed to delete model: :reason',{reason}),'error',{duration:5000});
       });
     }
@@ -590,9 +615,9 @@
       }
       renderExecStructured('save',res,elapsed,sql||'');
     }catch(err){
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('save.failed_with_reason','Failed to save: :reason',{reason}),'error',{duration:5000});
-      renderExecStructured('save',{success:false,message:err?.message||String(err)},'0',sql||'');
+      renderExecStructured('save',{success:false,message:readableError(err)},'0',sql||'');
     }
   });
 
@@ -605,7 +630,7 @@
       if(res?.success){ creatureNotify(translate('save.delete_success','Deleted successfully'),'success'); setTimeout(()=>{ location.href=window.Panel.url('/creature'); },700); }
       else { creatureNotify(res?.message||translate('save.delete_failed','Failed to delete'),'error',{duration:5000}); }
     }catch(err){
-      const reason=err?.message||err;
+      const reason=readableError(err);
       creatureNotify(translate('save.delete_failed_with_reason','Failed to delete: :reason',{reason}),'error',{duration:5000});
     }
   });

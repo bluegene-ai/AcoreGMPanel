@@ -148,6 +148,9 @@ class ItemInventoryRepository extends MultiServerRepository
             $instances
         ));
 
+        // 容器内含物品数一次取齐：逐容器 COUNT(*) 会让一次渲染发 6–11 条同形查询
+        $containerCounts = $this->containedItemCounts($guid, $itemGuids);
+
         $items = [];
         foreach ($map as $row) {
             $instanceGuid = $row['item'];
@@ -163,7 +166,7 @@ class ItemInventoryRepository extends MultiServerRepository
             $location = $this->locations->resolve($bag, $slot, $containerRow);
             $entry = (int) ($instance['itemEntry'] ?? 0);
             $isContainer = $bag === 0 && ($this->locations->isBagSlot($slot) || $this->locations->isBankBagSlot($slot));
-            $nestedCount = $isContainer ? $this->containedItemCount($guid, $instanceGuid) : 0;
+            $nestedCount = $isContainer ? ($containerCounts[$instanceGuid] ?? 0) : 0;
 
             $items[] = [
                 'instance_guid' => $instanceGuid,
@@ -534,6 +537,37 @@ class ItemInventoryRepository extends MultiServerRepository
         $stmt->execute([':g' => $characterGuid, ':b' => $containerInstanceGuid]);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * 一次 `GROUP BY bag` 取回多个容器的内含物品数。
+     * @param int[] $containerInstanceGuids
+     * @return array<int,int> 容器实例 guid => 内含物品数（没有内含物品的容器不在结果里）
+     */
+    private function containedItemCounts(int $characterGuid, array $containerInstanceGuids): array
+    {
+        $containerInstanceGuids = array_values(array_unique(array_filter(
+            array_map('intval', $containerInstanceGuids),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($characterGuid <= 0 || $containerInstanceGuids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($containerInstanceGuids), '?'));
+        $stmt = $this->chars->prepare(
+            'SELECT bag, COUNT(*) AS total FROM character_inventory'
+            . ' WHERE guid = ? AND bag IN (' . $placeholders . ') GROUP BY bag'
+        );
+        $stmt->execute(array_merge([$characterGuid], $containerInstanceGuids));
+
+        $counts = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $counts[(int) $row['bag']] = (int) $row['total'];
+        }
+
+        return $counts;
     }
 
     public function loadItemMeta(int $entry, bool $withStack = false): ?array

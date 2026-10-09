@@ -278,15 +278,29 @@ final class AuctionatorConfigFile
         return (float) $value;
     }
 
-    public static function assertWritable(string $path): void
+    /**
+     * 面板能不能写这个 conf：以真实能力为准（同目录建临时文件 → rename），不用 is_writable()。
+     * Windows 上 is_writable() 对这类路径不可靠：文件与目录都可能报 false 而实际可写。
+     */
+    public static function canWrite(string $path): bool
     {
         $directory = dirname($path);
         if (!is_dir($directory)) {
-            throw new RuntimeException('directory missing: ' . $directory);
+            return false;
         }
 
-        if (is_file($path) && !is_writable($path)) {
-            throw new RuntimeException('file not writable: ' . $path);
+        $probe = $directory . DIRECTORY_SEPARATOR . '.agmp_write_probe_' . bin2hex(random_bytes(4)) . '.tmp';
+        if (@file_put_contents($probe, '') === false) {
+            return false;
         }
+
+        $renamed = @rename($probe, $probe . '.renamed');
+        foreach ([$probe, $probe . '.renamed'] as $leftover) {
+            if (is_file($leftover)) {
+                @unlink($leftover);
+            }
+        }
+
+        return (bool) $renamed;
     }
 }

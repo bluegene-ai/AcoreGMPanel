@@ -27,7 +27,8 @@ final class TransientCache
         if (!is_string($raw) || $raw === '')
             return null;
 
-        $entry = @unserialize($raw);
+        // 缓存内容只应是数组/标量：禁止反序列化出对象，避免缓存目录一旦可写就变成对象注入入口。
+        $entry = @unserialize($raw, ['allowed_classes' => false]);
         if (!is_array($entry) || !array_key_exists('expires_at', $entry))
             return null;
 

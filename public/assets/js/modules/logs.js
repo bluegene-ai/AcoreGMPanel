@@ -1,8 +1,11 @@
 /**
  * File: public/assets/js/modules/logs.js
- * Purpose: Provides functionality for the public/assets/js/modules module.
+ * Purpose: 集中日志读取页（模块/类型/条数选择 + 原始输出）。
+ *
+ * 整体包在 IIFE 里，避免占用 qs / escapeHtml / boot 之类通用全局名。
  */
 
+(function(){
 const qs = (sel, ctx = document) => ctx.querySelector(sel);
 const getPanelApi = () => (window.Panel && window.Panel.api) ? window.Panel.api : null;
 const escapeHtml = (value) => String(value)
@@ -37,7 +40,6 @@ function boot(){
   const status = (key, fallback) => moduleTranslate(`status.${key}`, fallback);
   const action = (key, fallback) => moduleTranslate(`actions.${key}`, fallback);
   const summarySeparator = String(summary('separator', ' | ') || ' | ');
-  let timer = null;
   let panelReadyAttempts = 0;
   const MAX_PANEL_RETRIES = 12;
   let lastLines = [];
@@ -161,13 +163,10 @@ function boot(){
     tableBody.innerHTML = '';
     activeRowEl = null;
     if(!Array.isArray(entries) || entries.length === 0){
-      const row = document.createElement('tr');
-      const cell = document.createElement('td');
-      cell.colSpan = 4;
-      cell.className = 'muted text-center';
-      cell.textContent = status('no_entries', 'No log entries');
-      row.appendChild(cell);
-      tableBody.appendChild(row);
+      const emptyLabel = status('no_entries', 'No log entries');
+      tableBody.innerHTML = (window.Panel && typeof window.Panel.emptyRow === 'function')
+        ? window.Panel.emptyRow(4, emptyLabel, { rowClassName: 'js-log-empty', cellClassName: 'muted text-center' })
+        : `<tr class="js-log-empty"><td colspan="4" class="muted text-center">${escapeHtml(emptyLabel)}</td></tr>`;
       return;
     }
     entries.forEach(entry => {
@@ -272,9 +271,10 @@ function boot(){
       renderTable(res.entries || []);
       updateSummary(res);
     } catch(error){
-      const exceptionPrefix = status('exception_prefix', '[EXCEPTION] ');
+      // 原始异常（含请求路径/堆栈）只进控制台：界面上给一句可读的话
+      console.error('[logs] request failed', error);
       const requestError = status('request_error', 'Request error');
-      if(rawBox){ rawBox.textContent = `${exceptionPrefix}${error?.message || error}`; }
+      if(rawBox){ rawBox.textContent = requestError; }
       if(tableBody){ tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">${requestError}</td></tr>`; }
     }
   }
@@ -291,26 +291,47 @@ function boot(){
   }
 
   if(autoBtn){
+    // 自动刷新：隐藏标签页暂停、失败退避 —— 未开启时一次请求都不发
     autoBtn.addEventListener('click', () => {
       const active = autoBtn.getAttribute('data-on') === '1';
       if(active){
         autoBtn.setAttribute('data-on', '0');
         autoBtn.textContent = action('auto_on', 'Enable auto refresh');
-        if(timer){ clearInterval(timer); timer = null; }
+        stopAutoRefresh();
       } else {
         autoBtn.setAttribute('data-on', '1');
         autoBtn.textContent = action('auto_off', 'Disable auto refresh');
         triggerLoad();
-        timer = setInterval(triggerLoad, 4000);
+        startAutoRefresh();
       }
     });
   }
 
   if(canRead) triggerLoad();
 }
+
+/** 轮询句柄：优先用公共 Panel.poll（隐藏暂停 + 失败退避），缺失时退回固定间隔。 */
+let timer = null;
+
+function startAutoRefresh(){
+  stopAutoRefresh();
+  if(window.Panel && typeof window.Panel.poll === 'function'){
+    timer = window.Panel.poll(()=> loadLogs(), 4000, { pauseWhenHidden: true, backoffOnError: true });
+    return;
+  }
+  timer = { stop(){ window.clearInterval(this.id); }, id: window.setInterval(()=> loadLogs(), 4000) };
+}
+
+function stopAutoRefresh(){
+  if(!timer) return;
+  timer.stop();
+  timer = null;
+}
+
 if(document.readyState === 'loading'){
   document.addEventListener('DOMContentLoaded', boot);
 } else {
   boot();
 }
+})();
 

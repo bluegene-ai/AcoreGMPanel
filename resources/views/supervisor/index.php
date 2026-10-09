@@ -125,15 +125,6 @@ $sourceBadge = static function (array $diagnostics, string $key): string {
     </span>
   </div>
   <div class="sv-toolbar__actions">
-    <?php if (($capabilities['control'] ?? false) && $supervisorRunning): ?>
-      <button type="button" class="btn outline" data-sv-action="restart" data-sv-target="all">
-        <?= htmlspecialchars(__('app.supervisor.actions.restart_all')) ?>
-      </button>
-      <button type="button" class="btn outline danger" data-sv-action="stop" data-sv-target="all"
-              data-sv-confirm="<?= htmlspecialchars(__('app.supervisor.confirm.stop_all'), ENT_QUOTES, 'UTF-8') ?>">
-        <?= htmlspecialchars(__('app.supervisor.actions.stop_all')) ?>
-      </button>
-    <?php endif; ?>
     <?php if (($capabilities['control'] ?? false) && !$supervisorRunning && ($state['can_start'] ?? false)): ?>
       <button type="button" class="btn" data-sv-action="start_supervisor" data-sv-target="all">
         <?= htmlspecialchars(__('app.supervisor.actions.start_supervisor')) ?>
@@ -146,6 +137,48 @@ $sourceBadge = static function (array $diagnostics, string $key): string {
     </label>
   </div>
 </div>
+
+<?php
+// 重启/停止会波及该区全部在线玩家：与「刷新」分开放进危险区，并要求照打确认词。
+$dangerActions = [];
+if (($capabilities['control'] ?? false) && $supervisorRunning) {
+    $dangerActions[] = [
+        'action' => 'restart',
+        'class' => 'btn outline danger',
+        'label' => __('app.supervisor.actions.restart_all'),
+        'confirm' => __('app.supervisor.confirm.restart_all'),
+        'require_text' => 'RESTART',
+        'require_label' => __('app.supervisor.confirm.restart_all_gate'),
+    ];
+    $dangerActions[] = [
+        'action' => 'stop',
+        'class' => 'btn outline danger',
+        'label' => __('app.supervisor.actions.stop_all'),
+        'confirm' => __('app.supervisor.confirm.stop_all'),
+        'require_text' => '',
+        'require_label' => '',
+    ];
+}
+?>
+<?php if ($dangerActions !== []): ?>
+<div class="sv-danger-zone" role="group" aria-label="<?= htmlspecialchars(__('app.supervisor.danger.zone_label'), ENT_QUOTES, 'UTF-8') ?>">
+  <div class="sv-danger-zone__text">
+    <strong><?= htmlspecialchars(__('app.supervisor.danger.zone_label')) ?></strong>
+    <span class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.danger.zone_hint')) ?></span>
+  </div>
+  <div class="sv-danger-zone__actions">
+    <?php foreach ($dangerActions as $dangerAction): ?>
+      <button type="button" class="<?= htmlspecialchars($dangerAction['class'], ENT_QUOTES, 'UTF-8') ?>"
+              data-sv-action="<?= htmlspecialchars($dangerAction['action'], ENT_QUOTES, 'UTF-8') ?>"
+              data-sv-target="all"
+              data-sv-confirm="<?= htmlspecialchars($dangerAction['confirm'], ENT_QUOTES, 'UTF-8') ?>"
+              <?= $dangerAction['require_text'] !== '' ? 'data-sv-confirm-text="' . htmlspecialchars($dangerAction['require_text'], ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+              <?= $dangerAction['require_label'] !== '' ? 'data-sv-confirm-label="' . htmlspecialchars($dangerAction['require_label'], ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+      ><?= htmlspecialchars($dangerAction['label']) ?></button>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php
 // 状态文件必须属于 <dir>/supervisor.ini 描述的那个 supervisor：InstanceName 不同说明这个目录
@@ -220,10 +253,10 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
   <header class="sv-panel__head">
     <h3><?= htmlspecialchars(__('app.supervisor.diagnostics.title')) ?></h3>
   </header>
-  <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.intro')) ?>">i</span></p>
+  <p class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.intro_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.intro')) ?></p>
   <?php if (($diagnostics['ini_conflicts'] ?? []) !== []): ?>
     <div class="sv-notice sv-notice--error">
-      <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title')) ?>">i</span>
+      <?= htmlspecialchars(__('app.supervisor.diagnostics.conflict_title_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.conflict_title')) ?>
       <ul class="sv-muted sv-small">
         <?php foreach ((array) $diagnostics['ini_conflicts'] as $conflictKey => $conflictPair): ?>
           <?php
@@ -291,14 +324,14 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
           : __('app.supervisor.diagnostics.open_basedir_empty')) ?></dd></div>
   </dl>
   <?php if ((string) ($diagnostics['open_basedir'] ?? '') !== ''): ?>
-    <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning')) ?>">i</span></div>
+    <div class="sv-notice sv-notice--error"><?= htmlspecialchars(__('app.supervisor.diagnostics.open_basedir_warning_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.open_basedir_warning')) ?></div>
   <?php endif; ?>
 
   <table class="table">
     <thead>
       <tr>
-        <th><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_path')) ?></th>
-        <th><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_state')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_path')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.supervisor.diagnostics.candidate_state')) ?></th>
       </tr>
     </thead>
     <tbody>
@@ -325,9 +358,9 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
   <div class="sv-notice">
     <strong><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_title')) ?></strong>
     <?php if (($state['reason'] ?? '') === 'dir_missing'): ?>
-      <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured')) ?>">i</span></div>
+      <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.fix_configured')) ?></div>
     <?php endif; ?>
-    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint')) ?>">i</span></div>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.fix_hint')) ?></div>
     <ol class="sv-muted sv-small">
       <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_config', ['file' => (string) ($diagnostics['override_file'] ?? 'config/generated/supervisor.php')])) ?>
         <pre>return [
@@ -336,7 +369,7 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
       </li>
       <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_env', ['var' => (string) ($diagnostics['env_var'] ?? '')])) ?></li>
     </ol>
-    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note')) ?>">i</span></div>
+    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_note_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.fix_option_note')) ?></div>
   </div>
 </section>
 <?php endif; ?>

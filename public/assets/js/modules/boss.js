@@ -30,6 +30,15 @@
     return fallback || path;
   }
 
+  /**
+   * 整页刷新但保留滚动位置：保存配置会同时改动多个面板，局部替换拿不到可信页面，
+   * 所以这里保留整页刷新，只是不再把滚动位置丢掉（Tab 由 URL hash 记忆）。
+   */
+  function panelReload(){
+    if(typeof panel.reload === 'function'){ panel.reload(); return; }
+    window.location.reload();
+  }
+
   function withServer(path){
     if(!currentServer) return path;
     return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'server=' + encodeURIComponent(currentServer);
@@ -65,10 +74,15 @@
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       };
 
-  // 铜 → 金币文案（10000 铜 = 1 金）
+  // 铜 → 金币文案（10000 铜 = 1 金）。单位走语言包（Panel.moneyUnit），不再在 fallback 里写「金」。
   function goldAmount(copper){
     const value = Math.round((Number(copper || 0) / 10000) * 100) / 100;
-    return t('ux.gold_amount', ':amount 金').replace(':amount', value.toFixed(2));
+    const unit = (typeof panel.moneyUnit === 'function')
+      ? panel.moneyUnit('gold', { module: 'boss', fallback: 'g' })
+      : 'g';
+    return t('ux.gold_amount', ':amount :unit')
+      .replace(':amount', value.toFixed(2))
+      .replace(':unit', unit);
   }
 
   function goldText(min, max, avg){
@@ -150,7 +164,7 @@
     }
 
     show('success', json.message || t('feedback.success', 'Action completed.'));
-    window.setTimeout(function(){ window.location.reload(); }, 600);
+    window.setTimeout(function(){ panelReload(); }, 600);
   }
 
   async function saveConfig(){
@@ -168,7 +182,7 @@
     }
 
     show('success', json.message || t('feedback.config_success', 'Configuration saved.'));
-    window.setTimeout(function(){ window.location.reload(); }, 600);
+    window.setTimeout(function(){ panelReload(); }, 600);
   }
 
   // 扩展配置字段多、都在二级 Tab 里：开关型带一个 hidden=0 占位（未勾选时提交 0）；
@@ -209,7 +223,7 @@
     }
 
     show('success', json.message || t('feedback.ext_success', 'Extended configuration saved.'));
-    window.setTimeout(function(){ window.location.reload(); }, 600);
+    window.setTimeout(function(){ panelReload(); }, 600);
   }
 
   /* ---- Tab 分页：每个 [data-boss-tabs] 容器管自己的按钮与面板（面板须为容器直接子节点），
@@ -704,7 +718,7 @@
       }
       show('success', json.message || t('feedback.success', 'Done'));
       // 奖池名/序号/物品名都由服务端渲染，写完直接重载页面
-      window.setTimeout(function(){ window.location.reload(); }, 700);
+      window.setTimeout(function(){ panelReload(); }, 700);
       return json;
     }
 
@@ -1047,7 +1061,7 @@
               .replace(':green', String(summary.green || 0)))
             + '</span>';
         }
-        window.setTimeout(function(){ window.location.reload(); }, 900);
+        window.setTimeout(function(){ panelReload(); }, 900);
       });
     }
   }

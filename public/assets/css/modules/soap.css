@@ -12,7 +12,7 @@
 .soap-category--active{border-color:#62a7ff;background:#112840;}
 .soap-category__name{font-weight:600;font-size:14px;color:#e7f4ff;}
 .soap-category__meta{max-width:100%;}
-.soap-category__badge{font-size:11px;font-weight:600;color:#83befc;background:rgba(82,164,255,.22);padding:2px 8px;border-radius:999px;margin-top:4px;}
+.soap-category__badge{font-size:11.5px;font-weight:600;color:#83befc;background:rgba(82,164,255,.22);padding:2px 8px;border-radius:999px;margin-top:4px;}
 .soap-wizard__commands{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto;padding-right:4px;}
 .soap-command{display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:#071019;border:1px solid transparent;border-radius:10px;padding:12px 14px;text-align:left;cursor:pointer;color:#d7e7ff;transition:border .2s,background .2s;}
 .soap-command:hover{border-color:rgba(94,168,255,.35);}
@@ -20,7 +20,7 @@
 .soap-command__title{display:flex;align-items:center;gap:8px;}
 .soap-command__name{font-weight:600;font-size:14px;}
 .soap-command__desc{font-size:12px;line-height:1.4;}
-.soap-command__cat{font-size:11px;color:#6f91bf;}
+.soap-command__cat{font-size:11.5px;color:#6f91bf;}
 .soap-command__empty{padding:20px;background:#081421;border-radius:10px;color:#7aa6d9;text-align:center;font-size:13px;}
 .soap-wizard__detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px;}
 .soap-wizard__detail-header h2{margin:0;font-size:20px;color:#f1fbff;}
@@ -29,7 +29,7 @@
 .soap-risk--low{background:rgba(32,168,127,.16);color:#53dcab;}
 .soap-risk--medium{background:rgba(255,196,86,.18);color:#ffdc8c;}
 .soap-risk--high{background:rgba(205,72,69,.2);color:#ff9b9b;}
-.soap-risk--unknown{background:rgba(109,125,146,.28);color:#9eb0c9;}
+.soap-risk--unknown{background:rgba(109,125,146,.28);color:var(--c-text-muted);}
 .soap-notes{margin:12px 0 18px;padding-left:18px;color:#9ec5ff;font-size:13px;line-height:1.5;}
 .soap-notes li+li{margin-top:6px;}
 .soap-target-hint{margin-bottom:18px;padding:10px 14px;border-radius:8px;background:rgba(255,196,86,.1);color:#ffd488;font-size:13px;}

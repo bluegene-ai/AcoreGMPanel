@@ -9,6 +9,7 @@ namespace Acme\Panel\Domain\Logs;
 use Acme\Panel\Support\ConfigLocalization;
 use Acme\Panel\Core\Lang;
 use Acme\Panel\Support\LogPath;
+use Acme\Panel\Support\TransientCache;
 use InvalidArgumentException;
 
 class LogManager
@@ -107,16 +108,24 @@ class LogManager
         ];
     }
 
+    /**
+     * config/logs.php + 本地化结果按语种缓存 300 秒：`ConfigLocalization::localizeArray()`
+     * 会遍历整份模块清单走一遍语言表，而这份配置在一次部署内是常量。
+     */
     private function loadConfig(): array
     {
         $file = $this->resolvePath('config/logs.php');
-        if(is_file($file)){
-            $data = require $file;
-            if(is_array($data)){
-                return ConfigLocalization::localizeArray($data);
+        $locale = Lang::locale();
+
+        return TransientCache::remember('logs_config', 'config_' . $locale, 300, function () use ($file): array {
+            if(is_file($file)){
+                $data = require $file;
+                if(is_array($data)){
+                    return ConfigLocalization::localizeArray($data);
+                }
             }
-        }
-        return [];
+            return [];
+        });
     }
 
     private function resolvePath(string $relative): string

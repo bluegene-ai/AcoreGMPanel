@@ -63,10 +63,9 @@ if (!$messages) {
 	return;
 }
 
+    // 统一到 panel-flash：视图、JS 与校验脚本都走这一套。
 foreach ($messages as $entry) {
-	$type = $entry['type'];
-	$label = strtoupper($entry['label']);
-	$cls = 'flash-' . (in_array($type, $validTypes, true) ? $type : 'info');
-	echo '<div class="flash-msg ' . $cls . '"><strong>' . htmlspecialchars($label) . '</strong>' . htmlspecialchars($entry['text']) . '</div>';
+	$type = in_array($entry['type'], $validTypes, true) ? $entry['type'] : 'info';
+	echo '<div class="panel-flash panel-flash--' . $type . ' is-visible">' . htmlspecialchars($entry['text']) . '</div>';
 }
 ?>

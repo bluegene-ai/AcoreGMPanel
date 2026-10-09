@@ -43,4 +43,4 @@ Thumbs.db
 /docs
 
 # Local preview / scratch artifacts
-/storage/tmp/
+/public/assets/_preview/

@@ -210,6 +210,7 @@ return array (
       'username_required' => '用户名不能为空。',
       'password_required' => '密码不能为空。',
       'password_mismatch' => '两次密码不一致。',
+      'password_too_short' => '密码至少 8 位。',
     ),
   ),
   'finish' => 

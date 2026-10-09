@@ -35,6 +35,38 @@ class QuestRepository extends MultiServerRepository
     ];
     public function __construct(){ parent::__construct(); $this->world = $this->world(); }
 
+    /**
+     * quest_template 的完整列清单（顺序与表一致）。
+     *
+     * 任务编辑页的同一行还要参与 rowHash 与 undo 快照（Snapshot::buildInsert）：少取一列
+     * 就会让哈希口径与撤销 SQL 失真，所以这里是全列，只是不再写 `SELECT *`。
+     */
+    private const DB_COLUMNS = [
+        'ID', 'QuestType', 'QuestLevel', 'MinLevel', 'QuestSortID', 'QuestInfoID',
+        'SuggestedGroupNum', 'RequiredFactionId1', 'RequiredFactionId2', 'RequiredFactionValue1', 'RequiredFactionValue2', 'RewardNextQuest',
+        'RewardXPDifficulty', 'RewardMoney', 'RewardMoneyDifficulty', 'RewardDisplaySpell', 'RewardSpell', 'RewardHonor',
+        'RewardKillHonor', 'StartItem', 'Flags', 'RequiredPlayerKills', 'RewardItem1', 'RewardAmount1',
+        'RewardItem2', 'RewardAmount2', 'RewardItem3', 'RewardAmount3', 'RewardItem4', 'RewardAmount4',
+        'ItemDrop1', 'ItemDropQuantity1', 'ItemDrop2', 'ItemDropQuantity2', 'ItemDrop3', 'ItemDropQuantity3',
+        'ItemDrop4', 'ItemDropQuantity4', 'RewardChoiceItemID1', 'RewardChoiceItemQuantity1', 'RewardChoiceItemID2', 'RewardChoiceItemQuantity2',
+        'RewardChoiceItemID3', 'RewardChoiceItemQuantity3', 'RewardChoiceItemID4', 'RewardChoiceItemQuantity4', 'RewardChoiceItemID5', 'RewardChoiceItemQuantity5',
+        'RewardChoiceItemID6', 'RewardChoiceItemQuantity6', 'POIContinent', 'POIx', 'POIy', 'POIPriority',
+        'RewardTitle', 'RewardTalents', 'RewardArenaPoints', 'RewardFactionID1', 'RewardFactionValue1', 'RewardFactionOverride1',
+        'RewardFactionID2', 'RewardFactionValue2', 'RewardFactionOverride2', 'RewardFactionID3', 'RewardFactionValue3', 'RewardFactionOverride3',
+        'RewardFactionID4', 'RewardFactionValue4', 'RewardFactionOverride4', 'RewardFactionID5', 'RewardFactionValue5', 'RewardFactionOverride5',
+        'TimeAllowed', 'AllowableRaces', 'LogTitle', 'LogDescription', 'QuestDescription', 'AreaDescription',
+        'QuestCompletionLog', 'RequiredNpcOrGo1', 'RequiredNpcOrGo2', 'RequiredNpcOrGo3', 'RequiredNpcOrGo4', 'RequiredNpcOrGoCount1',
+        'RequiredNpcOrGoCount2', 'RequiredNpcOrGoCount3', 'RequiredNpcOrGoCount4', 'RequiredItemId1', 'RequiredItemId2', 'RequiredItemId3',
+        'RequiredItemId4', 'RequiredItemId5', 'RequiredItemId6', 'RequiredItemCount1', 'RequiredItemCount2', 'RequiredItemCount3',
+        'RequiredItemCount4', 'RequiredItemCount5', 'RequiredItemCount6', 'Unknown0', 'ObjectiveText1', 'ObjectiveText2',
+        'ObjectiveText3', 'ObjectiveText4', 'VerifiedBuild',
+    ];
+
+    private static function columns(): string
+    {
+        return '`'.implode('`,`',self::DB_COLUMNS).'`';
+    }
+
     private function questInfoLabelOverrides(): array
     {
         static $cache = null;
@@ -418,14 +450,14 @@ class QuestRepository extends MultiServerRepository
     }
 
     public function find(int $id): ?array
-    { if($id<=0) return null; $st=$this->world->prepare('SELECT * FROM quest_template WHERE ID=:id'); $st->execute([':id'=>$id]); $r=$st->fetch(PDO::FETCH_ASSOC); return $r?:null; }
+    { if($id<=0) return null; $st=$this->world->prepare('SELECT '.self::columns().' FROM quest_template WHERE ID=:id'); $st->execute([':id'=>$id]); $r=$st->fetch(PDO::FETCH_ASSOC); return $r?:null; }
 
     public function create(int $newId, ?int $copyId=null): array
     {
         if($newId<=0) return ['success'=>false,'message'=>$this->repoError('invalid_new_id')];
         $ex=$this->world->prepare('SELECT 1 FROM quest_template WHERE ID=:e'); $ex->execute([':e'=>$newId]); if($ex->fetch()) return ['success'=>false,'message'=>$this->repoError('id_exists')];
         if($copyId){
-            $src=$this->world->prepare('SELECT * FROM quest_template WHERE ID=:c'); $src->execute([':c'=>$copyId]); $data=$src->fetch(PDO::FETCH_ASSOC); if(!$data) return ['success'=>false,'message'=>$this->repoError('copy_source_missing')];
+            $src=$this->world->prepare('SELECT '.self::columns().' FROM quest_template WHERE ID=:c'); $src->execute([':c'=>$copyId]); $data=$src->fetch(PDO::FETCH_ASSOC); if(!$data) return ['success'=>false,'message'=>$this->repoError('copy_source_missing')];
             $data['ID']=$newId; $cols=array_keys($data); $ph=array_map(fn($c)=>':'.$c,$cols);
             $sql='INSERT INTO quest_template(`'.implode('`,`',$cols).'`) VALUES('.implode(',',$ph).')';
             $ins=$this->world->prepare($sql); foreach($data as $k=>$v){ $ins->bindValue(':'.$k,$v===null?null:$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
@@ -510,7 +542,7 @@ class QuestRepository extends MultiServerRepository
     Audit::log('quest','exec_sql',$type?:'UNKNOWN',['sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error,'server_id'=>$this->serverId]);
         $this->appendSqlLog($type?:'UNKNOWN',$ok,$affected,$norm,$error);
         if(!$ok) return ['success'=>false,'message'=>$this->repoError('sql_exec_error', ['error'=>$error])];
-        $after=null; if($type==='UPDATE' && preg_match('/WHERE\s+`?ID`?\s*=\s*(\d+)/i',$norm,$mm)){ $entry=(int)$mm[1]; $st=$pdo->prepare('SELECT * FROM quest_template WHERE ID=:e'); if($st->execute([':e'=>$entry])){ $r=$st->fetch(PDO::FETCH_ASSOC); if($r) $after=$r; } }
+        $after=null; if($type==='UPDATE' && preg_match('/WHERE\s+`?ID`?\s*=\s*(\d+)/i',$norm,$mm)){ $entry=(int)$mm[1]; $st=$pdo->prepare('SELECT '.self::columns().' FROM quest_template WHERE ID=:e'); if($st->execute([':e'=>$entry])){ $r=$st->fetch(PDO::FETCH_ASSOC); if($r) $after=$r; } }
         $operationLabel = match($type){
             'INSERT' => Lang::get('app.quest.repository.sql.insert_label'),
             'UPDATE' => Lang::get('app.quest.repository.sql.update_label'),
@@ -533,7 +565,7 @@ class QuestRepository extends MultiServerRepository
     { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
 
     private function currentUser(): string
-    { return $_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); }
+    { return \Acme\Panel\Support\Auth::user() ?? 'unknown'; }
 
 
 

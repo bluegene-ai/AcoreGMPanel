@@ -2,7 +2,7 @@
 .aegis-page-intro{margin-top:-8px;margin-bottom:20px;}
 .aegis-feedback-hidden{display:none;}
 .aegis-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:32px;}
-.aegis-panel{background:#0d1621;border:1px solid rgba(94,168,255,.14);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(4,16,28,.22);min-width:0;}
+.aegis-panel{background:var(--c-surface-2);border:1px solid rgba(94,168,255,.14);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(4,16,28,.22);min-width:0;}
 .aegis-panel--full{grid-column:1 / -1;}
 .aegis-panel__head,.aegis-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .aegis-toolbar__group{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}

@@ -90,6 +90,10 @@ $reputationStandingLabel = static function (int $standing): string {
   $showAccountCharactersUrl = $showAccountName !== ''
     ? url_with_server('/character?account=' . rawurlencode($showAccountName) . '&load_all=1')
     : '';
+  // 直达发件：/mass-mail 读到 prefill_target 就把自定义收件人预填成这个角色（mass_mail.js）
+  $showSendUrl = (string) ($summary['name'] ?? '') !== ''
+    ? url_with_server('/mass-mail?prefill_target=' . rawurlencode((string) $summary['name']))
+    : '';
   ?>
   <div class="char-toolbar">
     <a class="btn outline btn-sm" href="<?= htmlspecialchars($charBase) ?>"><?= htmlspecialchars(__('app.account.show.back_to_characters')) ?></a>
@@ -98,6 +102,9 @@ $reputationStandingLabel = static function (int $standing): string {
     <?php endif; ?>
     <?php if($showAccountCharactersUrl !== ''): ?>
       <a class="btn outline btn-sm" href="<?= htmlspecialchars($showAccountCharactersUrl) ?>"><?= htmlspecialchars(__('app.character.index.table.same_account')) ?></a>
+    <?php endif; ?>
+    <?php if($showSendUrl !== ''): ?>
+      <a class="btn outline btn-sm" href="<?= htmlspecialchars($showSendUrl) ?>"><?= htmlspecialchars(__('app.character.show.send_to_character')) ?></a>
     <?php endif; ?>
   </div>
 
@@ -146,7 +153,21 @@ $reputationStandingLabel = static function (int $standing): string {
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.map')) ?></th><td><?= $mapName ? (htmlspecialchars($mapName) . ' (#' . $mapId . ')') : (string)$mapId ?> / <?= $zoneName ? (htmlspecialchars($zoneName) . ' (#' . $zoneId . ')') : (string)$zoneId ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.position')) ?></th><td><?= htmlspecialchars(number_format((float)$summary['position_x'],2)).', '.htmlspecialchars(number_format((float)$summary['position_y'],2)).', '.htmlspecialchars(number_format((float)$summary['position_z'],2)) ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.money')) ?></th><td><?= htmlspecialchars(format_money_gsc($summary['money'] ?? 0)) ?></td></tr>
-              <tr><th><?= htmlspecialchars(__('app.character.show.summary.mail')) ?></th><td><?= (int)($mail_count ?? 0) ?></td></tr>
+              <tr><th><?= htmlspecialchars(__('app.character.show.summary.mail')) ?></th><td>
+                <?php
+                  // 邮件数可点：直接带着收件人过滤跳到邮件管理，省掉"复制角色名再粘到筛选"这一步
+                  $showMailCount = (int)($mail_count ?? 0);
+                  $showMailFilterUrl = url_with_server('/mail?filter_receiver=' . rawurlencode((string)($summary['name'] ?? '')));
+                ?>
+                <?php if($showMailCount > 0): ?>
+                  <a href="<?= htmlspecialchars($showMailFilterUrl) ?>"><?= $showMailCount ?></a>
+                <?php else: ?>
+                  0
+                <?php endif; ?>
+                <?php if($showMailCount > 0): ?>
+                  <a class="link char-inline-link" href="<?= htmlspecialchars($showMailFilterUrl) ?>"><?= htmlspecialchars(__('app.character.show.summary.mail_view')) ?></a>
+                <?php endif; ?>
+              </td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.logout')) ?></th><td><?= htmlspecialchars(format_datetime($summary['logout_time'] ?? null)) ?></td></tr>
               <tr><th><?= htmlspecialchars(__('app.character.show.summary.homebind')) ?></th><td>
                 <?php if(!empty($summary['homebind'])): $hb=$summary['homebind']; ?>
@@ -214,7 +235,7 @@ $reputationStandingLabel = static function (int $standing): string {
                     <button class="btn btn-sm warn" type="submit"><?= htmlspecialchars(__('app.character.actions.boost_submit')) ?></button>
                   </div>
                   <div class="char-action-hint">
-                    <?= htmlspecialchars(__('app.character.actions.boost_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character.actions.boost_hint')) ?>">i</span>
+                    <?= htmlspecialchars(__('app.character.actions.boost_hint_short')) ?><?= panel_hint(__('app.character.actions.boost_hint')) ?>
                   </div>
                 </form>
               <?php endif; ?>
@@ -359,9 +380,9 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.skills.skill')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.skills.value')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.skills.max')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.skills.skill')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.skills.value')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.skills.max')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -386,9 +407,9 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact" id="spells-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.spells.spell')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.spells.active')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.spells.disabled')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.spells.spell')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.spells.active')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.spells.disabled')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -410,10 +431,10 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.cooldowns.spell')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.cooldowns.item')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.cooldowns.time')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.cooldowns.category')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.cooldowns.spell')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.cooldowns.item')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.cooldowns.time')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.cooldowns.category')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -467,11 +488,11 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.quests.quest')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.quests.status')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.quests.timer')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.quests.mob_counts')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.quests.item_counts')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.quests.quest')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.quests.status')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.quests.timer')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.quests.mob_counts')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.quests.item_counts')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -530,9 +551,9 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact" id="reps-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.reputations.faction')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.reputations.standing')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.reputations.flags')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.reputations.faction')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.reputations.standing')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.reputations.flags')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -569,14 +590,14 @@ $reputationStandingLabel = static function (int $standing): string {
         <table class="table table--compact" id="auras-table" data-filter-empty="<?= htmlspecialchars(__('app.character.controls.filter_no_results')) ?>">
           <thead>
             <tr>
-              <th><?= htmlspecialchars(__('app.character.show.auras.spell')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.caster')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.item')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.mask')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.amounts')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.charges')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.duration')) ?></th>
-              <th><?= htmlspecialchars(__('app.character.show.auras.remaining')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.spell')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.caster')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.item')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.mask')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.amounts')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.charges')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.duration')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character.show.auras.remaining')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -612,8 +633,8 @@ $reputationStandingLabel = static function (int $standing): string {
             <table class="table table--compact">
               <thead>
                 <tr>
-                  <th><?= htmlspecialchars(__('app.character.show.achievements.achievement')) ?></th>
-                  <th><?= htmlspecialchars(__('app.character.show.achievements.date')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.character.show.achievements.achievement')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.character.show.achievements.date')) ?></th>
                 </tr>
               </thead>
               <tbody>
@@ -635,9 +656,9 @@ $reputationStandingLabel = static function (int $standing): string {
             <table class="table table--compact">
               <thead>
                 <tr>
-                  <th><?= htmlspecialchars(__('app.character.show.achievements.criteria')) ?></th>
-                  <th><?= htmlspecialchars(__('app.character.show.achievements.counter')) ?></th>
-                  <th><?= htmlspecialchars(__('app.character.show.achievements.date')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.character.show.achievements.criteria')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.character.show.achievements.counter')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.character.show.achievements.date')) ?></th>
                 </tr>
               </thead>
               <tbody>

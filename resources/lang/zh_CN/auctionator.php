@@ -481,6 +481,9 @@ return [
     'js' => [
         'modules' => [
             'auctionator' => [
+                'errors' => [
+                    'network' => '网络中断，请重试',
+                ],
                 'confirm' => [
                     'disabled_remove' => '确认把该物品移出自动上架黑名单吗？',
                     'itemclass_delete' => '确认删除该类别行吗？该类别将不再被自动卖家选中。',

@@ -11,7 +11,7 @@
 
 /* ---------- cards ---------- */
 .ii-toolbar,
-.ii-card{background:#141b1f;border:1px solid rgba(52,70,82,.55);border-radius:12px;padding:20px 22px;box-shadow:0 14px 36px rgba(0,0,0,.28);}
+.ii-card{background:var(--c-surface-1);border:1px solid rgba(52,70,82,.55);border-radius:12px;padding:20px 22px;box-shadow:0 14px 36px rgba(0,0,0,.28);}
 .ii-card{display:flex;flex-direction:column;}
 .ii-toolbar{margin-bottom:22px;}
 .ii-card__header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;}
@@ -78,7 +78,7 @@ a.char-name-cell--linked{text-decoration:none;}
 a.char-name-cell--linked .char-name-cell__name{border-bottom:1px dotted rgba(127,178,229,.5);}
 a.char-name-cell--linked:hover .char-name-cell__name{color:#a8cdf5;border-bottom-color:#a8cdf5;}
 a.char-name-cell--linked:hover .char-name-cell__id{opacity:.8;}
-.ii-badge{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:9px;font-size:11px;background:rgba(63,168,255,.16);color:#9dc9f2;border:1px solid rgba(63,168,255,.3);}
+.ii-badge{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:9px;font-size:11.5px;background:rgba(63,168,255,.16);color:#9dc9f2;border:1px solid rgba(63,168,255,.3);}
 .ii-pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;}
 .ii-failure-list{max-height:220px;overflow:auto;margin-top:10px;font-size:12px;}
 .ii-failure-list ul{margin:6px 0 0;padding-left:18px;}

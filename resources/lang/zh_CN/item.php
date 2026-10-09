@@ -812,8 +812,12 @@ return array (
         'list' => 
         array (
           'confirm_delete' => '确认删除物品 #:id?',
+          'delete_title' => '删除物品',
+          'delete_require_label' => '请照打物品名或 entry 以确认',
+          'delete_submit' => '删除',
           'delete_success' => '物品已删除',
           'delete_failed' => '删除失败',
+          'delete_failed_network' => '网络中断，请重试',
           'delete_failed_with_reason' => '删除失败: :reason',
           'subclass' => 
           array (
@@ -882,6 +886,9 @@ return array (
           'failed' => '保存失败',
           'failed_with_reason' => '保存失败: :reason',
           'confirm_delete_item' => '确认删除物品 #:id?',
+          'delete_title' => '删除物品',
+          'delete_require_label' => '请照打物品名或 entry 以确认',
+          'delete_submit' => '删除',
           'delete_success' => '物品已删除',
           'delete_failed' => '删除失败',
         ),

@@ -76,7 +76,7 @@ if ($rewardSectionDefaultOnly) {
     <div class="raf-section__heading">
       <h2 class="raf-section__title"><?= htmlspecialchars(__('app.raf.reward_log.title')) ?></h2>
       <p class="muted raf-panel__meta" data-raf-summary><?= htmlspecialchars($rewardSectionSummary) ?></p>
-      <p class="muted raf-section__note"><?= htmlspecialchars(__('app.raf.reward_log.subtitle_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.raf.reward_log.subtitle')) ?>">i</span></p>
+      <p class="muted raf-section__note"><?= htmlspecialchars(__('app.raf.reward_log.subtitle_short')) ?><?= panel_hint(__('app.raf.reward_log.subtitle')) ?></p>
     </div>
     <div class="raf-section__actions">
       <button

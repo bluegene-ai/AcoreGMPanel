@@ -144,13 +144,6 @@ class ItemController extends Controller
         return $this->json(['success'=>true,'type'=>$state['type'],'logs'=>$lines]);
     }
 
-    public function apiCheck(Request $request): Response
-    { $this->requireViewCapability(); $state = $this->prepareItemEntryState($request); if($state['entry']<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.invalid_id')],422); $exists=$this->repo->find($state['entry'])!==null; return $this->json(['success'=>true,'exists'=>$exists,'entry'=>$state['entry']]); }
-
-    public function apiFetch(Request $request): Response
-    { $this->requireViewCapability(); $state = $this->prepareItemEntryState($request); if($state['entry']<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.invalid_id')],422); $row=$this->repo->find($state['entry']); if(!$row) return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.not_found')],404); return $this->json(['success'=>true,'item'=>$row]); }
-
-
     /**
      * 物品属性卡（悬停物品名时弹出的那个）。除物品编辑页外，面板所有页面的物品名都走这里。
      *
@@ -205,13 +198,6 @@ class ItemController extends Controller
         return [
             'type' => $this->normalizedEnum($request, 'type', ['sql', 'deleted', 'actions'], 'sql'),
             'limit' => $this->boundedInt($request, 'limit', 200, 1, 500),
-        ];
-    }
-
-    private function prepareItemEntryState(Request $request): array
-    {
-        return [
-            'entry' => max(0, (int) $request->input('entry', 0)),
         ];
     }
 

@@ -19,7 +19,9 @@ class CsrfMiddleware
         if(in_array($request->method,$this->methods,true)){
 
 
-            $token = $request->post['_csrf'] ?? $request->post['_token'] ?? $request->get['_csrf'] ?? $request->get['_token'] ?? null;
+            // 只接受请求体与自定义头：token 进 query string 会经 Referer、访问日志、
+            // 浏览器历史外泄，等于把防护削弱成"知道 URL 就能伪造"。
+            $token = $request->post['_csrf'] ?? $request->post['_token'] ?? null;
 
 
             if(!$token){

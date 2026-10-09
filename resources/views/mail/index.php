@@ -21,6 +21,7 @@
   $capabilityNotice = $__canAll(['mail.view', 'mail.mark_read', 'mail.delete', 'mail.stats', 'mail.logs'])
     ? null
     : __('app.common.capabilities.page_limited');
+  include __DIR__.'/../partials/list_url.php';
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <?php
@@ -74,21 +75,22 @@
   </div>
 </div>
 
+<div class="table-wrap">
 <table class="table mail-table" id="mailTable" data-sort="<?= htmlspecialchars($sort) ?>" data-dir="<?= htmlspecialchars($dir) ?>">
   <thead>
     <tr>
       <?php if($mailCanBulk): ?>
-      <th class="mail-table__select-col"><input type="checkbox" id="mailSelectAll"></th>
+      <th scope="col" class="mail-table__select-col"><input type="checkbox" id="mailSelectAll"></th>
       <?php endif; ?>
-  <th data-sort="id" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.id')) ?><?= $sort==='id'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.sender')) ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.receiver')) ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.subject')) ?></th>
-  <th data-sort="money" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.money')) ?><?= $sort==='money'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.attachments')) ?></th>
-  <th data-sort="expire_time" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.expire')) ?><?= $sort==='expire_time'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.status')) ?></th>
-  <th><?= htmlspecialchars(__('app.mail.table.headers.actions')) ?></th>
+  <th scope="col" data-sort="id" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.id')) ?><?= $sort==='id'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.sender')) ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.receiver')) ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.subject')) ?></th>
+  <th scope="col" data-sort="money" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.money')) ?><?= $sort==='money'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.attachments')) ?></th>
+  <th scope="col" data-sort="expire_time" class="sortable"><?= htmlspecialchars(__('app.mail.table.headers.expire')) ?><?= $sort==='expire_time'?($dir==='ASC'?' ▲':' ▼'):'' ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.status')) ?></th>
+  <th scope="col"><?= htmlspecialchars(__('app.mail.table.headers.actions')) ?></th>
     </tr>
   </thead>
   <tbody>
@@ -137,11 +139,11 @@
   <?php endif; ?>
   </tbody>
 </table>
+</div>
 <?php
 
 
-  $base=url('/mail'); $pages=$pages; $page=$page;
-  $qs=$_GET; unset($qs['page']); if(!empty($qs)){ $base.='?'.http_build_query($qs); }
+  $base=$list_url('/mail'); $pages=$pages; $page=$page;
   include __DIR__.'/../components/pagination.php';
 ?>
 

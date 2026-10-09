@@ -5,6 +5,10 @@
  * 每个区一个 supervisor：页面顶部的切换器决定本页跟哪个实例通信（每次 API 调用带 ?instance=<id>）。
  */
 
+(function(){
+  if(window.__panelSupervisorBound) return;
+  window.__panelSupervisorBound = true;
+
 const svQs = (sel, ctx = document) => ctx.querySelector(sel);
 const svQsa = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 const svEscape = (value) => String(value)
@@ -121,7 +125,24 @@ function boot(){
   }
 
   let pollTimer = null;
+  let logPoll = null;
   let busy = false;
+
+  /**
+   * 日志轮询只在「自动刷新」勾选时运行，且标签页隐藏时暂停。
+   * 无条件 15 s 拉一次是纯浪费：不勾自动刷新的用户从没要求过实时日志。
+   */
+  function startLogPoll(){
+    if(logPoll) return;
+    if(typeof window.Panel === 'undefined' || typeof window.Panel.poll !== 'function') return;
+    logPoll = window.Panel.poll(()=> refreshLog(), 15000, { pauseWhenHidden: true, backoffOnError: true });
+  }
+
+  function stopLogPoll(){
+    if(!logPoll) return;
+    logPoll.stop();
+    logPoll = null;
+  }
 
   function showResult(message, tone){
     if(!resultBox) return;
@@ -307,10 +328,15 @@ function boot(){
     }catch(error){ /* ignore */ }
   }
 
-  async function awaitCommand(id, timeoutMs){
-    const deadline = Date.now() + (timeoutMs || 25000);
+  /** 等待 supervisor 回执期间的可见进度：三态（已下发 / 执行中 Ns / 完成或超时）。 */
+  async function awaitCommand(id, timeoutMs, onTick){
+    const limit = timeoutMs || 25000;
+    const deadline = Date.now() + limit;
+    let waited = 0;
     while(Date.now() < deadline){
       await new Promise((resolve) => setTimeout(resolve, 700));
+      waited += 0.7;
+      if(typeof onTick === 'function') onTick(Math.min(waited, limit / 1000));
       try{
         const res = await PanelApi.get(withInstance(statusUrl));
         const last = res && res.state && res.state.supervisor ? res.state.supervisor.last_command : null;
@@ -324,9 +350,28 @@ function boot(){
     return null;
   }
 
-  async function sendCommand(action, target, confirmation){
+  /**
+   * 下发指令。破坏性动作走 Panel.confirm：`data-sv-confirm-text` 非空时要求照打
+   * （全部重启要打 RESTART），确认框自己处理 Esc 与焦点。
+   */
+  async function sendCommand(action, target, button){
     if(busy) return;
-    if(confirmation && !window.confirm(confirmation)) return;
+
+    const confirmation = button ? (button.dataset.svConfirm || '') : '';
+    if(confirmation){
+      const required = button.dataset.svConfirmText || '';
+      const confirmed = (window.Panel && typeof window.Panel.confirm === 'function')
+        ? await window.Panel.confirm({
+            message: confirmation,
+            danger: true,
+            requireText: required,
+            requireLabel: required ? (button.dataset.svConfirmLabel || t('confirm.require_text_label', 'Type to confirm')) : '',
+            confirmLabel: t('confirm.submit', 'Confirm'),
+            cancelLabel: t('confirm.cancel', 'Cancel')
+          })
+        : window.confirm(confirmation);
+      if(!confirmed) return;
+    }
 
     busy = true;
     svQsa('button[data-sv-action]').forEach((btn) => { btn.disabled = true; });
@@ -347,10 +392,17 @@ function boot(){
         return;
       }
 
-      const finished = await awaitCommand(res.id, 30000);
+      const pendingLabel = t('messages.awaiting', 'running: :action / :target');
+      const startedAt = Date.now();
+      const finished = await awaitCommand(res.id, 30000, (seconds)=>{
+        showResult(pendingLabel.replace(':action', action).replace(':target', target)
+          + ' · ' + t('messages.elapsed', ':seconds s').replace(':seconds', seconds.toFixed(1)), 'info');
+      });
       if(finished){
         const tone = finished.result === 'ok' ? 'ok' : 'warn';
-        showResult(`${finished.action} / ${finished.target}: ${finished.message}`, tone);
+        const total = ((Date.now() - startedAt) / 1000).toFixed(1);
+        showResult(`${finished.action} / ${finished.target}: ${finished.message}`
+          + ' · ' + t('messages.elapsed', ':seconds s').replace(':seconds', total), tone);
       }else{
         showResult(t('messages.timeout', 'no confirmation from the supervisor yet - refresh in a moment'), 'warn');
       }
@@ -378,7 +430,7 @@ function boot(){
       const action = btn.dataset.svAction;
       const target = btn.dataset.svTarget || 'all';
       if(!canControl) return;
-      sendCommand(action, target, btn.dataset.svConfirm || null);
+      sendCommand(action, target, btn);
     });
 
     if(refreshBtn){
@@ -390,17 +442,18 @@ function boot(){
         if(pollTimer) return;
         const seconds = Math.max(2, Number(config.pollSeconds) || 5);
         pollTimer = setInterval(() => refreshStatus(false), seconds * 1000);
+        startLogPoll();
       };
       const stop = () => {
-        if(!pollTimer) return;
-        clearInterval(pollTimer);
-        pollTimer = null;
+        if(pollTimer){
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        stopLogPoll();
       };
       autoBox.addEventListener('change', () => { autoBox.checked ? start() : stop(); });
       if(autoBox.checked) start();
     }
-
-    setInterval(refreshLog, 15000);
   }
 
   bind();
@@ -413,3 +466,4 @@ if(document.readyState === 'loading'){
 }else{
   boot();
 }
+})();

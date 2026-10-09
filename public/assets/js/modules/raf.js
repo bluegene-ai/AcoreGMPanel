@@ -38,7 +38,7 @@
   }
 
   function can(key){
-    return capabilities[key] !== false;
+    return capabilities[key] === true;
   }
 
   function show(type, message){

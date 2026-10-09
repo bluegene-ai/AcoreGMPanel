@@ -53,7 +53,7 @@ $prescreenKindLabel = static function (string $kind): string {
   </div>
   <p class="muted boss-config-note">
     <?= htmlspecialchars(__('app.boss.prescreen.intro')) ?>
-    <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.prescreen.intro_hint')) ?>">i</span>
+    <?= panel_hint(__('app.boss.prescreen.intro_hint')) ?>
   </p>
 
   <div class="boss-runtime-meta">
@@ -132,14 +132,14 @@ $prescreenKindLabel = static function (string $kind): string {
       <table class="table boss-table boss-table--sticky" data-boss-prescreen-table>
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.level')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.kind')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.preset')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.stage')) ?></th>
-            <th class="boss-num"><?= htmlspecialchars(__('app.boss.prescreen.columns.line')) ?></th>
-            <th class="boss-num"><?= htmlspecialchars(__('app.boss.prescreen.columns.spell')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.name')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.prescreen.columns.verdicts')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.level')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.kind')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.preset')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.stage')) ?></th>
+            <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.prescreen.columns.line')) ?></th>
+            <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.prescreen.columns.spell')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.name')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.prescreen.columns.verdicts')) ?></th>
           </tr>
         </thead>
         <tbody>

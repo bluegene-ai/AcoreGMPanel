@@ -52,9 +52,9 @@ return static function (Router $router): void {
     $router->match(['GET', 'POST'], '/account/login', [AccountController::class, 'login']);
     $router->get('/account/logout', [AccountController::class, 'logout']);
 
-    $router->get('/realm/list', [RealmController::class, 'list']);
-
     $router->group([AuthMiddleware::class], static function (Router $router): void {
+        // 区服清单带有部署拓扑（区名/序号），不属于公开信息，放在鉴权组内。
+        $router->get('/realm/list', [RealmController::class, 'list']);
         $router->get('/account', [AccountController::class, 'index']);
         $router->get('/aegis', [AegisController::class, 'index']);
         $router->get('/aegis/api/overview', [AegisController::class, 'apiOverview']);
@@ -81,7 +81,6 @@ return static function (Router $router): void {
         $router->get('/character/view', [CharacterController::class, 'show']);
         $router->get('/character/api/list', [CharacterController::class, 'apiList']);
         $router->get('/character/api/show', [CharacterController::class, 'apiShow']);
-        $router->get('/character/api/names', [CharacterController::class, 'apiNames']);
 
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/account/api/create', [AccountController::class, 'apiCreate']);
@@ -184,8 +183,6 @@ return static function (Router $router): void {
             $router->post('/item/api/save', [ItemController::class, 'apiSave']);
             $router->post('/item/api/exec-sql', [ItemController::class, 'apiExecSql']);
             $router->post('/item/api/logs', [ItemController::class, 'apiLogs']);
-            $router->post('/item/api/check', [ItemController::class, 'apiCheck']);
-            $router->post('/item/api/fetch', [ItemController::class, 'apiFetch']);
             $router->post('/logs/api/list', [LogsController::class, 'apiList']);
             $router->post('/audit/api/list', [AuditController::class, 'apiList']);
 
@@ -202,15 +199,12 @@ return static function (Router $router): void {
         $router->get('/logs', [LogsController::class, 'index']);
 
         $router->get('/quest', [QuestController::class, 'index']);
-        $router->get('/quest/api/editor/load', [QuestController::class, 'apiEditorLoad']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {
             $router->post('/quest/api/create', [QuestController::class, 'apiCreate']);
             $router->post('/quest/api/delete', [QuestController::class, 'apiDelete']);
             $router->post('/quest/api/save', [QuestController::class, 'apiSave']);
             $router->post('/quest/api/exec-sql', [QuestController::class, 'apiExecSql']);
             $router->post('/quest/api/fetch', [QuestController::class, 'apiFetch']);
-            $router->post('/quest/api/editor/preview', [QuestController::class, 'apiEditorPreview']);
-            $router->post('/quest/api/editor/save', [QuestController::class, 'apiEditorSave']);
             $router->post('/quest/api/logs', [QuestController::class, 'apiLogs']);
         });
 

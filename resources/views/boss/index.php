@@ -409,7 +409,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
       </div>
       <p class="muted boss-config-note">
         <?= htmlspecialchars(__('app.boss.config.note_short')) ?>
-        <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.note')) ?>">i</span>
+        <?= panel_hint(__('app.boss.config.note')) ?>
       </p>
 
       <form id="bossConfigForm" class="boss-config-form">
@@ -421,7 +421,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
             </div>
             <div class="boss-config-columns">
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.boss_entry')) ?>">i</span></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.boss_entry')) ?><?= panel_hint(__('app.boss.config.hints.boss_entry')) ?></span>
                 <select
                   name="boss_entry"
                   id="bossTierSelect"
@@ -480,7 +480,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
               </label>
 
               <div class="boss-field boss-field--readonly">
-                <span><?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.estimated_hp')) ?>">i</span></span>
+                <span><?= htmlspecialchars(__('app.boss.fields.estimated_hp')) ?><?= panel_hint(__('app.boss.config.hints.estimated_hp')) ?></span>
                 <strong
                   class="boss-estimated-hp"
                   id="bossEstimatedHp"
@@ -491,7 +491,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
               </div>
 
               <label class="boss-field">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_preset')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.skill_preset')) ?>">i</span></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.skill_preset')) ?><?= panel_hint(__('app.boss.config.hints.skill_preset')) ?></span>
                 <select name="skill_preset">
                   <?php foreach (($bossOptions['presets'] ?? []) as $option): ?>
                     <option
@@ -558,7 +558,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
             </div>
             <p class="muted boss-config-note">
               <?= htmlspecialchars(__('app.boss.config.hints.reward_pools_moved_short')) ?>
-              <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.reward_pools_moved')) ?>">i</span>
+              <?= panel_hint(__('app.boss.config.hints.reward_pools_moved')) ?>
             </p>
             <div class="boss-config-columns">
               <div class="boss-field boss-field--readonly">
@@ -605,7 +605,7 @@ $bossTabs['log'] = __('app.boss.tabs.log');
             </div>
             <div class="boss-config-columns">
               <label class="boss-field boss-field--full">
-                <span><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.config.hints.spawn_points_text')) ?>">i</span></span>
+                <span><?= htmlspecialchars(__('app.boss.config.fields.spawn_points_text')) ?><?= panel_hint(__('app.boss.config.hints.spawn_points_text')) ?></span>
                 <textarea name="spawn_points_text" rows="6" placeholder="<?= htmlspecialchars(__('app.boss.config.placeholders.spawn_point_line')) ?>"><?= htmlspecialchars((string) ($bossConfig['spawn_points_text'] ?? '')) ?></textarea>
               </label>
             </div>
@@ -652,11 +652,11 @@ $bossTabs['log'] = __('app.boss.tabs.log');
           <table class="table boss-table boss-table--sticky" data-boss-events-table>
             <thead>
               <tr>
-                <th><?= htmlspecialchars(__('app.boss.events.columns.time')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.events.columns.type')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.events.columns.boss')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.events.columns.actor')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.events.columns.note')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.events.columns.time')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.events.columns.type')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.events.columns.boss')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.events.columns.actor')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.events.columns.note')) ?></th>
               </tr>
             </thead>
             <tbody>
@@ -712,13 +712,13 @@ $bossTabs['log'] = __('app.boss.tabs.log');
           <table class="table boss-table boss-table--sticky" data-boss-contributors-table>
             <thead>
               <tr>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.time')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.player')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.boss')) ?></th>
-                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.score')) ?></th>
-                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.damage')) ?></th>
-                <th class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.healing')) ?></th>
-                <th><?= htmlspecialchars(__('app.boss.contributors.columns.rewards')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.contributors.columns.time')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.contributors.columns.player')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.contributors.columns.boss')) ?></th>
+                <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.score')) ?></th>
+                <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.damage')) ?></th>
+                <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.contributors.columns.healing')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.boss.contributors.columns.rewards')) ?></th>
               </tr>
             </thead>
             <tbody>

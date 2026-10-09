@@ -58,6 +58,7 @@
     search: '',
     status: 'all',
     pollTimer: null,
+    pollTimerId: null,
     busy: false,
     tab: 'status',
     /** 最近一次实时状态（运行控制按钮的文案/可用性依赖它） */
@@ -131,7 +132,9 @@
       });
       return await response.json();
     } catch (error) {
-      return { success: false, message: String(error) };
+      // 原始异常只进控制台，界面上给一句可读的话
+      console.error('[trivia] request failed', error);
+      return { success: false, message: t('errors.network', 'Network error, please retry'), raw: String(error) };
     }
   }
 
@@ -344,11 +347,32 @@
       dom.refreshedAt.textContent = t('status.refreshed', 'Refreshed') + ' ' + new Date().toLocaleTimeString();
     }  }
 
+  /**
+   * 状态轮询：统一走 Panel.poll（隐藏标签页暂停 + 失败退避 + 显式 stop）。
+   * 未勾选自动刷新时不起表。
+   */
   function startPolling() {
-    if (state.pollTimer) window.clearInterval(state.pollTimer);
-    const seconds = Math.max(5, parseInt(data.pollSeconds, 10) || 10);
+    stopPolling();
     if (dom.autoRefresh && !dom.autoRefresh.checked) return;
-    state.pollTimer = window.setInterval(refreshStatus, seconds * 1000);
+    const seconds = Math.max(5, parseInt(data.pollSeconds, 10) || 10);
+    if (window.Panel && typeof window.Panel.poll === 'function') {
+      state.pollTimer = window.Panel.poll(function () { return refreshStatus(); }, seconds * 1000, {
+        pauseWhenHidden: true,
+        backoffOnError: true
+      });
+      return;
+    }
+    state.pollTimer = { stop: function () { window.clearInterval(state.pollTimerId); } };
+    state.pollTimerId = window.setInterval(refreshStatus, seconds * 1000);
+  }
+
+  function stopPolling() {
+    if (state.pollTimer && typeof state.pollTimer.stop === 'function') state.pollTimer.stop();
+    state.pollTimer = null;
+    if (state.pollTimerId) {
+      window.clearInterval(state.pollTimerId);
+      state.pollTimerId = null;
+    }
   }
 
   async function runAction(action, extra) {
@@ -610,6 +634,28 @@
   }
 
   // ---- 模板导入 ----
+  /**
+   * 导入进度：轮数由模板行数估算，显示「已提交 N 行 · 已用 Ns」。
+   * 服务端一次性返回结果（没有 job id），所以只给"执行中 + 计时"的可信进度。
+   */
+  function startImportProgress(template){
+    const lines = String(template || '').split(/\r?\n/).filter(function(line){ return line.trim() !== ''; }).length;
+    const started = Date.now();
+    const render = function(){
+      const seconds = ((Date.now() - started) / 1000).toFixed(1);
+      show('info', tt('import.running', { lines: lines, seconds: seconds }, 'Importing :lines lines · :seconds s'));
+    };
+    render();
+    const timer = window.setInterval(render, 500);
+    return {
+      stop: function(){
+        window.clearInterval(timer);
+        const seconds = ((Date.now() - started) / 1000).toFixed(1);
+        show('info', tt('import.finished', { seconds: seconds }, 'Import finished · :seconds s'));
+      }
+    };
+  }
+
   function renderImportResult(json) {
     if (!dom.importResult) return;
     dom.importResult.innerHTML = (json && json.html) || '';
@@ -646,10 +692,20 @@
       return;
     }
     const confirmText = t('confirm.import', 'Import these questions into the database?');
-    if (confirmText && !window.confirm(confirmText)) return;
+    const proceed = (window.Panel && typeof window.Panel.confirm === 'function')
+      ? await window.Panel.confirm({ message: confirmText, danger: true, confirmLabel: t('confirm.submit', 'Import') })
+      : window.confirm(confirmText);
+    if (!proceed) return;
 
     if (dom.importCommit) dom.importCommit.disabled = true;
-    const json = await request('POST', data.importUrl || '/trivia/api/questions/import', { mode: 'commit', template: template });
+    // 导入是长任务：给出可见的三态进度（排队 / 执行中 Ns），而不是只把按钮变灰
+    const progress = startImportProgress(template);
+    let json = null;
+    try {
+      json = await request('POST', data.importUrl || '/trivia/api/questions/import', { mode: 'commit', template: template });
+    } finally {
+      progress.stop();
+    }
 
     if (!json || !json.success) {
       show('error', (json && json.message) || t('errors.import_failed', 'Import failed.'));
@@ -801,7 +857,7 @@
   if (dom.autoRefresh) {
     dom.autoRefresh.addEventListener('change', function () {
       if (dom.autoRefresh.checked) startPolling();
-      else if (state.pollTimer) window.clearInterval(state.pollTimer);
+      else stopPolling();
     });
   }
 
@@ -895,6 +951,23 @@
 
     // 4) 兜底：宽松 UTF-8（把坏字节替换掉，至少能预览出问题在哪）
     return decode('utf-8');
+  }
+
+  /**
+   * 导入模板草稿：粘进来一大段模板后误点导航就全丢了。
+   * 键含 server 与路径，切区/切页不会串味。
+   */
+  if (dom.importText && window.Panel && typeof window.Panel.unsavedGuard === 'function') {
+    const triviaServer = new URLSearchParams(window.location.search).get('server') || '';
+    window.Panel.unsavedGuard(dom.importText, {
+      draftKey: 'trivia.import:' + triviaServer + ':' + window.location.pathname,
+      message: t('confirm.leave_import', 'The import template has not been committed. Leave this page?'),
+      leaveLabel: t('confirm.leave_confirm', 'Discard the template'),
+      onRestore: function () {
+        if (dom.importCommit) dom.importCommit.disabled = true;
+        show('info', t('import.draft_restored', 'Restored the uncommitted template from your last visit.'));
+      }
+    });
   }
 
   if (dom.importFile && dom.importText) {

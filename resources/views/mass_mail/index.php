@@ -16,6 +16,9 @@
   $capabilityNotice = $__canAll(['mass_mail.announce', 'mass_mail.send', 'mass_mail.logs'])
     ? null
     : __('app.common.capabilities.page_limited');
+  // 数值上限在服务端定义、渲染进 max 与恒定文案：超限不再靠服务端静默截断或 hover 提示
+  $massMailGoldMax = 2147483647;
+  $massMailItemMax = 1000;
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
@@ -92,6 +95,7 @@
             data-name-unknown="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.item_name_unknown'), ENT_QUOTES, 'UTF-8') ?>"
             data-name-empty="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.item_name_empty'), ENT_QUOTES, 'UTF-8') ?>"
             data-name-duplicate="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.item_duplicate'), ENT_QUOTES, 'UTF-8') ?>"
+            data-item-max="<?= (int) $massMailItemMax ?>"
           >
             <input type="hidden" name="items" id="mmItems" value="">
             <div class="massmail-items__grid massmail-items__head">
@@ -110,12 +114,16 @@
             </div>
           </div>
 
-          <div class="massmail-hint muted small"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint')) ?>">i</span></div>
+          <div class="massmail-hint muted small" id="itemsHint"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint_short')) ?>
+            <?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_max_hint', ['max' => number_format($massMailItemMax)])) ?>
+            <?= panel_hint(__('app.mass_mail.index.sections.send.items_hint')) ?>
+          </div>
         </div>
         <div class="massmail-field massmail-cond" data-for="send_gold|send_item_gold">
           <label for="goldAmount"><?= __('app.mass_mail.index.sections.send.gold_label') ?></label>
-          <input type="number" name="amount" id="goldAmount" min="1">
+          <input type="number" name="amount" id="goldAmount" min="1" max="<?= $massMailGoldMax ?>" aria-describedby="goldAmountHint">
           <div class="massmail-gold-preview" id="goldPreview"><?= __('app.mass_mail.index.sections.send.gold_preview_placeholder') ?></div>
+          <div class="massmail-hint muted small" id="goldAmountHint"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.gold_max_hint', ['max' => number_format($massMailGoldMax)])) ?></div>
         </div>
         <div class="massmail-field massmail-custom full-span massmail-cond" data-for="custom">
           <label for="mmCustomList"><?= __('app.mass_mail.index.sections.send.custom_list_label') ?></label>
@@ -125,6 +133,9 @@
       </div>
       <div class="massmail-actions massmail-actions--primary">
         <button type="submit" class="btn primary" id="btnMassSend"><?= __('app.mass_mail.index.sections.send.submit') ?></button>
+        <div class="massmail-progress" id="mmProgress" role="status" aria-live="polite" hidden>
+          <span class="muted small" id="mmProgressLabel"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.progress_label')) ?></span>
+        </div>
       </div>
       <p class="massmail-hint muted small"><?= __('app.mass_mail.index.sections.send.hint') ?></p>
     </form>
@@ -155,15 +166,16 @@
     </div>
   </div>
   <div class="massmail-logs__table">
+    <div class="table-wrap">
     <table class="table" id="massMailLogTable">
       <thead><tr>
-        <th class="massmail-logs__col-time"><?= __('app.mass_mail.index.sections.logs.table.headers.time') ?></th>
-        <th class="massmail-logs__col-type"><?= __('app.mass_mail.index.sections.logs.table.headers.type') ?></th>
-        <th><?= __('app.mass_mail.index.sections.logs.table.headers.details') ?></th>
-        <th class="massmail-logs__col-targets"><?= __('app.mass_mail.index.sections.logs.table.headers.targets') ?></th>
-        <th class="massmail-logs__col-result"><?= __('app.mass_mail.index.sections.logs.table.headers.success_fail') ?></th>
-        <th class="massmail-logs__col-status"><?= __('app.mass_mail.index.sections.logs.table.headers.status') ?></th>
-        <th class="massmail-logs__col-recipients"><?= __('app.mass_mail.index.sections.logs.table.headers.recipients') ?></th>
+        <th scope="col" class="massmail-logs__col-time"><?= __('app.mass_mail.index.sections.logs.table.headers.time') ?></th>
+        <th scope="col" class="massmail-logs__col-type"><?= __('app.mass_mail.index.sections.logs.table.headers.type') ?></th>
+        <th scope="col"><?= __('app.mass_mail.index.sections.logs.table.headers.details') ?></th>
+        <th scope="col" class="massmail-logs__col-targets"><?= __('app.mass_mail.index.sections.logs.table.headers.targets') ?></th>
+        <th scope="col" class="massmail-logs__col-result"><?= __('app.mass_mail.index.sections.logs.table.headers.success_fail') ?></th>
+        <th scope="col" class="massmail-logs__col-status"><?= __('app.mass_mail.index.sections.logs.table.headers.status') ?></th>
+        <th scope="col" class="massmail-logs__col-recipients"><?= __('app.mass_mail.index.sections.logs.table.headers.recipients') ?></th>
       </tr></thead>
       <tbody>
         <?php foreach(($logs??[]) as $lg): $ok=(int)$lg['success']===1; ?>
@@ -204,6 +216,7 @@
         <?php endif; ?>
       </tbody>
     </table>
+    </div>
   </div>
 </section>
 <?php else: ?>

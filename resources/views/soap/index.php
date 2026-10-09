@@ -30,7 +30,7 @@
     <div id="soapActionFlash" class="panel-flash soap-flash-hidden"></div>
     <div id="soapCommandSummary" class="soap-wizard__summary">
   <h2><?= htmlspecialchars(__('app.soap.summary.title')) ?></h2>
-  <p class="muted"><?= htmlspecialchars(__('app.soap.summary.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.soap.summary.hint')) ?>">i</span></p>
+  <p class="muted"><?= htmlspecialchars(__('app.soap.summary.hint_short')) ?><?= panel_hint(__('app.soap.summary.hint')) ?></p>
       <div class="soap-wizard__meta small muted" id="soapWizardMeta"></div>
     </div>
     <div id="soapCommandDetail" class="soap-wizard__detail" hidden>

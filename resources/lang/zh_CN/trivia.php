@@ -383,6 +383,7 @@ return [
                     'preview_ok' => '解析完成：可导入 :valid 行，问题 :invalid 行',
                 ],
                 'errors' => [
+                    'network' => '网络中断，请重试',
                     'command_failed' => '指令执行失败。',
                     'load_failed' => '读取数据失败。',
                     'settings_save_failed' => '设置保存失败。',

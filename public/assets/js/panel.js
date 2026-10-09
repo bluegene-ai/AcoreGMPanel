@@ -241,11 +241,20 @@
     return null;
   }
 
+  /**
+   * 原始响应体只进控制台，不进界面：后端抛出的 HTML 错误页/堆栈对操作者没有意义，
+   * 展示出来还会泄露路径与 SQL。用户看到的是可读文案，排障靠 console。
+   */
+  function logRawPayload(label, status, raw){
+    console.error('[panel] ' + label + ' (HTTP ' + status + ')', raw);
+  }
+
   async function parseApiResponse(resp){
     const fallbackMsg = getLocale(['common','errors','invalid_json'], 'Invalid JSON');
     const text = await resp.text();
     const parsed = parseApiText(text);
     if(parsed !== null) return parsed;
+    logRawPayload('non-JSON response', resp.status, text);
     return { success:false, message:fallbackMsg, raw:text, status:resp.status };
   }
 
@@ -295,7 +304,20 @@
       if(!body.has('_csrf')) body.append('_csrf', csrfToken);
       init.headers['X-CSRF-TOKEN'] = csrfToken;
     }
-    const resp = await fetch(url, init);
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (cause) {
+      // 网络层失败（断线、请求被拦、超时）也包成同一个形状：调用方只需要看 success/message，
+      // 原始异常留给控制台。
+      logRawPayload('request failed: ' + url, 0, cause);
+      return {
+        success:false,
+        message:getLocale(['common','errors','network'], 'Network error, please retry'),
+        network:true,
+        raw:cause && cause.message ? String(cause.message) : String(cause)
+      };
+    }
     return await parseApiResponse(resp);
   }
 
@@ -330,6 +352,18 @@
       el.textContent = '';
     }
 
+    /** 通知条的屏幕阅读器语义：错误用 alert（打断播报），其余用 status（择机播报）。 */
+    function applyLiveSemantics(el, severity){
+      if(!el) return;
+      if(severity === 'error'){
+        el.setAttribute('role', 'alert');
+        el.setAttribute('aria-live', 'assertive');
+      } else {
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+      }
+    }
+
     function show(target,type,message,opts){
       const el = resolve(target);
       if(!el) return;
@@ -340,6 +374,7 @@
       const key = (type||'').toLowerCase();
       const cls = TYPE_CLASS[key];
       if(cls) el.classList.add(cls);
+      applyLiveSemantics(el, key === 'error' ? 'error' : 'info');
       const allowHtml = !!options.allowHtml;
       const text = message==null? '' : message;
       if(allowHtml){ el.innerHTML = text; }
@@ -771,8 +806,8 @@
 
       cancelBtn.addEventListener('click', ()=> finish(false));
       okBtn.addEventListener('click', ()=>{ if(!okBtn.disabled) finish(true); });
-      // 背景点击：Modal 自己的处理器只 hide，不会 resolve，所以这里补一条
-      ref.el.addEventListener('click', (event)=>{ if(event.target === ref.el) finish(false); });
+      // 确认框不因误点背景而消失（Promise 会一直挂着），Esc 与「取消」都是明确的拒绝
+      ref.el.__panelCloseOnBackdrop = false;
 
       keyHandler = (event)=>{
         if(event.key !== 'Escape') return;
@@ -787,6 +822,769 @@
 
       return new Promise((resolve)=>{ resolver = resolve; });
     };
+  }
+
+  /**
+   * 局部刷新：取同一个路由的 HTML，只替换指定区域。
+   *
+   * 整页 location.reload() 会把滚动位置、筛选条件、分页与展开的 Tab 一起丢掉，而列表页
+   * 一次删除/封禁之后真正变的只有那张表。区域替换后重新挂上全站增强，并广播
+   * `panel:region` 事件让模块自己重绑（模块注册的监听都是 document 级委托，通常无需处理）。
+   *
+   * @param {string|Element} target 要替换的区域
+   * @param {string} [url]          取 HTML 的地址（面板相对路径；默认当前地址）
+   * @param {object} [options]
+   * @param {string} [options.source] 从响应里取哪个选择器（默认与 target 相同）
+   * @param {'inner'|'outer'} [options.mode='inner']
+   * @param {Function} [options.onAfterSwap] (scope, parsedDocument) => void
+   * @returns {Promise<boolean>} 是否成功替换
+   */
+  async function reloadRegion(target, url, options){
+    const opts = options || {};
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    const selector = typeof target === 'string' ? target : opts.selector;
+    if(!el || !selector) return false;
+
+    const requestUrl = url || (window.location.pathname + window.location.search);
+    let html;
+    try {
+      const resp = await fetch(buildUrl(requestUrl), {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' }
+      });
+      if(!resp.ok){
+        console.error('[panel] reloadRegion failed', resp.status, requestUrl);
+        return false;
+      }
+      html = await resp.text();
+    } catch (error) {
+      console.error('[panel] reloadRegion request failed', requestUrl, error);
+      return false;
+    }
+
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const next = parsed.querySelector(opts.source || selector);
+    if(!next){
+      console.error('[panel] reloadRegion: region missing in response', opts.source || selector);
+      return false;
+    }
+
+    if(opts.mode === 'outer'){
+      if(!el.parentNode) return false;
+      el.replaceWith(next);
+    } else {
+      el.innerHTML = next.innerHTML;
+    }
+
+    const scope = opts.mode === 'outer' ? next : el;
+    if(window.GameMetaColorize) window.GameMetaColorize();
+    bindTableFilters(scope);
+    document.dispatchEvent(new CustomEvent('panel:region', { detail: { scope } }));
+    if(typeof opts.onAfterSwap === 'function') opts.onAfterSwap(scope, parsed);
+    return true;
+  }
+
+  /**
+   * 分页条（服务端 components/pagination.php 的同一套标记）。
+   *
+   * 传了 onNavigate 就渲染成按钮（AJAX 列表自己取数），否则用 urlFor 生成真实链接
+   * （无 JS 也能翻页）。`aria-current="page"` 与总条数/跳页都在这里统一。
+   *
+   * @param {string|Element} target 承载分页条的容器
+   * @param {object} options page / pages / total / perPage / onNavigate / urlFor / window
+   * @returns {{el: Element, update: Function}|null}
+   */
+  function paginateBar(target, options){
+    const opts = options || {};
+    const host = typeof target === 'string' ? document.querySelector(target) : target;
+    if(!host) return null;
+
+    const label = (path, fallback)=> getLocale(path, fallback);
+    const previousLabel = label(['common','pagination','previous'], 'Previous');
+    const nextLabel = label(['common','pagination','next'], 'Next');
+    const windowSize = Math.max(1, parseInt(opts.window, 10) || 3);
+
+    function render(){
+      const page = Math.max(1, parseInt(opts.page, 10) || 1);
+      const pages = Math.max(0, parseInt(opts.pages, 10) || 0);
+      const total = opts.total === undefined || opts.total === null ? null : Number(opts.total);
+      const perPage = parseInt(opts.perPage, 10) || 0;
+
+      host.textContent = '';
+      if(pages <= 1){
+        host.hidden = true;
+        return;
+      }
+      host.hidden = false;
+
+      const nav = document.createElement('nav');
+      nav.className = 'pagination-bar';
+      nav.setAttribute('aria-label', label(['common','pagination','label'], 'Pagination'));
+      const list = document.createElement('ul');
+      list.className = 'pagination-list';
+
+      const makeItem = (targetPage, text, extraClass, ariaLabel, disabled, current)=>{
+        const li = document.createElement('li');
+        const tag = typeof opts.onNavigate === 'function' ? 'button' : 'a';
+        const node = document.createElement(tag);
+        node.className = 'pg' + (extraClass ? ' ' + extraClass : '') + (current ? ' active' : '');
+        node.textContent = text;
+        if(ariaLabel) node.setAttribute('aria-label', ariaLabel);
+        if(ariaLabel) node.setAttribute('title', ariaLabel);
+        if(tag === 'button') node.type = 'button';
+        if(current) node.setAttribute('aria-current', 'page');
+        if(disabled){
+          node.classList.add('disabled');
+          node.setAttribute('aria-disabled', 'true');
+          if(tag === 'button') node.disabled = true;
+        } else if(tag === 'a'){
+          const href = typeof opts.urlFor === 'function' ? opts.urlFor(targetPage) : ('?page=' + targetPage);
+          node.setAttribute('href', href);
+        }
+        if(!disabled && !current){
+          node.addEventListener('click', (event)=>{
+            event.preventDefault();
+            if(typeof opts.onNavigate === 'function') opts.onNavigate(targetPage);
+            else window.location.href = node.getAttribute('href');
+          });
+        }
+        li.appendChild(node);
+        return li;
+      };
+
+      const start = Math.max(1, page - windowSize);
+      const end = Math.min(pages, page + windowSize);
+      list.appendChild(makeItem(page - 1, '«', 'prev', previousLabel, page <= 1, false));
+      if(start > 1){
+        list.appendChild(makeItem(1, '1', '', null, false, page === 1));
+        if(start > 2){
+          const gap = document.createElement('li');
+          gap.className = 'pagination-gap';
+          gap.setAttribute('aria-hidden', 'true');
+          gap.textContent = '…';
+          list.appendChild(gap);
+        }
+      }
+      for(let i = start; i <= end; i += 1){
+        list.appendChild(makeItem(i, String(i), '', label(['common','pagination','page'], 'Page') + ' ' + i, false, i === page));
+      }
+      if(end < pages){
+        if(end < pages - 1){
+          const gap = document.createElement('li');
+          gap.className = 'pagination-gap';
+          gap.setAttribute('aria-hidden', 'true');
+          gap.textContent = '…';
+          list.appendChild(gap);
+        }
+        list.appendChild(makeItem(pages, String(pages), '', null, false, page === pages));
+      }
+      list.appendChild(makeItem(page + 1, '»', 'next', nextLabel, page >= pages, false));
+      nav.appendChild(list);
+
+      if(total !== null && total >= 0){
+        const meta = document.createElement('div');
+        meta.className = 'pagination-meta muted small';
+        const from = perPage > 0 ? (page - 1) * perPage + 1 : 0;
+        const to = perPage > 0 ? Math.min(page * perPage, total) : total;
+        meta.textContent = perPage > 0
+          ? label(['common','pagination','range'], ':from-:to of :total')
+              .replace(':from', String(from)).replace(':to', String(to)).replace(':total', String(total))
+          : label(['common','pagination','total'], ':total total').replace(':total', String(total));
+        nav.appendChild(meta);
+      }
+      host.appendChild(nav);
+    }
+
+    render();
+    return {
+      el: host,
+      update(next){
+        if(next) Object.assign(opts, next);
+        render();
+      }
+    };
+  }
+
+  /**
+   * 金额单位解析：显式传入 > modules.<module>.money.units.* > modules.<module>.money.*
+   * > modules.<module>.gold.units.* > common.money.units.* > 英文兜底。
+   */
+  function resolveMoneyUnit(name, moduleName, explicitUnits, fallback){
+    if(explicitUnits && typeof explicitUnits[name] === 'string' && explicitUnits[name] !== '') return explicitUnits[name];
+    const candidates = [];
+    if(moduleName){
+      candidates.push(['modules', moduleName, 'money', 'units', name]);
+      candidates.push(['modules', moduleName, 'money', name]);
+      candidates.push(['modules', moduleName, 'gold', 'units', name]);
+    }
+    candidates.push(['common','money','units', name]);
+    for(const path of candidates){
+      const value = getLocale(path, null);
+      if(typeof value === 'string' && value !== '' && !looksLikeI18nKey(value)) return value;
+    }
+    return fallback;
+  }
+
+  /**
+   * 铜币 → 「1 金 20 银 3 铜」。单位走语言包：模块自己的 modules.<module>.money.units.*
+   * 或既有的 modules.<module>.gold.units.*，都没有时退回英文单位 —— 不再各写一套硬编码。
+   */
+  function formatMoney(copper, options){
+    const opts = options || {};
+    let amount = Number(copper);
+    if(!Number.isFinite(amount) || amount < 0) amount = 0;
+    amount = Math.floor(amount);
+
+    const moduleName = opts.module ? String(opts.module) : '';
+    const unit = (name, fallback)=> resolveMoneyUnit(name, moduleName, opts.units, fallback);
+
+    const gold = Math.floor(amount / 10000);
+    const silver = Math.floor((amount % 10000) / 100);
+    const copperPart = amount % 100;
+    const separator = opts.separator || ' ';
+    const parts = [];
+    if(gold > 0 || opts.always) parts.push(gold + separator + unit('gold', 'Gold'));
+    if(silver > 0 || opts.always) parts.push(silver + separator + unit('silver', 'Silver'));
+    if(copperPart > 0 || parts.length === 0) parts.push(copperPart + separator + unit('copper', 'Copper'));
+    return parts.join(' ');
+  }
+
+  /**
+   * 单个金额单位（给"12.34 金"这类自定格式用，避免为了取一个单位再造一份映射）。
+   * @param {'gold'|'silver'|'copper'} name
+   */
+  function moneyUnit(name, options){
+    const opts = options || {};
+    return resolveMoneyUnit(String(name), opts.module ? String(opts.module) : '', opts.units, opts.fallback || String(name));
+  }
+
+  /** 剪贴板：HTTPS/localhost 走异步 API，其余（含 http 内网部署）退回 execCommand。 */
+  async function copyText(text, options){
+    const opts = options || {};
+    const value = String(text ?? '');
+    let ok = false;
+
+    if(navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext){
+      try {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      } catch (error) {
+        console.warn('[panel] clipboard API unavailable, falling back', error);
+      }
+    }
+    if(!ok){
+      try {
+        const area = document.createElement('textarea');
+        area.value = value;
+        area.setAttribute('readonly', 'readonly');
+        area.style.position = 'fixed';
+        area.style.top = '-1000px';
+        document.body.appendChild(area);
+        area.select();
+        ok = document.execCommand('copy');
+        area.remove();
+      } catch (error) {
+        console.warn('[panel] copy fallback failed', error);
+        ok = false;
+      }
+    }
+    if(typeof opts.feedback === 'function') opts.feedback(ok);
+    return ok;
+  }
+
+  const MODIFIER_KEYS = { ctrl: 'ctrlKey', control: 'ctrlKey', alt: 'altKey', shift: 'shiftKey', meta: 'metaKey', cmd: 'metaKey' };
+  const EDITABLE_TAGS = { INPUT: true, TEXTAREA: true, SELECT: true };
+  /**
+   * 在输入框里也必须生效的键：它们不产生字符，被吞掉只会让用户以为快捷键坏了。
+   * 可打印字符（如 `/`）相反 —— 在输入框里就是正常输入，不能被快捷键吃掉。
+   */
+  const EDITABLE_SAFE_KEYS = {
+    escape: true, enter: true, tab: true, backspace: true, delete: true,
+    arrowup: true, arrowdown: true, arrowleft: true, arrowright: true,
+    home: true, end: true, pageup: true, pagedown: true
+  };
+
+  function comboOf(event){
+    const parts = [];
+    if(event.ctrlKey) parts.push('ctrl');
+    if(event.altKey) parts.push('alt');
+    if(event.shiftKey) parts.push('shift');
+    if(event.metaKey) parts.push('meta');
+    let key = String(event.key || '').toLowerCase();
+    if(key === ' ' || key === 'spacebar') key = 'space';
+    parts.push(key);
+    return parts.join('+');
+  }
+
+  /**
+   * 声明式页面快捷键。
+   *
+   * 可打印字符的单键（`/`、`k` 之类）在输入框里不触发 —— 否则会吃掉正常打字；
+   * 不可打印键（`Escape`、`Enter`、方向键…）在输入框里照常触发，它们不产生字符，
+   * 被吞掉只会让人以为快捷键坏了。带修饰键的组合（`ctrl+enter`）在任何地方都生效。
+   * 返回句柄可 destroy。
+   *
+   * @param {Object<string, Function>} map 例如 {'/': fn, 'escape': fn, 'ctrl+enter': fn}
+   * @param {object} [options]
+   * @param {string|Element} [options.root] 生效范围，默认 document
+   * @param {boolean} [options.preventDefault=true]
+   * @returns {{destroy: Function}}
+   */
+  function bindHotkeys(map, options){
+    const opts = options || {};
+    const root = typeof opts.root === 'string' ? document.querySelector(opts.root) : (opts.root || document);
+    const handlers = {};
+    Object.entries(map || {}).forEach(([combo, handler])=>{
+      if(typeof handler !== 'function') return;
+      handlers[String(combo).toLowerCase().split('+').map((part)=> part.trim()).join('+')] = handler;
+    });
+
+    function onKeydown(event){
+      const combo = comboOf(event);
+      const handler = handlers[combo];
+      if(!handler) return;
+      const hasModifier = /(^|\+)(ctrl|alt|meta)\+/.test(combo) || combo.indexOf('shift+') === 0;
+      const target = event.target;
+      const editable = target && (EDITABLE_TAGS[target.tagName] || target.isContentEditable);
+      const bareKey = combo.indexOf('+') === -1 ? combo : combo.slice(combo.lastIndexOf('+') + 1);
+      if(editable && !hasModifier && !EDITABLE_SAFE_KEYS[bareKey]) return;
+      if(opts.preventDefault !== false) event.preventDefault();
+      handler(event);
+    }
+
+    root.addEventListener('keydown', onKeydown);
+    return { destroy(){ root.removeEventListener('keydown', onKeydown); } };
+  }
+
+  function normalizeErrorList(errors){
+    if(errors === null || errors === undefined) return [];
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((item)=>{
+      if(item && typeof item === 'object'){
+        return { field: item.field ? String(item.field) : '', message: String(item.message ?? '') };
+      }
+      return { field: '', message: String(item ?? '') };
+    }).filter((item)=> item.message !== '');
+  }
+
+  /**
+   * 逐字段渲染校验错误：.is-invalid + aria-invalid + 字段下错误文本 + 焦点移到第一个错处。
+   * 只报第一条错误的做法会让用户来回提交好几轮。
+   *
+   * @param {Element|string} form
+   * @param {Array<{field:string,message:string}>|string} errors
+   * @param {object} [options] summarySelector 额外把汇总写到某个容器
+   */
+  function applyFormErrors(form, errors, options){
+    const opts = options || {};
+    const el = typeof form === 'string' ? document.querySelector(form) : form;
+    if(!el) return [];
+    const list = normalizeErrorList(errors);
+
+    Array.prototype.forEach.call(el.querySelectorAll('.is-invalid'), (node)=>{
+      node.classList.remove('is-invalid');
+      node.removeAttribute('aria-invalid');
+      node.removeAttribute('aria-describedby');
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-field-error]'), (node)=> node.remove());
+
+    const focused = [];
+    list.forEach((entry, index)=>{
+      if(!entry.field) return;
+      const input = el.querySelector('[name="' + entry.field.replace(/"/g, '\\"') + '"]');
+      if(!input) return;
+      const errorId = (input.id || ('panel-field-' + index)) + '-error';
+      input.classList.add('is-invalid');
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', errorId);
+
+      const holder = input.closest('.form-field, .massmail-field, .list-filter__field') || input.parentNode;
+      const note = document.createElement('div');
+      note.className = 'field-error small text-danger';
+      note.id = errorId;
+      note.setAttribute('data-field-error', '1');
+      note.textContent = entry.message;
+      if(holder && holder.parentNode) holder.appendChild(note);
+      else if(input.parentNode) input.parentNode.insertBefore(note, input.nextSibling);
+      focused.push(input);
+    });
+
+    if(opts.summarySelector){
+      const summary = document.querySelector(opts.summarySelector);
+      if(summary){
+        const generic = list.filter((item)=> !item.field);
+        summary.textContent = generic.length ? generic.map((item)=> item.message).join(' · ') : '';
+        summary.hidden = summary.textContent === '';
+      }
+    }
+
+    if(focused.length && typeof focused[0].focus === 'function') focused[0].focus();
+    return focused;
+  }
+
+  /**
+   * 整页刷新但把滚动位置带回来。
+   *
+   * 用于确实需要重取整页的场景（保存配置后多处区块都会变、局部替换拿不到可信页面时的兜底）。
+   * 筛选条件、分页、Tab 都在 URL 里；刷新后仍在，只需保住滚动位置。
+   */
+  function reloadKeepingPosition(){
+    try {
+      window.sessionStorage.setItem('panel:scroll:' + window.location.pathname, String(window.scrollY || 0));
+    } catch (error) { /* 隐私模式下 sessionStorage 不可用 */ }
+    window.location.reload();
+  }
+
+  function restoreScrollPosition(){
+    let saved = null;
+    try { saved = window.sessionStorage.getItem('panel:scroll:' + window.location.pathname); } catch (error) { saved = null; }
+    if(saved === null) return;
+    try { window.sessionStorage.removeItem('panel:scroll:' + window.location.pathname); } catch (error) { /* ignore */ }
+    const top = parseInt(saved, 10);
+    if(!Number.isFinite(top) || top <= 0) return;
+    const paint = ()=> window.scrollTo(0, top);
+    paint();
+    // 图片/字体撑高页面后位置会漂，下一帧再补一次
+    window.requestAnimationFrame(paint);
+  }
+
+  /**
+   * 表格空态行（JS 生成时用，文案统一走 app.common.empty.*）。
+   */
+  function emptyRowHtml(colspan, label, options){
+    const opts = options || {};
+    const text = label === null || label === undefined
+      ? getLocale(['common','empty','no_data'], 'No data')
+      : String(label);
+    const cls = opts.cellClassName || 'text-center muted';
+    return '<tr class="' + (opts.rowClassName || 'js-empty-row') + '"><td colspan="' + Math.max(1, parseInt(colspan, 10) || 1)
+      + '" class="' + cls + '">' + escapeHtmlText(text) + '</td></tr>';
+  }
+
+  /**
+   * 轮询：失败退避、隐藏标签页暂停、回到前台立刻补一次，并提供 stop()。
+   * supervisor 那种"无条件 15 s 拉一次、页面切走也不停"的写法是全局性能负担，统一走这里。
+   *
+   * @param {Function} fn 每次轮询执行（可返回 Promise）
+   * @param {number} interval 基础间隔 ms
+   * @param {object} [options] pauseWhenHidden / backoffOnError / maxInterval / onError / immediate
+   * @returns {{start: Function, stop: Function, isRunning: Function, trigger: Function}}
+   */
+  function createPoll(fn, interval, options){
+    const opts = options || {};
+    const base = Math.max(1000, Number(interval) || 5000);
+    const maxInterval = Math.max(base, Number(opts.maxInterval) || base * 8);
+    const backoff = opts.backoffOnError !== false;
+    let timer = null;
+    let stopped = true;
+    let failures = 0;
+    let busy = false;
+
+    const delay = ()=> (backoff && failures > 0 ? Math.min(base * Math.pow(2, failures), maxInterval) : base);
+
+    function schedule(){
+      if(stopped) return;
+      if(timer) window.clearTimeout(timer);
+      timer = window.setTimeout(tick, delay());
+    }
+
+    async function tick(){
+      if(stopped || busy) return;
+      if(opts.pauseWhenHidden !== false && document.hidden){ schedule(); return; }
+      busy = true;
+      try {
+        await fn();
+        failures = 0;
+      } catch (error) {
+        failures += 1;
+        console.warn('[panel] poll iteration failed (' + failures + ')', error);
+        if(typeof opts.onError === 'function') opts.onError(error, failures);
+      } finally {
+        busy = false;
+        schedule();
+      }
+    }
+
+    function onVisibilityChange(){
+      if(stopped || document.hidden) return;
+      if(timer) window.clearTimeout(timer);
+      tick();
+    }
+
+    function start(){
+      if(!stopped) return;
+      stopped = false;
+      failures = 0;
+      if(opts.pauseWhenHidden !== false) document.addEventListener('visibilitychange', onVisibilityChange);
+      if(opts.immediate === false) schedule(); else tick();
+    }
+
+    function stop(){
+      stopped = true;
+      if(timer){ window.clearTimeout(timer); timer = null; }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    return {
+      start,
+      stop,
+      isRunning: ()=> !stopped,
+      trigger(){
+        if(timer) window.clearTimeout(timer);
+        return tick();
+      }
+    };
+  }
+
+  /**
+   * 脏数据守卫：表单改过之后，关页/刷新/点站内链接都会被拦下。
+   *
+   * - `draftKey` 非空时把未提交的值写进 localStorage 并在下次进入时恢复（键要含 server 与页面）。
+   * - `blockUnload:false` 用于筛选表单这类"改了就只是查询条件"的场景：只留草稿，不拦导航。
+   *
+   * @param {Element|string} target 表单（或包含表单字段的容器）
+   * @param {object} [options] message / draftKey / blockUnload / onRestore / leaveLabel
+   * @returns {{isDirty:Function, markDirty:Function, clear:Function, saveDraft:Function, clearDraft:Function, requestLeave:Function, destroy:Function}}
+   */
+  function createUnsavedGuard(target, options){
+    const opts = options || {};
+    const scope = typeof target === 'string' ? document.querySelector(target) : target;
+    if(!scope) return null;
+    if(scope.__panelUnsavedGuard) return scope.__panelUnsavedGuard;
+
+    const message = opts.message || getLocale(['common','unsaved','message'], 'There are unsaved changes. Leave this page?');
+    const leaveLabel = opts.leaveLabel || getLocale(['common','unsaved','leave'], 'Discard changes');
+    const draftKey = opts.draftKey ? String(opts.draftKey) : '';
+    const blockUnload = opts.blockUnload !== false;
+
+    let dirty = false;
+    let bypass = false;
+    let draftTimer = null;
+
+    function fields(){
+      return Array.prototype.slice.call(scope.querySelectorAll('input[name], textarea[name], select[name]'))
+        .filter((node)=> node.type !== 'hidden' && node.type !== 'submit' && node.type !== 'button');
+    }
+
+    function draftPayload(){
+      const data = {};
+      fields().forEach((node)=>{
+        const name = node.name;
+        if(!name) return;
+        if(node.type === 'checkbox' || node.type === 'radio'){
+          if(node.checked && node.defaultChecked !== true) data[name] = node.value;
+          return;
+        }
+        const value = String(node.value ?? '');
+        if(value !== '' && value !== String(node.defaultValue ?? '')) data[name] = value;
+      });
+      return data;
+    }
+
+    function saveDraft(){
+      if(!draftKey) return;
+      try {
+        const data = draftPayload();
+        if(Object.keys(data).length === 0){ window.localStorage.removeItem(draftKey); return; }
+        window.localStorage.setItem(draftKey, JSON.stringify(data));
+      } catch (error) { /* 隐私模式下 localStorage 不可用 */ }
+    }
+
+    function scheduleDraftSave(){
+      if(!draftKey) return;
+      if(draftTimer) window.clearTimeout(draftTimer);
+      draftTimer = window.setTimeout(saveDraft, 400);
+    }
+
+    function clearDraft(){
+      if(!draftKey) return;
+      try { window.localStorage.removeItem(draftKey); } catch (error) { /* ignore */ }
+    }
+
+    function restoreDraft(){
+      if(!draftKey || opts.restore === false) return;
+      let saved = null;
+      try {
+        const raw = window.localStorage.getItem(draftKey);
+        if(raw) saved = JSON.parse(raw);
+      } catch (error) { saved = null; }
+      if(!saved || typeof saved !== 'object') return;
+      let applied = 0;
+      Object.entries(saved).forEach(([name, value])=>{
+        const node = scope.querySelector('[name="' + name.replace(/"/g, '\\"') + '"]');
+        if(!node) return;
+        if(node.type === 'checkbox' || node.type === 'radio') node.checked = true;
+        else if(String(node.value ?? '') === '') node.value = String(value);
+        else return;
+        applied += 1;
+      });
+      if(applied > 0){
+        markDirty();
+        if(typeof opts.onRestore === 'function') opts.onRestore(applied);
+      }
+    }
+
+    function markDirty(){
+      if(bypass) return;
+      dirty = true;
+      scope.__panelDirty = true;
+      scheduleDraftSave();
+    }
+
+    function clear(){
+      dirty = false;
+      scope.__panelDirty = false;
+      clearDraft();
+    }
+
+    function onBeforeUnload(event){
+      if(!dirty || bypass || !blockUnload) return undefined;
+      event.preventDefault();
+      event.returnValue = message;
+      return message;
+    }
+
+    function onInput(){ markDirty(); }
+
+    // 提交属于"用户自己的动作"：让导航照走，否则筛选表单一点搜索就弹确认框
+    function onSubmit(){
+      bypass = true;
+      window.setTimeout(()=>{ bypass = false; }, 1000);
+      if(draftKey) saveDraft();
+    }
+
+    function onDocumentClick(event){
+      if(!dirty || bypass) return;
+      if(event.defaultPrevented || event.button !== 0) return;
+      if(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+      if(!link) return;
+      if(link.target && link.target !== '_self') return;
+      if(link.hasAttribute('download')) return;
+      const href = link.getAttribute('href') || '';
+      if(href === '' || href.charAt(0) === '#' || /^(mailto|tel|javascript):/i.test(href)) return;
+      let url;
+      try { url = new URL(link.href, window.location.href); } catch (error) { return; }
+      if(url.origin !== window.location.origin) return;
+      if(url.pathname === window.location.pathname && url.search === window.location.search) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      requestLeave(()=>{ window.location.href = url.href; });
+    }
+
+    /** 先确认再执行一段会丢弃当前编辑的动作（跳转、切 Tab、关闭）。 */
+    async function requestLeave(action){
+      if(!dirty){ if(typeof action === 'function') action(); return true; }
+      saveDraft();
+      const ok = (window.Panel && typeof window.Panel.confirm === 'function')
+        ? await window.Panel.confirm({ message, danger: true, confirmLabel: leaveLabel })
+        : window.confirm(message);
+      if(!ok) return false;
+      bypass = true;
+      dirty = false;
+      if(typeof action === 'function') action();
+      return true;
+    }
+
+    scope.addEventListener('input', onInput);
+    scope.addEventListener('change', onInput);
+    scope.addEventListener('submit', onSubmit);
+    if(blockUnload) window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('click', onDocumentClick, true);
+
+    const guard = {
+      element: scope,
+      isDirty: ()=> dirty,
+      markDirty,
+      clear,
+      saveDraft,
+      clearDraft,
+      requestLeave,
+      destroy(){
+        scope.removeEventListener('input', onInput);
+        scope.removeEventListener('change', onInput);
+        scope.removeEventListener('submit', onSubmit);
+        window.removeEventListener('beforeunload', onBeforeUnload);
+        document.removeEventListener('click', onDocumentClick, true);
+        delete scope.__panelUnsavedGuard;
+      }
+    };
+
+    scope.__panelUnsavedGuard = guard;
+    restoreDraft();
+    return guard;
+  }
+
+  /**
+   * 表单弹窗骨架：取消/提交按钮、提交锁、字段级错误区、点遮罩不误关。
+   * 一个模块用一个 id，重复打开复用同一个槽位，不会叠出多层遮罩。
+   *
+   * @param {object} options id / title / body / submitLabel / cancelLabel / danger / width / onSubmit
+   * @returns {{modal:Element, bodyEl:Element, form:Element, submit:Function, close:Function,
+   *            showError:Function, showFieldErrors:Function, setBusy:Function}|null}
+   */
+  function formModal(options){
+    const opts = options || {};
+    if(!window.Modal) return null;
+    const id = opts.id || 'panel-form';
+    const cancelLabel = opts.cancelLabel || getLocale(['common','actions','cancel'], 'Cancel');
+    const submitLabel = opts.submitLabel || getLocale(['common','actions','save'], 'Save');
+    const footer = '<button type="button" class="btn outline" data-form-cancel>' + escapeHtmlText(cancelLabel) + '</button>'
+      + '<button type="button" class="btn ' + (opts.danger ? 'danger' : 'primary') + '" data-form-submit>'
+      + escapeHtmlText(submitLabel) + '</button>';
+
+    const ref = window.Modal.show({
+      id,
+      title: opts.title || '',
+      content: opts.body || '',
+      footer,
+      width: opts.width || '',
+      closeOnBackdrop: false
+    });
+
+    const form = ref.bodyEl.querySelector('form');
+    const errorBox = ref.bodyEl.querySelector('.form-error');
+    const submitBtn = ref.footerEl.querySelector('[data-form-submit]');
+    const cancelBtn = ref.footerEl.querySelector('[data-form-cancel]');
+
+    const ui = {
+      modal: ref.el,
+      bodyEl: ref.bodyEl,
+      footerEl: ref.footerEl,
+      form,
+      submitBtn,
+      cancelBtn,
+      close(){ window.Modal.hide(id); },
+      showError(message){
+        if(!errorBox) return;
+        errorBox.textContent = message || '';
+        errorBox.hidden = !message;
+      },
+      showFieldErrors(errors){
+        if(form) applyFormErrors(form, errors, { summarySelector: '.form-error' });
+        else ui.showError(normalizeErrorList(errors).map((item)=> item.message).join(' · '));
+      },
+      setBusy(busy, pendingLabel){
+        if(!submitBtn) return;
+        if(busy){
+          if(!submitBtn.dataset.originalLabel) submitBtn.dataset.originalLabel = submitBtn.textContent;
+          if(pendingLabel) submitBtn.textContent = pendingLabel;
+        } else if(submitBtn.dataset.originalLabel){
+          submitBtn.textContent = submitBtn.dataset.originalLabel;
+        }
+        submitBtn.disabled = busy;
+        if(cancelBtn) cancelBtn.disabled = busy;
+      },
+      async submit(){
+        if(typeof opts.onSubmit === 'function') await opts.onSubmit(ui);
+      }
+    };
+
+    // 重新打开时旧的监听随 innerHTML 一起消失，所以每次 show() 之后都要重挂
+    if(cancelBtn) cancelBtn.addEventListener('click', ()=> ui.close());
+    if(submitBtn) submitBtn.addEventListener('click', ()=> ui.submit());
+    if(form) form.addEventListener('submit', (event)=>{ event.preventDefault(); ui.submit(); });
+    return ui;
   }
 
   const PanelContext = {
@@ -834,6 +1632,36 @@
     },
     /** 带后果说明的确认框（Promise<boolean>），取代 window.confirm。 */
     confirm: createConfirm(),
+    /** 局部刷新一个区域，取代整页 location.reload()；见 reloadRegion()。 */
+    reloadRegion,
+    /** 整页刷新但保留滚动位置；仅在区域替换不可用时使用。 */
+    reload: reloadKeepingPosition,
+    /** 分页条（服务端 pagination.php 的同一套标记），AJAX 列表复用；见 paginateBar()。 */
+    paginate: paginateBar,
+    /** 铜币 → 本地化金额文案；见 formatMoney()。 */
+    money: formatMoney,
+    /** 单个金额单位（gold/silver/copper），走同一套语言包解析。 */
+    moneyUnit,
+    /** 复制到剪贴板，非安全上下文自动降级；见 copyText()。 */
+    copy: copyText,
+    /** 声明式快捷键；见 bindHotkeys()。 */
+    hotkeys: bindHotkeys,
+    /** 表格空态行 HTML；见 emptyRowHtml()。 */
+    emptyRow: emptyRowHtml,
+    /** 统一轮询（隐藏暂停 + 失败退避 + stop）；见 createPoll()。 */
+    poll: createPoll,
+    /** 脏数据守卫（含可选 localStorage 草稿）；见 createUnsavedGuard()。 */
+    unsavedGuard: createUnsavedGuard,
+    /** 逐字段渲染校验错误；见 applyFormErrors()。 */
+    formErrors: applyFormErrors,
+    /** 表单弹窗骨架（一个模块一个槽位）；见 formModal()。 */
+    formModal,
+    /** 把任意错误整理成可读的一句话（原始异常只进控制台）。 */
+    errorMessage(error, fallback){
+      const raw = error && error.message ? String(error.message) : '';
+      if(raw !== '') console.error('[panel] ' + (fallback || 'error'), error);
+      return fallback || getLocale(['common','errors','network'], 'Network error, please retry');
+    },
     /** 读回某个选择器当前的 entry（逗号分隔），表单校验用；未初始化时返回 null。 */
     itemPickerValue(target){
       const host = typeof target === 'string' ? document.querySelector(target) : target;
@@ -996,6 +1824,7 @@
     applyMetrics();
     bindLanguageSwitch();
     bindServerSwitch();
+    restoreScrollPosition();
     loadPageModule();
   })();
 
@@ -1272,10 +2101,12 @@
   (function(){
     if(window.Modal) return;
     const registry = new Map();
+    const stack = [];                 // 打开顺序；栈顶是最后打开的那个
     const widthClassMap = {
       '760px': 'modal-panel--760',
       '820px': 'modal-panel--820'
     };
+    const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     function applyWidthClass(panel, width){
       if(!panel) return;
@@ -1288,6 +2119,15 @@
       const hasActiveModal = !!document.querySelector('.modal-backdrop.active');
       document.body.classList.toggle('modal-open', hasActiveModal);
     }
+
+    function focusableIn(root){
+      if(!root) return [];
+      return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), (node)=>
+        node.offsetParent !== null || node === document.activeElement
+      );
+    }
+
+    function topId(){ return stack.length ? stack[stack.length - 1] : null; }
 
     function ensure(id){
       if(registry.has(id)) return registry.get(id);
@@ -1306,13 +2146,18 @@
         document.body.appendChild(el);
       }
       if(!el.__bound){
-        el.addEventListener('click', e=>{ if(e.target === el) hide(id); });
+        // 点遮罩关闭由每个弹窗自己声明（__panelCloseOnBackdrop）；表单类弹窗默认不关，
+        // 否则输入到一半点到背景就白填了。
+        el.addEventListener('click', e=>{
+          if(e.target === el && el.__panelCloseOnBackdrop !== false) hide(id);
+        });
         el.querySelector('[data-close]').addEventListener('click', ()=> hide(id));
         el.__bound = true;
       }
       const ref = {
         id,
         el,
+        trigger: null,
         titleEl: el.querySelector('[data-role="title"]'),
         bodyEl: el.querySelector('[data-role="body"]'),
         footerEl: el.querySelector('[data-role="footer"]')
@@ -1324,6 +2169,7 @@
       const { id, title, content, footer, width } = opts;
       const ref = ensure(id);
       const panel = ref.el.querySelector('[data-role="panel"]');
+      const wasOpen = ref.el.classList.contains('active');
       if(title !== undefined) ref.titleEl.textContent = title;
       if(content !== undefined) ref.bodyEl.innerHTML = content;
       if(footer !== undefined) ref.footerEl.innerHTML = footer;
@@ -1333,21 +2179,66 @@
         ref.footerEl.querySelector('[data-close]').addEventListener('click', ()=> hide(id));
       }
       applyWidthClass(panel, width);
+      ref.el.__panelCloseOnBackdrop = opts.closeOnBackdrop !== false;
+
+      if(!wasOpen){
+        // 记录触发元素：关闭后把焦点还回去，键盘用户的落点不会跑回文档开头
+        ref.trigger = document.activeElement && document.activeElement.nodeType === 1 ? document.activeElement : null;
+        if(stack.indexOf(id) === -1) stack.push(id);
+      }
+
+      ref.el.setAttribute('role', 'dialog');
+      ref.el.setAttribute('aria-modal', 'true');
       ref.el.classList.add('active');
       syncBodyModalState();
+
+      if(!wasOpen){
+        const first = focusableIn(ref.bodyEl)[0] || panel;
+        if(first){
+          if(first === panel && !panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+          if(typeof first.focus === 'function') first.focus();
+        }
+      }
       return ref;
     }
     function hide(id){
       const ref = registry.get(id);
       if(!ref) return;
+      const index = stack.indexOf(id);
+      if(index >= 0) stack.splice(index, 1);
       ref.el.classList.remove('active');
+      ref.el.__panelCloseOnBackdrop = true;
       syncBodyModalState();
+      const back = ref.trigger;
+      ref.trigger = null;
+      if(back && typeof back.focus === 'function' && document.contains(back)) back.focus();
     }
-    function hideAll(){ registry.forEach((_, key)=> hide(key)); }
+    /** 只关栈顶：Esc 不该一次抹掉用户叠起来的所有弹窗。 */
+    function hideAll(){ const id = topId(); if(id) hide(id); }
     function updateContent(id, html){ const ref = ensure(id); ref.bodyEl.innerHTML = html; }
     function append(id, html){ const ref = ensure(id); ref.bodyEl.insertAdjacentHTML('beforeend', html); }
-    window.addEventListener('keydown', e=>{ if(e.key === 'Escape'){ hideAll(); }});
-    window.Modal = { show, hide, hideAll, updateContent, append };
+
+    /** Tab 在弹窗内循环，不允许焦点跑到背后的页面上。 */
+    function trapTab(event){
+      const id = topId();
+      if(!id) return;
+      const ref = registry.get(id);
+      if(!ref || !ref.el.classList.contains('active')) return;
+      const items = focusableIn(ref.el);
+      if(!items.length){ event.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const inside = ref.el.contains(active);
+      if(event.shiftKey && (!inside || active === first)){ event.preventDefault(); last.focus(); }
+      else if(!event.shiftKey && (!inside || active === last)){ event.preventDefault(); first.focus(); }
+    }
+
+    window.addEventListener('keydown', e=>{
+      if(e.key === 'Tab'){ trapTab(e); return; }
+      if(e.key === 'Escape'){ hideAll(); }
+    });
+    window.Modal = { show, hide, hideAll, updateContent, append, top: topId };
   })();
 
 

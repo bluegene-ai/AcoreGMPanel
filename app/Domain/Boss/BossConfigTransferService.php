@@ -9,6 +9,8 @@ declare(strict_types=1);
 namespace Acme\Panel\Domain\Boss;
 
 use Acme\Panel\Core\Config;
+use Acme\Panel\Core\Database;
+use PDO;
 use Throwable;
 
 /**
@@ -64,6 +66,7 @@ class BossConfigTransferService
 
     private BossRepository $source;
     private BossRepository $target;
+    private ?int $targetServerId;
 
     /** 奖池表的伪分组名：不是 ext 分组，复制时按位号原样搬运。 */
     public const REWARD_POOLS_GROUP = 'reward_pools';
@@ -71,11 +74,98 @@ class BossConfigTransferService
     /**
      * @param BossRepository $source 源区服仓储（serverId = 复制来源）
      * @param BossRepository $target 目标区服仓储（serverId = 复制目标）
+     * @param int|null $targetServerId 目标区服索引；给出时整批写入包在一个事务里，失败整批回滚
      */
-    public function __construct(BossRepository $source, BossRepository $target)
+    public function __construct(BossRepository $source, BossRepository $target, ?int $targetServerId = null)
     {
         $this->source = $source;
         $this->target = $target;
+        $this->targetServerId = $targetServerId;
+    }
+
+    /**
+     * 跨区复制的对外入口：先在目标区服世界的连接上开事务，再执行复制。
+     *
+     * 目标区三个写入面（扩展配置列、主配置列、奖池行）必须整体成败一致：
+     * 只要最终 ok=false，整批回滚，不留半份配置；拿不到目标连接时退化为逐项写入，
+     * 并在结果里标出 partial（部分成功）。
+     *
+     * @param array<int,string> $groups
+     * @return array<string,mixed>
+     */
+    public function copyExt(array $groups = [], bool $includeMainConfig = false): array
+    {
+        $pdo = $this->beginTargetTransaction();
+
+        try {
+            $result = $this->performCopy($groups, $includeMainConfig);
+        } catch (Throwable $exception) {
+            $this->rollbackTarget($pdo);
+            throw $exception;
+        }
+
+        $written = (int) $result['ext_columns'] + (int) $result['main_columns'] + (int) $result['pool_rows'];
+        $result['written'] = $written;
+        $result['rolled_back'] = false;
+
+        if ($pdo !== null) {
+            if (!empty($result['ok'])) {
+                try {
+                    $pdo->commit();
+                } catch (Throwable $exception) {
+                    $this->rollbackTarget($pdo);
+                    $result['ok'] = false;
+                    $result['rolled_back'] = true;
+                    $result['warnings'][] = '目标区服事务提交失败，已整批回滚：' . $exception->getMessage();
+                }
+            } else {
+                $this->rollbackTarget($pdo);
+                $result['ok'] = false;
+                $result['rolled_back'] = true;
+                $result['warnings'][] = '目标区服写入未全部成功，已整批回滚（目标区保持复制前状态）';
+            }
+        }
+
+        $result['partial'] = empty($result['ok']) && empty($result['rolled_back']) && $written > 0;
+
+        return $result;
+    }
+
+    /**
+     * 目标区的三个写入面（扩展配置列、主配置列、奖池行）都经 BossRepository 的
+     * characters 连接写 `custom_db_name`.`boss_*`，因此事务必须开在同一连接上。
+     */
+    private function beginTargetTransaction(): ?PDO
+    {
+        if ($this->targetServerId === null) {
+            return null;
+        }
+
+        try {
+            $pdo = Database::forServer($this->targetServerId, 'characters');
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            if (!$pdo->beginTransaction()) {
+                return null;
+            }
+
+            return $pdo;
+        } catch (Throwable $exception) {
+            return null;
+        }
+    }
+
+    private function rollbackTarget(?PDO $pdo): void
+    {
+        if ($pdo === null) {
+            return;
+        }
+
+        try {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+        } catch (Throwable $exception) {
+        }
     }
 
     /**
@@ -90,7 +180,7 @@ class BossConfigTransferService
      * @param bool $includeMainConfig 是否连主配置（boss_activity_config）一起复制
      * @return array<string,mixed> 见类 docblock
      */
-    public function copyExt(array $groups = [], bool $includeMainConfig = false): array
+    private function performCopy(array $groups = [], bool $includeMainConfig = false): array
     {
         $skipped = [];
         $warnings = [];

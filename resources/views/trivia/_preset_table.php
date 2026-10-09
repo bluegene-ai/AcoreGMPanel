@@ -24,14 +24,14 @@ $itemLabel = static function (int $entry) use ($itemNames): string {
   <div class="tv-empty"><?= htmlspecialchars(__('app.trivia.presets.empty')) ?></div>
 <?php else: ?>
   <div class="tv-table-wrap">
-    <table class="tv-table">
+    <table class="table table--tv">
       <thead>
         <tr>
-          <th><?= htmlspecialchars(__('app.trivia.fields.preset_name')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.items_preview')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.preset_money')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
-          <th></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.preset_name')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.items_preview')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.preset_money')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
+          <th scope="col"></th>
         </tr>
       </thead>
       <tbody>

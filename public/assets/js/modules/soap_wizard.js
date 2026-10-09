@@ -488,23 +488,11 @@
       Feedback.info(dom.flashBox, translate('copy.empty', 'Nothing to copy'));
       return;
     }
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(command).then(()=>{
-        Feedback.success(dom.flashBox, translate('copy.success', 'Copied to clipboard'));
-      }).catch(()=>{
-        fallbackCopy(command);
-      });
-    } else {
-      fallbackCopy(command);
-    }
-  }
-
-  function fallbackCopy(text){
-    const ta=document.createElement('textarea');
-    ta.value=text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); Feedback.success(dom.flashBox, translate('copy.success', 'Copied to clipboard')); }
-    catch(e){ Feedback.error(dom.flashBox, translate('copy.failure', 'Copy failed')); }
-    finally { document.body.removeChild(ta); }
+    // 非安全上下文下 navigator.clipboard 不可用，降级与提示统一由 Panel.copy 负责
+    Panel.copy(command, { feedback: (ok)=>{
+      if(ok) Feedback.success(dom.flashBox, translate('copy.success', 'Copied to clipboard'));
+      else Feedback.error(dom.flashBox, translate('copy.failure', 'Copy failed'));
+    } });
   }
 
   function sendExecute(payload){

@@ -15,15 +15,15 @@ $serverId = \Acme\Panel\Support\ServerContext::currentId();
   <div class="tv-empty"><?= htmlspecialchars(__('app.trivia.winners.empty')) ?></div>
 <?php else: ?>
   <div class="tv-table-wrap">
-    <table class="tv-table">
+    <table class="table table--tv">
       <thead>
         <tr>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.rank')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.name')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.wins')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.money')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.last_win_at')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.winners.columns.last_question')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.rank')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.name')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.wins')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.money')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.last_win_at')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.winners.columns.last_question')) ?></th>
         </tr>
       </thead>
       <tbody>

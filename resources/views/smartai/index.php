@@ -39,7 +39,7 @@ include dirname(__DIR__) . '/components/page_header.php';
       <div class="smartai-step" data-step="1">
         <header>
           <h2><?= htmlspecialchars(__('app.smartai.base.title')) ?></h2>
-          <p class="muted"><?= htmlspecialchars(__('app.smartai.base.description_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.smartai.base.description')) ?>">i</span></p>
+          <p class="muted"><?= htmlspecialchars(__('app.smartai.base.description_short')) ?><?= panel_hint(__('app.smartai.base.description')) ?></p>
         </header>
         <div id="smartAiBaseFields" class="smartai-form-grid"></div>
       </div>
@@ -48,13 +48,13 @@ include dirname(__DIR__) . '/components/page_header.php';
           <div id="smartAiSegmentTabs" class="smartai-segment-tabs"></div>
           <button type="button" class="btn outline btn-sm" id="smartAiAddSegmentBtn">+ <?= htmlspecialchars(__('app.smartai.segment.add')) ?></button>
         </div>
-        <p class="small muted smartai-segment-hint"><?= htmlspecialchars(__('app.smartai.segment.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.smartai.segment.hint')) ?>">i</span></p>
+        <p class="small muted smartai-segment-hint"><?= htmlspecialchars(__('app.smartai.segment.hint_short')) ?><?= panel_hint(__('app.smartai.segment.hint')) ?></p>
         <div id="smartAiSegmentBase" class="smartai-form-grid smartai-segment-base"></div>
       </div>
       <div class="smartai-step" data-step="2" hidden>
         <header>
           <h2><?= htmlspecialchars(__('app.smartai.event.title')) ?></h2>
-          <p class="muted"><?= htmlspecialchars(__('app.smartai.event.description_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.smartai.event.description')) ?>">i</span></p>
+          <p class="muted"><?= htmlspecialchars(__('app.smartai.event.description_short')) ?><?= panel_hint(__('app.smartai.event.description')) ?></p>
         </header>
         <div class="smartai-selector" id="smartAiEventSelect"></div>
         <div id="smartAiEventParams" class="smartai-form-grid"></div>
@@ -62,7 +62,7 @@ include dirname(__DIR__) . '/components/page_header.php';
       <div class="smartai-step" data-step="3" hidden>
         <header>
           <h2><?= htmlspecialchars(__('app.smartai.action.title')) ?></h2>
-          <p class="muted"><?= htmlspecialchars(__('app.smartai.action.description_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.smartai.action.description')) ?>">i</span></p>
+          <p class="muted"><?= htmlspecialchars(__('app.smartai.action.description_short')) ?><?= panel_hint(__('app.smartai.action.description')) ?></p>
         </header>
         <div class="smartai-selector" id="smartAiActionSelect"></div>
         <div id="smartAiActionParams" class="smartai-form-grid"></div>
@@ -70,7 +70,7 @@ include dirname(__DIR__) . '/components/page_header.php';
       <div class="smartai-step" data-step="4" hidden>
         <header>
           <h2><?= htmlspecialchars(__('app.smartai.target.title')) ?></h2>
-          <p class="muted"><?= htmlspecialchars(__('app.smartai.target.description_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.smartai.target.description')) ?>">i</span></p>
+          <p class="muted"><?= htmlspecialchars(__('app.smartai.target.description_short')) ?><?= panel_hint(__('app.smartai.target.description')) ?></p>
         </header>
         <div class="smartai-selector" id="smartAiTargetSelect"></div>
         <div id="smartAiTargetParams" class="smartai-form-grid"></div>

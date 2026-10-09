@@ -106,7 +106,8 @@ final class DbcReader
             $base = $record * $this->recordSize;
             $out = [];
             foreach (array_keys($wanted) as $index) {
-                $value = unpack('V', substr($this->data, $base + $index * 4, 4));
+    // unpack 的第三个参数是偏移量：直接定位可省掉每次 substr 的字符串分配。
+                $value = unpack('V', $this->data, $base + $index * 4);
                 $out[$index] = (int) ($value[1] ?? 0);
             }
 

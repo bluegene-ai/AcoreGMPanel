@@ -71,7 +71,7 @@
 .raf-status{display:inline-flex;align-items:center;justify-content:center;min-width:86px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;}
 .raf-status--active{background:rgba(45,167,118,.18);color:#86efb5;}
 .raf-status--completed{background:rgba(77,128,216,.2);color:#b9d5ff;}
-.raf-status--inactive{background:rgba(143,158,178,.18);color:#c8d3df;}
+.raf-status--inactive{background:rgba(143,158,178,.18);color:var(--c-text-strong);}
 .raf-status--permanent_blocked{background:rgba(207,73,91,.18);color:#ffb5bd;}
 .raf-action-stack{display:flex;flex-direction:column;gap:8px;align-items:flex-start;}
 .raf-pagination{display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;padding-top:14px;}
@@ -99,10 +99,10 @@
 .raf-reward-item{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
 .raf-reward-item__name{font-weight:600;}
 .raf-reward-item__count{color:#bcd7f2;font-size:12px;}
-.raf-badge{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(143,158,178,.18);color:#c8d3df;}
+.raf-badge{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(143,158,178,.18);color:var(--c-text-strong);}
 .raf-badge--login{background:rgba(45,167,118,.18);color:#86efb5;}
 .raf-badge--level_change{background:rgba(77,128,216,.2);color:#b9d5ff;}
-.raf-badge--unknown{background:rgba(143,158,178,.18);color:#c8d3df;}
+.raf-badge--unknown{background:rgba(143,158,178,.18);color:var(--c-text-strong);}
 
 @media (max-width:1280px){
   .raf-stats__grid--bindings{grid-template-columns:repeat(3,minmax(0,1fr));}

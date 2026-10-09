@@ -41,6 +41,12 @@ return array (
   ),
   'manager' => 
   array (
+    'summary' => 
+    array (
+      'impact' => '影响：:count',
+      'impact_paren' => '（影响：:count）',
+      'error_prefix' => ' | 错误：:message',
+    ),
     'pipe_sql' => 
     array (
       'summary' => ':type :status（影响：:affected）',
@@ -105,6 +111,26 @@ return array (
           'sql' => 
           array (
             'label' => 'SQL 执行',
+          ),
+          'deleted' => 
+          array (
+            'label' => '删除记录',
+          ),
+          'actions' => 
+          array (
+            'label' => '操作记录',
+          ),
+        ),
+      ),
+      'character' => 
+      array (
+        'label' => '角色',
+        'description' => '角色编辑相关操作日志。',
+        'types' => 
+        array (
+          'actions' => 
+          array (
+            'label' => '操作记录',
           ),
         ),
       ),

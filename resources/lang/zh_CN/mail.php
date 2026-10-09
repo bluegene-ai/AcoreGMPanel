@@ -204,6 +204,20 @@ return [
                     'loading' => '加载中…',
                     'empty' => '暂无邮件',
                 ],
+                'money' => [
+                    'units' => [
+                        'gold' => '金',
+                        'silver' => '银',
+                        'copper' => '铜',
+                    ],
+                ],
+                'errors' => [
+                    'network' => '网络中断，请重试',
+                    'load_failed' => '列表加载失败',
+                ],
+                'draft' => [
+                    'restored' => '已恢复上次未提交的筛选条件',
+                ],
             ],
         ],
     ],

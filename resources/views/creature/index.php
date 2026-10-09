@@ -4,10 +4,6 @@
  * Purpose: Provides functionality for the resources/views/creature module.
  */
 
-?>
-<?php
-$serverParam = isset($_GET['server']) ? (int)$_GET['server'] : null;
-
 use Acme\Panel\Support\ConfigLocalization;
 
 $creatureCfg = include __DIR__.'/../../../config/creature.php';
@@ -32,12 +28,13 @@ $__pageCapabilities = $creatureCapabilities;
 $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs'])
   ? null
   : __('app.common.capabilities.page_limited');
+include __DIR__.'/../partials/list_url.php';
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <div id="creature-feedback" class="panel-flash panel-flash--inline"></div>
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
 <form method="get" action="" class="inline creature-filter-form">
-  <?php if($serverParam!==null): ?><input type="hidden" name="server" value="<?= $serverParam ?>"><?php endif; ?>
+  <?php include __DIR__.'/../partials/server_field.php'; ?>
   <input type="hidden" name="filter_npcflag_bits" id="filter_npcflag_bits" value="<?= htmlspecialchars($filter_npcflag_bits ?? '') ?>">
   <select name="search_type">
     <option value="name" <?= $search_type==='name'?'selected':'' ?>><?= __('app.creature.index.filters.search_type.name') ?></option>
@@ -71,34 +68,35 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
     <div class="creature-npcflag-filter__actions">
       <button type="button" class="btn btn-sm outline" id="npcflagApplyBtn"><?= __('app.creature.index.npcflag.apply') ?></button>
       <button type="button" class="btn btn-sm outline" id="npcflagClearBtn"><?= __('app.creature.index.npcflag.clear') ?></button>
-      <span class="muted creature-npcflag-filter__hint"><?= __('app.creature.index.npcflag.mode_hint_short') ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.creature.index.npcflag.mode_hint')) ?>">i</span></span>
+      <span class="muted creature-npcflag-filter__hint"><?= __('app.creature.index.npcflag.mode_hint_short') ?><?= panel_hint(__('app.creature.index.npcflag.mode_hint')) ?></span>
     </div>
   </details>
 </form>
+<div class="table-wrap">
 <table class="table creature-table">
   <thead><tr>
-    <th><?= __('app.creature.index.table.headers.id') ?></th>
-    <th><?= __('app.creature.index.table.headers.name') ?></th>
-    <th><?= __('app.creature.index.table.headers.subname') ?></th>
-    <th><?= __('app.creature.index.table.headers.min_level') ?></th>
-    <th><?= __('app.creature.index.table.headers.max_level') ?></th>
-    <th><?= __('app.creature.index.table.headers.faction') ?></th>
-    <th><?= __('app.creature.index.table.headers.npcflag') ?></th>
-    <th><?= __('app.creature.index.table.headers.actions') ?></th>
-    <th><?= __('app.creature.index.table.headers.verify') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.id') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.name') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.subname') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.min_level') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.max_level') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.faction') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.npcflag') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.actions') ?></th>
+    <th scope="col"><?= __('app.creature.index.table.headers.verify') ?></th>
   </tr></thead>
   <tbody>
   <?php foreach($pager->items as $row): ?>
     <tr data-entry="<?= (int)$row['entry'] ?>">
       <td><?= (int)$row['entry'] ?></td>
-      <td><a href="?<?= http_build_query((['edit_id'=>$row['entry']] + $_GET)) ?>" class="text-info"><?= htmlspecialchars($row['name']??'') ?></a></td>
+      <td><a href="<?= htmlspecialchars($list_url('/creature', ['edit_id' => (int)$row['entry']])) ?>" class="text-info"><?= htmlspecialchars($row['name']??'') ?></a></td>
       <td><?= htmlspecialchars($row['subname']??'') ?></td>
       <td><?= (int)$row['minlevel'] ?></td>
       <td><?= (int)$row['maxlevel'] ?></td>
   <td title="<?= (int)$row['faction'] ?>"><?= htmlspecialchars(mapFactionLabel((int)$row['faction'],$FACTION_LABELS)) ?></td>
   <td title="<?= (int)$row['npcflag'] ?>" class="creature-table__npcflag"><?= htmlspecialchars(mapNpcFlagLabel((int)$row['npcflag'],$NPCFLAG_LABELS)) ?></td>
       <td class="nowrap">
-        <a class="btn-sm btn info outline" href="?<?= http_build_query((['edit_id'=>$row['entry']] + $_GET)) ?>"><?= __('app.creature.index.table.actions.edit') ?></a>
+        <a class="btn-sm btn info outline" href="<?= htmlspecialchars($list_url('/creature', ['edit_id' => (int)$row['entry']])) ?>"><?= __('app.creature.index.table.actions.edit') ?></a>
         <?php if($creatureCapabilities['delete']): ?>
         <button class="btn-sm btn danger action-delete" data-id="<?= (int)$row['entry'] ?>"><?= __('app.creature.index.table.actions.delete') ?></button>
         <?php endif; ?>
@@ -113,10 +111,10 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
   <?php endif; ?>
   </tbody>
 </table>
+</div>
 <?php
   $pages=$pager->pages; $page=$pager->page;
-  $base=url('/creature');
-  $qs=$_GET; unset($qs['page']); if($serverParam!==null) $qs['server']=$serverParam; if(!empty($qs)){ $base.='?'.http_build_query($qs); }
+  $base=$list_url('/creature');
   include __DIR__.'/../components/pagination.php';
 ?>
 
@@ -167,10 +165,10 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
     <div class="modal-body">
       <div id="verifyDiag" class="muted creature-verify-diag"></div>
       <table class="table" id="verifyDiffTable"><thead><tr>
-        <th><?= __('app.creature.index.modals.verify.headers.field') ?></th>
-        <th><?= __('app.creature.index.modals.verify.headers.rendered') ?></th>
-        <th><?= __('app.creature.index.modals.verify.headers.database') ?></th>
-        <th><?= __('app.creature.index.modals.verify.headers.status') ?></th>
+        <th scope="col"><?= __('app.creature.index.modals.verify.headers.field') ?></th>
+        <th scope="col"><?= __('app.creature.index.modals.verify.headers.rendered') ?></th>
+        <th scope="col"><?= __('app.creature.index.modals.verify.headers.database') ?></th>
+        <th scope="col"><?= __('app.creature.index.modals.verify.headers.status') ?></th>
       </tr></thead><tbody></tbody></table>
       <div id="verifySuggestion" class="creature-verify-suggestion"></div>
     </div>

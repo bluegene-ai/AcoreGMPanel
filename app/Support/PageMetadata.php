@@ -338,7 +338,13 @@ final class PageMetadata
             : 'http';
         $path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
         if (!is_string($path) || $path === '')
-            $path = Url::to('/');
+            $path = '/';
+
+        // .htaccess 重写会剥掉子路径前缀（面板部署在 /agmp 下时 REQUEST_URI 是 /account/login），
+        // 因此这里必须把 base_path 补回去，否则 canonical 指向一个不存在的 URL。
+        $base = rtrim((string) Config::get('app.base_path', ''), '/');
+        if ($base !== '' && $path !== $base && !str_starts_with($path, $base . '/'))
+            $path = $base . $path;
 
         return $scheme . '://' . $host . $path;
     }

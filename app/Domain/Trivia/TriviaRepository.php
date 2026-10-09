@@ -452,6 +452,9 @@ class TriviaRepository extends MultiServerRepository
 
     /**
      * 导出全部题目（不分页）。
+     *
+     * 分批取行（每批 500）并即时归一化：题库上千行时不必先把整份原始结果集读进内存。
+     *
      * @return array<int,array<string,mixed>>
      */
     public function allQuestions(): array
@@ -460,11 +463,35 @@ class TriviaRepository extends MultiServerRepository
             return [];
         }
 
-        $rows = $this->characters()
-            ->query('SELECT * FROM ' . $this->table('questions') . ' ORDER BY `enabled` DESC, `sort_order` ASC, `id` ASC')
-            ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $batchSize = 500;
+        $offset = 0;
+        $questions = [];
 
-        return array_map([$this, 'normalizeQuestionRow'], $rows);
+        $stmt = $this->characters()->prepare(
+            'SELECT * FROM ' . $this->table('questions')
+            . ' ORDER BY `enabled` DESC, `sort_order` ASC, `id` ASC LIMIT :limit OFFSET :offset'
+        );
+        $stmt->bindValue(':limit', $batchSize, PDO::PARAM_INT);
+
+        while (true) {
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            $chunk = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            if ($chunk === []) {
+                break;
+            }
+
+            foreach ($chunk as $row) {
+                $questions[] = $this->normalizeQuestionRow($row);
+            }
+
+            $offset += $batchSize;
+            if (count($chunk) < $batchSize) {
+                break;
+            }
+        }
+
+        return $questions;
     }
 
     /**

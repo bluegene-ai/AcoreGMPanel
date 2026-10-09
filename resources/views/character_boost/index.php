@@ -37,7 +37,7 @@ include dirname(__DIR__) . '/components/page_header.php';
   <?php if ($boostCapabilities['apply']): ?>
   <section class="cb-hub__card">
     <h3 class="cb-section-title"><?= htmlspecialchars(__('app.character_boost.admin.apply.title')) ?></h3>
-    <p class="cb-hub__note muted small"><?= htmlspecialchars(__('app.character_boost.admin.apply.note_short', ['realm' => (string) $boostRealmId])) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character_boost.admin.apply.note', ['realm' => (string) $boostRealmId])) ?>">i</span></p>
+    <p class="cb-hub__note muted small"><?= htmlspecialchars(__('app.character_boost.admin.apply.note_short', ['realm' => (string) $boostRealmId])) ?><?= panel_hint(__('app.character_boost.admin.apply.note', ['realm' => (string) $boostRealmId])) ?></p>
 
     <form
       id="boostApplyForm"
@@ -84,7 +84,7 @@ include dirname(__DIR__) . '/components/page_header.php';
         <button class="btn success" type="submit" id="boostApplySubmit"><?= htmlspecialchars(__('app.character_boost.admin.actions.apply')) ?></button>
       </div>
 
-      <p class="cb-help"><?= htmlspecialchars(__('app.character_boost.admin.apply.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character_boost.admin.apply.hint')) ?>">i</span></p>
+      <p class="cb-help"><?= htmlspecialchars(__('app.character_boost.admin.apply.hint_short')) ?><?= panel_hint(__('app.character_boost.admin.apply.hint')) ?></p>
     </form>
 
     <div id="boostApplyPreviewBox" class="cb-preview" hidden>
@@ -129,11 +129,11 @@ include dirname(__DIR__) . '/components/page_header.php';
         <table class="table table--compact">
           <thead>
             <tr>
-              <th>ID</th>
-              <th><?= htmlspecialchars(__('app.character_boost.templates.columns.name')) ?></th>
-              <th><?= htmlspecialchars(__('app.character_boost.templates.columns.target_level')) ?></th>
-              <th><?= htmlspecialchars(__('app.character_boost.templates.columns.money_gold')) ?></th>
-              <th><?= htmlspecialchars(__('app.character_boost.templates.columns.items')) ?></th>
+              <th scope="col">ID</th>
+              <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.name')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.target_level')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.money_gold')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.items')) ?></th>
             </tr>
           </thead>
           <tbody>
@@ -179,10 +179,10 @@ include dirname(__DIR__) . '/components/page_header.php';
       <table class="table table--compact" id="boostHistoryTable">
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.character_boost.admin.history.columns.time')) ?></th>
-            <th><?= htmlspecialchars(__('app.character_boost.admin.history.columns.character')) ?></th>
-            <th><?= htmlspecialchars(__('app.character_boost.admin.history.columns.rewards')) ?></th>
-            <th><?= htmlspecialchars(__('app.character_boost.admin.history.columns.status')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.admin.history.columns.time')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.admin.history.columns.character')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.admin.history.columns.rewards')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.admin.history.columns.status')) ?></th>
           </tr>
         </thead>
         <tbody id="boostHistoryBody">

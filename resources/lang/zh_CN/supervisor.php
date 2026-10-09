@@ -103,6 +103,14 @@ return [
     'confirm' => [
         'stop_all' => '确定要停止 worldserver 与 authserver 吗？停止后不会自动拉起，需要手动再启动。',
         'stop_service' => '确定要停止 :service 吗？停止后不会自动拉起。',
+        'restart_all' => '确定要重启 worldserver 与 authserver 吗？在线玩家会被断开。',
+        'restart_all_gate' => '请照打 RESTART 以确认重启全部服务',
+    ],
+
+    'danger' => [
+        'zone_label' => '危险操作',
+        'zone_hint' => '这些指令会影响该区所有玩家，且不会自动回滚。',
+        'require_text' => '照打确认',
     ],
 
     'services' => [
@@ -220,9 +228,17 @@ return [
                 'actions' => [
                     'start' => '启动',
                     'stop' => '停止',
+                    'restart' => '重启',
                 ],
                 'confirm' => [
                     'stop_service' => '确定要停止 :service 吗？',
+                    'stop_all' => '确定要停止 worldserver 与 authserver 吗？停止后不会自动拉起，需要手动再启动。',
+                    'restart_all' => '确定要重启 worldserver 与 authserver 吗？在线玩家会被断开。',
+                    'restart_all_gate' => '请照打 RESTART 以确认重启全部服务',
+                    'restart_service' => '确定要重启 :service 吗？',
+                    'require_text_label' => '照打确认',
+                    'cancel' => '取消',
+                    'submit' => '确定',
                 ],
                 'supervisor' => [
                     'running' => '守护程序运行中',

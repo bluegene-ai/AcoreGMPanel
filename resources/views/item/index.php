@@ -18,6 +18,7 @@ $__pageCapabilities = $itemCapabilities;
 $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs'])
   ? null
   : __('app.common.capabilities.page_limited');
+include __DIR__.'/../partials/list_url.php';
 ?>
 <?php include __DIR__.'/../components/page_header.php'; ?>
 <div id="item-feedback" class="panel-flash panel-flash--inline"></div>
@@ -62,8 +63,9 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
     <?php endif; ?>
   </div>
 </form>
+<div class="table-wrap">
 <table class="table item-table">
-  <thead><tr><th><?= htmlspecialchars(__('app.item.table.id')) ?></th><th><?= htmlspecialchars(__('app.item.table.name')) ?></th><th><?= htmlspecialchars(__('app.item.table.quality')) ?></th><th><?= htmlspecialchars(__('app.item.table.class')) ?></th><th><?= htmlspecialchars(__('app.item.table.subclass')) ?></th><th><?= htmlspecialchars(__('app.item.table.level')) ?></th><th><?= htmlspecialchars(__('app.item.table.actions')) ?></th></tr></thead>
+  <thead><tr><th scope="col"><?= htmlspecialchars(__('app.item.table.id')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.name')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.quality')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.class')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.subclass')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.level')) ?></th><th scope="col"><?= htmlspecialchars(__('app.item.table.actions')) ?></th></tr></thead>
   <tbody>
   <?php
 
@@ -78,15 +80,15 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
   $classCn = ItemMeta::className($classId);
   $subCn = ItemMeta::subclassName($classId,$subId);
       ?>
-  <td><a href="?<?= http_build_query(['edit_id'=>$row['entry']]+$_GET) ?>" class="item-name-link quality-badge <?= $qClass ?>"<?= item_tooltip_attrs((int)$row['entry'], true, $q) ?>><?= htmlspecialchars($row['name']??'') ?></a></td>
+  <td><a href="<?= htmlspecialchars($list_url('/item', ['edit_id' => (int)$row['entry']])) ?>" class="item-name-link quality-badge <?= $qClass ?>"<?= item_tooltip_attrs((int)$row['entry'], true, $q) ?>><?= htmlspecialchars($row['name']??'') ?></a></td>
   <td><span class="quality-badge <?= $qClass ?>" title="<?= htmlspecialchars($qName) ?>"><?= htmlspecialchars($qName) ?></span></td>
   <td title="class=<?= $classId ?>"><?= htmlspecialchars($classCn) ?> <small class="muted">(<?= $classId ?>)</small></td>
   <td title="class=<?= $classId ?> subclass=<?= $subId ?>"><?= htmlspecialchars($subCn) ?> <small class="muted">(<?= $subId ?>)</small></td>
       <td><?= (int)$row['itemlevel'] ?></td>
       <td class="nowrap">
-  <a class="btn-sm btn info outline" href="?<?= http_build_query(['edit_id'=>$row['entry']]+$_GET) ?>"><?= htmlspecialchars(__('app.item.actions.edit')) ?></a>
+  <a class="btn-sm btn info outline" href="<?= htmlspecialchars($list_url('/item', ['edit_id' => (int)$row['entry']])) ?>"><?= htmlspecialchars(__('app.item.actions.edit')) ?></a>
   <?php if($itemCapabilities['delete']): ?>
-  <button class="btn-sm btn danger action-delete" data-id="<?= (int)$row['entry'] ?>"><?= htmlspecialchars(__('app.item.actions.delete')) ?></button>
+  <button class="btn-sm btn danger action-delete" data-id="<?= (int)$row['entry'] ?>" data-name="<?= htmlspecialchars((string)($row['name'] ?? '')) ?>"><?= htmlspecialchars(__('app.item.actions.delete')) ?></button>
   <?php endif; ?>
   <?php if(!$itemCapabilities['delete']): ?>
   <span class="muted small"><?= htmlspecialchars(__('app.common.capabilities.read_only')) ?></span>
@@ -94,18 +96,16 @@ $capabilityNotice = $__canAll(['content.create', 'content.delete', 'content.logs
       </td>
     </tr>
   <?php endforeach; if(!$pager->items): ?>
-  <tr><td colspan="7" class="text-muted item-table__empty"><?= htmlspecialchars(__('app.item.table.empty')) ?></td></tr>
+  <?php $colspan = 7; $label = __('app.item.table.empty'); $cell_class = 'text-muted item-table__empty'; include __DIR__.'/../components/empty_state.php'; ?>
   <?php endif; ?>
   </tbody>
 </table>
+</div>
 <?php
   $pages=$pager->pages; $page=$pager->page;
 
 
-  $base=url('/item');
-
-
-  $qs = $_GET; unset($qs['page']); if(!empty($qs)){ $base .= '?'.http_build_query($qs); }
+  $base = $list_url('/item');
   include __DIR__.'/../components/pagination.php';
 ?>
 

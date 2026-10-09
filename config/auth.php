@@ -42,6 +42,11 @@ return [
       'events' => 'Boss runtime event stream reads.',
       'contributors' => 'Boss contributor snapshot and reward result reads.',
       'actions' => 'Boss SOAP actions such as spawn, preset change, difficulty change, and rebase.',
+      'pools.write' => 'Boss reward pool and extended-config writes, plus the skill prescreen run.',
+    ],
+    'supervisor' => [
+      'view' => 'Supervisor page shell, instance status and log tail reads.',
+      'control' => 'Supervisor start/stop/restart commands.',
     ],
     'audit' => [
       'read' => 'Audit log list and filter reads.',

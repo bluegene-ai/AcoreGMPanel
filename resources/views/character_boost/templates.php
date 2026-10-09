@@ -14,17 +14,18 @@ include dirname(__DIR__) . '/components/page_header.php';
 <div class="panel">
   <div id="boostTplFlash" class="panel-flash panel-flash--inline cb-flash-hidden"></div>
 
+  <div class="table-wrap">
   <table class="table" id="boostTplTable" data-delete-endpoint="<?= htmlspecialchars($deleteEndpoint) ?>">
     <thead>
       <tr>
-        <th>ID</th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.name')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.target_level')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.money_gold')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.items')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.class_rewards')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.require_match')) ?></th>
-        <th><?= htmlspecialchars(__('app.character_boost.templates.columns.actions')) ?></th>
+        <th scope="col">ID</th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.name')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.target_level')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.money_gold')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.items')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.class_rewards')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.require_match')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character_boost.templates.columns.actions')) ?></th>
       </tr>
     </thead>
     <tbody>
@@ -73,4 +74,5 @@ include dirname(__DIR__) . '/components/page_header.php';
       <?php endif; ?>
     </tbody>
   </table>
+  </div>
 </div>

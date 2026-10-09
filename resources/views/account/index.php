@@ -30,6 +30,7 @@
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
 <?php $hasCriteria = $load_all || ($search_value!=='') || ($filter_online!=='any') || ($filter_ban!=='any') || (trim((string)$exclude_username) !== ''); ?>
 <form class="list-filter" method="get" action="">
+  <?php include __DIR__.'/../partials/server_field.php'; ?>
   <div class="list-filter__grid list-filter__grid--fit">
     <label class="list-filter__field list-filter__field--fit-select">
       <span><?= htmlspecialchars(__('app.account.search.type_label')) ?></span>
@@ -88,17 +89,9 @@
 </form>
 <?php if($hasCriteria): ?>
 <?php
-  $sortUrl = static function(?string $value): string {
-    $base = url_with_server('/account');
-    $qs = $_GET;
-    unset($qs['page'], $qs['server']);
-    if($value === null || $value === ''){
-      unset($qs['sort']);
-    } else {
-      $qs['sort'] = $value;
-    }
-    $query = http_build_query($qs);
-    return $query ? ($base . (str_contains($base,'?') ? '&' : '?') . $query) : $base;
+  include __DIR__.'/../partials/list_url.php';
+  $sortUrl = static function(?string $value) use ($list_url): string {
+    return $list_url('/account', ['sort' => $value]);
   };
   $nextSort = static function(string $column) use ($sort): string {
     $cur = (string)$sort;
@@ -108,9 +101,17 @@
     if($cur === $desc) return '';
     return $asc;
   };
-  $isActive = static function(string $column) use ($sort): bool {
+  $sortAttrs = static function(string $column) use ($sort, $sort_direction): string {
     $cur = (string)$sort;
-    return $cur !== '' && str_starts_with($cur, $column . '_');
+    if($cur === '' || !str_starts_with($cur, $column . '_')) return 'table-sort';
+    $direction = $sort_direction($cur);
+    return 'table-sort is-active ' . $direction;
+  };
+  $sortArrow = static function(string $column) use ($sort): string {
+    $cur = (string)$sort;
+    if($cur === '' || !str_starts_with($cur, $column . '_')) return '';
+    $arrow = str_ends_with($cur, '_desc') ? '▼' : '▲';
+    return ' <span class="table-sort__dir" aria-hidden="true">' . $arrow . '</span>';
   };
 ?>
 <?php $friendlyTime=function(int $seconds): string {
@@ -177,19 +178,20 @@
     </div>
   </div>
   <?php endif; ?>
+  <div class="table-wrap">
   <table class="table">
   <thead><tr>
     <?php if($__accountCanBulk): ?>
-    <th class="account-table__select-col"><input type="checkbox" class="js-account-select-all" aria-label="select all"></th>
+    <th scope="col" class="account-table__select-col"><input type="checkbox" class="js-account-select-all" aria-label="<?= htmlspecialchars(__('app.account.bulk.select_all')) ?>"></th>
     <?php endif; ?>
-    <th><a class="table-sort<?= $isActive('id')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('id'))) ?>"><?= htmlspecialchars(__('app.account.table.id')) ?></a></th>
-    <th><?= htmlspecialchars(__('app.account.table.username')) ?></th>
-    <th><?= htmlspecialchars(__('app.account.table.gm')) ?></th>
-    <th><a class="table-sort<?= $isActive('online')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('online'))) ?>"><?= htmlspecialchars(__('app.account.table.online')) ?></a></th>
-    <th><a class="table-sort<?= $isActive('last_login')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('last_login'))) ?>"><?= htmlspecialchars(__('app.account.table.last_login')) ?></a></th>
-    <th><?= htmlspecialchars(__('app.account.table.last_ip')) ?></th>
-    <th><?= htmlspecialchars(__('app.account.table.ip_location')) ?></th>
-    <th><?= htmlspecialchars(__('app.account.table.actions')) ?></th>
+    <th scope="col"><a class="<?= $sortAttrs('id') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('id'))) ?>"><?= htmlspecialchars(__('app.account.table.id')) ?><?= $sortArrow('id') ?></a></th>
+    <th scope="col"><?= htmlspecialchars(__('app.account.table.username')) ?></th>
+    <th scope="col"><?= htmlspecialchars(__('app.account.table.gm')) ?></th>
+    <th scope="col"><a class="<?= $sortAttrs('online') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('online'))) ?>"><?= htmlspecialchars(__('app.account.table.online')) ?><?= $sortArrow('online') ?></a></th>
+    <th scope="col"><a class="<?= $sortAttrs('last_login') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('last_login'))) ?>"><?= htmlspecialchars(__('app.account.table.last_login')) ?><?= $sortArrow('last_login') ?></a></th>
+    <th scope="col"><?= htmlspecialchars(__('app.account.table.last_ip')) ?></th>
+    <th scope="col"><?= htmlspecialchars(__('app.account.table.ip_location')) ?></th>
+    <th scope="col"><?= htmlspecialchars(__('app.account.table.actions')) ?></th>
   </tr></thead>
     <tbody>
     <?php foreach($pager->items as $row): ?>
@@ -209,7 +211,7 @@
       ?>
       <tr data-id="<?= (int)$row['id'] ?>" data-username="<?= htmlspecialchars($row['username']) ?>" data-gm="<?= isset($row['gmlevel'])?(int)$row['gmlevel']:'0' ?>" data-last-ip="<?= htmlspecialchars($lastIp) ?>">
         <?php if($__accountCanBulk): ?>
-        <td><input type="checkbox" class="js-account-select" value="<?= (int)$row['id'] ?>" aria-label="select"></td>
+        <td><input type="checkbox" class="js-account-select" value="<?= (int)$row['id'] ?>" aria-label="<?= htmlspecialchars(__('app.account.table.select_row', ['name' => (string)$row['username']])) ?>"></td>
         <?php endif; ?>
         <td><?= (int)$row['id'] ?></td>
         <td><?= account_link((int)$row['id'], (string)$row['username']) ?></td>
@@ -284,19 +286,13 @@
         </td>
       </tr>
     <?php endforeach; ?>
-  <?php if(!$pager->items): ?><tr><td colspan="<?= $__accountCanBulk ? 9 : 8 ?>" class="account-table__empty-cell"><?= htmlspecialchars(__('app.account.feedback.empty')) ?></td></tr><?php endif; ?>
+  <?php if(!$pager->items): ?><?php $colspan = $__accountCanBulk ? 9 : 8; $label = __('app.account.feedback.empty'); $cell_class = 'account-table__empty-cell'; include __DIR__.'/../components/empty_state.php'; ?><?php endif; ?>
     </tbody>
   </table>
+  </div>
   <?php
   $page=$pager->page; $pages=$pager->pages;
-
-
-  $base=url_with_server('/account');
-    $qs=$_GET; unset($qs['page'],$qs['server']); if(!empty($qs)){
-
-      $join = strpos($base,'?')!==false?'&':'?';
-      $base .= $join.http_build_query($qs);
-    }
+  $base=$list_url('/account');
     include __DIR__.'/../components/pagination.php';
   ?>
 <?php endif; ?>

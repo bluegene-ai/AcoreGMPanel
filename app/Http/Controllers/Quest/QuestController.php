@@ -8,7 +8,6 @@ namespace Acme\Panel\Http\Controllers\Quest;
 
 use Acme\Panel\Core\{Controller,Request,Response,Lang,Url};
 use Acme\Panel\Domain\Quest\QuestRepository;
-use Acme\Panel\Domain\Quest\QuestAggregateService;
 use Acme\Panel\Support\{ServerContext,ServerList};
 use Acme\Panel\Support\Auth;
 
@@ -44,11 +43,6 @@ class QuestController extends Controller
     private function requireLogsCapability(): void
     {
         $this->requireCapability('content.logs');
-    }
-
-    private function requirePreviewCapability(): void
-    {
-        $this->requireCapability('content.preview');
     }
 
     public function __construct(){ $this->repo=new QuestRepository(); }
@@ -162,52 +156,6 @@ class QuestController extends Controller
 
     public function apiLogs(Request $request): Response
     { $this->requireLogsCapability(); $state = $this->prepareQuestLogState($request); $res=$this->repo->tailLog($state['type'],$state['limit']); return $this->json($res,$res['success']?200:422); }
-
-    public function apiEditorLoad(Request $request): Response
-    {
-        $this->requireViewCapability();
-        $state = $this->prepareQuestFetchState($request);
-        $service = new QuestAggregateService();
-        $res = $service->load($state['id']);
-        return $this->json($res, $res['success'] ? 200 : 422);
-    }
-
-    public function apiEditorSave(Request $request): Response
-    {
-        $this->requireUpdateCapability();
-        $id = (int)$request->input('id', 0);
-        $payload = $request->input('payload', []);
-        if (is_string($payload)) {
-            $decoded = json_decode($payload, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $payload = $decoded;
-            } else {
-                $payload = [];
-            }
-        }
-        $expected = $request->input('expected_hash');
-        $service = new QuestAggregateService();
-        $res = $service->save($id, is_array($payload) ? $payload : [], $expected ? (string)$expected : null);
-        return $this->json($res, $res['success'] ? 200 : 422);
-    }
-
-    public function apiEditorPreview(Request $request): Response
-    {
-        $this->requirePreviewCapability();
-        $id = (int)$request->input('id', 0);
-        $payload = $request->input('payload', []);
-        if (is_string($payload)) {
-            $decoded = json_decode($payload, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $payload = $decoded;
-            } else {
-                $payload = [];
-            }
-        }
-        $service = new QuestAggregateService();
-        $res = $service->preview($id, is_array($payload) ? $payload : []);
-        return $this->json($res, $res['success'] ? 200 : 422);
-    }
 
     private function prepareQuestFetchState(Request $request): array
     {

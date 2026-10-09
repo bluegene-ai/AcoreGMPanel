@@ -6,7 +6,7 @@
 .tv-panel {
   margin: 0 0 18px;
   padding: 16px 18px;
-  border: 1px solid var(--border-color, #2a3040);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--panel-bg, rgba(255, 255, 255, 0.02));
 }
@@ -39,7 +39,7 @@
   flex-wrap: wrap;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px dashed var(--border-color, #2a3040);
+  border-top: 1px dashed var(--border-color);
 }
 
 .tv-inline {
@@ -129,7 +129,7 @@
   margin: 0 0 14px;
   padding: 10px 14px;
   border-radius: 8px;
-  border: 1px solid var(--border-color, #2a3040);
+  border: 1px solid var(--border-color);
   background: rgba(108, 182, 255, 0.08);
 }
 
@@ -158,7 +158,7 @@
 .tv-fieldset {
   margin: 0 0 16px;
   padding: 12px 14px;
-  border: 1px solid var(--border-color, #2a3040);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
 }
 
@@ -231,7 +231,7 @@
 .tv-form--editor {
   margin-top: 16px;
   padding: 14px;
-  border: 1px dashed var(--border-color, #2a3040);
+  border: 1px dashed var(--border-color);
   border-radius: 10px;
 }
 
@@ -252,7 +252,7 @@
   flex-wrap: wrap;
   margin: 0 0 12px;
   padding: 0 0 10px;
-  border-bottom: 1px dashed var(--border-color, #2a3040);
+  border-bottom: 1px dashed var(--border-color);
 }
 
 .tv-editor__head h4 {
@@ -284,25 +284,16 @@
   overflow-x: auto;
 }
 
-.tv-table {
-  width: 100%;
-  border-collapse: collapse;
+/* 表头/边框/斑马纹/悬停共用 .table 基座；本模块只保留密度与顶部对齐。 */
+.table.table--tv {
   font-size: 0.9rem;
+  margin: 0;
 }
 
-.tv-table th,
-.tv-table td {
+.table.table--tv th,
+.table.table--tv td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border-color, #2a3040);
-  text-align: left;
   vertical-align: top;
-}
-
-.tv-table th {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
 }
 
 .tv-row--disabled {
@@ -351,7 +342,7 @@
 
 .tv-empty {
   padding: 18px;
-  border: 1px dashed var(--border-color, #2a3040);
+  border: 1px dashed var(--border-color);
   border-radius: 8px;
   text-align: center;
   opacity: 0.75;
@@ -376,7 +367,7 @@
 .tv-import {
   margin-top: 16px;
   padding: 14px;
-  border: 1px dashed var(--border-color, #2a3040);
+  border: 1px dashed var(--border-color);
   border-radius: 10px;
 }
 
@@ -450,8 +441,8 @@
   margin-bottom: 3px;
 }
 
-.tv-table--compact th,
-.tv-table--compact td {
+.table.table--tv-compact th,
+.table.table--tv-compact td {
   padding: 5px 8px;
   font-size: 0.84rem;
 }
@@ -460,7 +451,7 @@
  * 5 块内容竖堆一页要滚很久；只用 display 切换，表单与表格仍常驻 DOM，JS 逻辑不受影响。 */
 .tv-tabs-wrap {
   margin: 0 0 16px;
-  border-bottom: 1px solid var(--border-color, #2a3040);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .tv-tabs {
@@ -494,7 +485,7 @@
 .tv-tab.is-active {
   color: #e7f4ff;
   background: var(--panel-bg, rgba(255, 255, 255, 0.04));
-  border-color: var(--border-color, #2a3040);
+  border-color: var(--border-color);
   margin-bottom: -1px;
   box-shadow: inset 0 2px 0 #3fa8ff;
 }

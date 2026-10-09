@@ -6,7 +6,7 @@
 
 namespace Acme\Panel\Domain\MassMail;
 
-use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\Audit; use Acme\Panel\Support\GameNameResolver; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
+use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\Audit; use Acme\Panel\Support\GameNameResolver; use Acme\Panel\Support\ServerContext; use Acme\Panel\Support\SoapCommand; use Acme\Panel\Support\SoapExecutor; use PDO; use SoapFault; use Throwable;
 
 
 
@@ -18,11 +18,20 @@ use Acme\Panel\Core\Database; use Acme\Panel\Core\Lang; use Acme\Panel\Support\A
 
 class MassMailService
 {
+    /** 结构探测缓存版本：改这里即可让所有进程重新探测一次。 */
+    private const SCHEMA_VERSION = 'massmail-schema-v1';
+
+    /** 同一批群发的去重时间窗（秒）：窗口内重复提交被拒，窗口外允许重发。 */
+    private const SUBMIT_WINDOW_SECONDS = 300;
+
+    private static bool $schemaChecked = false;
+
     private PDO $chars; private int $serverId;
     private ?PDO $world = null;
     private array $soapConf;
     private SoapExecutor $soapExec;
     private string $logTable = 'panel_massmail_log';
+    private string $jobTable = 'panel_massmail_jobs';
     private string $actionLogFile;
     private string $itemCacheFile;
     private array $itemNameCache = [];
@@ -42,9 +51,57 @@ class MassMailService
         $this->actionLogFile = $baseStorage.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.'massmail_actions.log';
         $this->itemCacheFile  = $baseStorage.DIRECTORY_SEPARATOR.'cache'.DIRECTORY_SEPARATOR.'massmail_item_names.json';
         $this->loadItemCache();
+        $this->ensureSchema();
+    }
+
+    /**
+     * 建表与列迁移只做一次：进程内用 static 标记，跨请求用 config/generated 里的探测结果
+     * （带 TTL，避免手工删列后永远探测不到）。
+     */
+    private function ensureSchema(): void
+    {
+        if (self::$schemaChecked) return;
+        self::$schemaChecked = true;
+
+        $cacheFile = $this->schemaCacheFile();
+        $cached = $this->readSchemaCache($cacheFile);
+        if ($cached !== null) return;
+
         $this->ensureLogTable();
+        $this->ensureJobTable();
         $this->migrateAddServerIdColumn();
         $this->migrateAddItemsColumn();
+
+        $this->writeSchemaCache($cacheFile);
+    }
+
+    private function schemaCacheFile(): string
+    { return dirname(__DIR__,3).DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'generated'.DIRECTORY_SEPARATOR.'massmail_schema.php'; }
+
+    private function readSchemaCache(string $file): ?array
+    {
+        try {
+            if (!is_file($file) || (time() - (int) @filemtime($file)) > 86400) return null;
+            $data = @include $file;
+            if (is_array($data) && ($data['version'] ?? '') === self::SCHEMA_VERSION && ($data['server_id'] ?? -1) === $this->serverId) {
+                return $data;
+            }
+        } catch (\Throwable $e) {  }
+
+        return null;
+    }
+
+    private function writeSchemaCache(string $file): void
+    {
+        try {
+            $dir = dirname($file);
+            if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) return;
+            @file_put_contents($file, '<?php return '.var_export([
+                'version' => self::SCHEMA_VERSION,
+                'server_id' => $this->serverId,
+                'checked_at' => time(),
+            ], true).';'.PHP_EOL);
+        } catch (\Throwable $e) {  }
     }
 
 
@@ -79,7 +136,7 @@ class MassMailService
         $message = trim($message); if($message==='') return ['success'=>false,'message'=>__('app.mass_mail.service.announce.message_required')];
         $errors=[]; $sent=[];
         foreach(['announce'=>'.announce','notify'=>'.notify'] as $label=>$cmd){
-            $res = $this->soapExec->execute($cmd.' '.$message,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
+            $res = $this->soapExec->execute($cmd.' '.SoapCommand::text($message),[ 'server_id'=>$this->serverId, 'audit'=>true ]);
             if($res['success']) $sent[]=$label; else $errors[]=$label.':'.($res['message'] ?? $res['code'] ?? 'fail');
         }
         $ok = empty($errors);
@@ -114,6 +171,15 @@ class MassMailService
 
         $itemString = $items ? implode(' ', array_map(fn($it)=>$it['id'].':'.$it['qty'], $items)) : '';
 
+        // 一次性提交令牌：同一批内容在时间窗内重复提交（含并发双击）只受理一次。
+        $jobToken = $this->claimBulkJob($action,$subject,$targets,$itemString,$amount);
+        if($jobToken===null){
+            return [
+                'success'=>false,
+                'duplicate'=>true,
+                'message'=>__('app.mass_mail.service.bulk.duplicate_submission',[],'相同内容的群发已在处理中，请确认结果后再提交。'),
+            ];
+        }
 
         $success=0; $fail=0; $errors=[]; $sentNames=[]; $failedNames=[];
         $batches = array_chunk($targets,$this->batchSize);
@@ -124,7 +190,7 @@ class MassMailService
                 try {
                     if($action==='send_mail'){
                         $beforeMailId = $this->latestMailId();
-                        $cmd=sprintf('.send mail %s "%s" "%s"',$name,$subject,$body);
+                        $cmd=sprintf('.send mail %s "%s" "%s"',$name,SoapCommand::quoted($subject),SoapCommand::quoted($body));
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
                         if($res['success']) {
                             $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, null);
@@ -135,7 +201,7 @@ class MassMailService
                     }
                     elseif($action==='send_item'){
                         $beforeMailId = $this->latestMailId();
-                        $cmd=sprintf('.send items %s "%s" "%s" %s',$name,$subject,$body,$itemString);
+                        $cmd=sprintf('.send items %s "%s" "%s" %s',$name,SoapCommand::quoted($subject),SoapCommand::quoted($body),$itemString);
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
                         if($res['success']) {
                             $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, null);
@@ -146,7 +212,7 @@ class MassMailService
                     }
                     elseif($action==='send_gold'){
                         $beforeMailId = $this->latestMailId();
-                        $cmd=sprintf('.send money %s "%s" "%s" %d',$name,$subject,$body,$amount);
+                        $cmd=sprintf('.send money %s "%s" "%s" %d',$name,SoapCommand::quoted($subject),SoapCommand::quoted($body),$amount);
                         $res = $this->soapExec->execute($cmd,[ 'server_id'=>$this->serverId, 'audit'=>true ]);
                         if($res['success']) {
                             $deliveryError = $this->confirmMailDelivery($name, $subject, $beforeMailId, $amount);
@@ -205,7 +271,8 @@ class MassMailService
         $this->logBulk($action,$subject,$itemsSummary,$amount,$total,$success,$fail,$errors,$sentNames,$failedNames);
         Audit::log('massmail',$action,'bulk',[ 'targets'=>$total,'success_count'=>$success,'fail_count'=>$fail,'items'=>$itemsSummary,'amount'=>$amount,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'sample_errors'=>array_slice($errors,0,3), 'server_id'=>$this->serverId ]);
         $this->appendActionLog($action,$success,$fail,0,$amount??0,$subject);
-        return ['success'=>$ok,'message'=>$msg,'success_count'=>$success,'fail_count'=>$fail,'batches'=>$batchTotal,'batch_size'=>$this->batchSize];
+        $this->finishBulkJob($jobToken, $ok ? 'done' : ($success>0 ? 'partial' : 'failed'));
+        return ['success'=>$ok,'message'=>$msg,'success_count'=>$success,'fail_count'=>$fail,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'job_token'=>$jobToken];
     }
 
     public function recentLogs(int $limit=30): array
@@ -315,6 +382,63 @@ class MassMailService
 
     }
 
+    /**
+     * 群发一次性提交令牌：同一批内容在 SUBMIT_WINDOW_SECONDS 内只受理一次。
+     * 唯一键落在 (server_id, fingerprint)，并发提交时只有一条 INSERT 成功，另一条拿到重复键。
+     */
+    private function ensureJobTable(): void
+    {
+        $sql = "CREATE TABLE IF NOT EXISTS {$this->jobTable} (".
+            " id INT AUTO_INCREMENT PRIMARY KEY,".
+            " token CHAR(32) NOT NULL,".
+            " fingerprint CHAR(40) NOT NULL,".
+            " server_id INT NOT NULL DEFAULT 0,".
+            " action VARCHAR(16) NOT NULL,".
+            " subject VARCHAR(120) NOT NULL,".
+            " targets INT NOT NULL DEFAULT 0,".
+            " state VARCHAR(16) NOT NULL DEFAULT 'running',".
+            " created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,".
+            " updated_at TIMESTAMP NULL DEFAULT NULL,".
+            " UNIQUE KEY uniq_job (server_id, fingerprint),".
+            " KEY idx_created (created_at)".
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $this->chars->exec($sql);
+    }
+
+    /**
+     * @return string|null 受理时返回令牌；同一时间窗内已有同内容提交时返回 null
+     */
+    private function claimBulkJob(string $action,string $subject,array $targets,string $itemsRaw,?int $amount): ?string
+    {
+        $token = bin2hex(random_bytes(16));
+        $bucket = (int) floor(time() / self::SUBMIT_WINDOW_SECONDS);
+        $fingerprint = sha1(implode('|', [
+            $this->serverId, $action, mb_strtolower(trim($subject)),
+            implode(',', $targets), $itemsRaw, (string) $amount, (string) $bucket,
+        ]));
+
+        try {
+            $this->chars->exec("DELETE FROM {$this->jobTable} WHERE created_at < (NOW() - INTERVAL 1 DAY)");
+            $st = $this->chars->prepare("INSERT INTO {$this->jobTable}(token,fingerprint,server_id,action,subject,targets,state,created_at) VALUES(?,?,?,?,?,?,'running',NOW())");
+            $st->execute([$token, $fingerprint, $this->serverId, $action, mb_substr($subject,0,120), count($targets)]);
+        } catch (\PDOException $e) {
+            return null;
+        } catch (\Throwable $e) {
+            return $token;
+        }
+
+        return $token;
+    }
+
+    private function finishBulkJob(?string $token,string $state): void
+    {
+        if ($token === null || $token === '') return;
+        try {
+            $st = $this->chars->prepare("UPDATE {$this->jobTable} SET state=?, updated_at=NOW() WHERE token=?");
+            $st->execute([$state, $token]);
+        } catch (\Throwable $e) {  }
+    }
+
     private function logAnnounce(string $content,bool $ok,array $errors): void
     { $st=$this->chars->prepare("INSERT INTO {$this->logTable} (server_id,action,subject,items,item_id,item_name,quantity,amount,targets,success_count,fail_count,success,recipients,sample_errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"); $sample=$errors?implode(' | ',array_slice($errors,0,3)):null; $st->execute([$this->serverId,'announce',mb_substr($content,0,120),null,null,null,null,null,0,$ok?1:0,$ok?0:1,$ok?1:0,null,$sample]); }
 
@@ -421,7 +545,7 @@ class MassMailService
     { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>8000){ $this->itemNameCache=array_slice($this->itemNameCache,-6500,null,true); } $dir=dirname($this->itemCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
 
     private function appendActionLog(string $action,int $successOrCount,int $fail,int $itemId,int $amount,string $subject): void
-    { $user=$_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); \Acme\Panel\Support\LogPath::appendTo($this->actionLogFile, $line, true, 0777); }
+    { $user=\Acme\Panel\Support\Auth::user() ?? 'unknown'; $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); \Acme\Panel\Support\LogPath::appendTo($this->actionLogFile, $line, true, 0777); }
 
     private function migrateAddServerIdColumn(): void
     { try { $chk=$this->chars->query("SHOW COLUMNS FROM {$this->logTable} LIKE 'server_id'"); if(!$chk->fetch()){ $this->chars->exec("ALTER TABLE {$this->logTable} ADD server_id INT NOT NULL DEFAULT 0 AFTER id, ADD KEY idx_server(server_id)"); } }catch(\Throwable $e){} }

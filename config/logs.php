@@ -64,6 +64,27 @@ return [
                     'file' => 'creature_sql.log',
                     'format' => 'pipe_sql',
                 ],
+                'deleted' => [
+                    'label' => 'lang:app.logs.config.modules.creature.types.deleted.label',
+                    'file' => 'creature_deleted.log',
+                    'format' => 'pipe_deleted',
+                ],
+                'actions' => [
+                    'label' => 'lang:app.logs.config.modules.creature.types.actions.label',
+                    'file' => 'creature_actions.log',
+                    'format' => 'json_line',
+                ],
+            ],
+        ],
+        'character' => [
+            'label' => 'lang:app.logs.config.modules.character.label',
+            'description' => 'lang:app.logs.config.modules.character.description',
+            'types' => [
+                'actions' => [
+                    'label' => 'lang:app.logs.config.modules.character.types.actions.label',
+                    'file' => 'character_actions.log',
+                    'format' => 'json_line',
+                ],
             ],
         ],
         'quest' => [

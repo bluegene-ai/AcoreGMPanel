@@ -187,15 +187,15 @@ $capabilityNotice = $__canAll(['aegis.overview', 'aegis.offenses', 'aegis.events
       <table class="table aegis-table">
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.player')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.account')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.cheat')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.stage')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.offense_count')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.tier')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.last_reason')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.last_offense_at')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.offense.columns.actions')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.player')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.account')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.cheat')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.stage')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.offense_count')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.tier')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.last_reason')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.last_offense_at')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.offense.columns.actions')) ?></th>
           </tr>
         </thead>
         <tbody id="aegisOffenseTableBody">
@@ -258,15 +258,15 @@ $capabilityNotice = $__canAll(['aegis.overview', 'aegis.offenses', 'aegis.events
       <table class="table aegis-table">
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.time')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.player')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.account')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.cheat')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.level')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.tag')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.risk')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.position')) ?></th>
-            <th><?= htmlspecialchars(__('app.aegis.event.columns.detail')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.time')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.player')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.account')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.cheat')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.level')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.tag')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.risk')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.position')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.aegis.event.columns.detail')) ?></th>
           </tr>
         </thead>
         <tbody id="aegisEventTableBody">

@@ -86,8 +86,13 @@ class CreatureRepository extends MultiServerRepository
             $ok=$ins->execute(); if($ok){ Audit::log('creature','create',(string)$newId,['copy'=>$copyId]); $row=$this->find($newId); if($row){ $this->appendDeletedLog('CREATE',$newId,Snapshot::buildInsert('creature_template',$row)); } return ['success'=>true,'message'=>Lang::get('app.creature.repository.success.copied',['source'=>$copyId]),'new_id'=>$newId]; }
             return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.copy_failed')];
         }
-        $sql='INSERT INTO creature_template(entry,name,minlevel,maxlevel,faction,npcflag,unit_class,rank,type,scale,healthmodifier,manamodifier,armormodifier,damagemodifier,movementtype,regenhealth,ainame,verifiedbuild) VALUES(:e,:n,1,1,35,0,1,0,7,1,1,1,1,1,0,1,\'SmartAI\',12340)';
-        $st=$this->world->prepare($sql); $ok=$st->execute([':e'=>$newId,':n'=>'New Creature '.$newId]);
+        // 空模板按该库实际存在的列拼 INSERT：不同 AzerothCore 分支的 creature_template 列集不同
+        // （本库 55 列且没有 scale），写死列名会让新建在任何一处缺列时整条失败。
+        $defaults=['name'=>'New Creature '.$newId,'minlevel'=>1,'maxlevel'=>1,'faction'=>35,'npcflag'=>0,'unit_class'=>1,'rank'=>0,'type'=>7,'scale'=>1,'healthmodifier'=>1,'manamodifier'=>1,'armormodifier'=>1,'damagemodifier'=>1,'movementtype'=>0,'regenhealth'=>1,'ainame'=>'SmartAI','verifiedbuild'=>12340];
+        $cols=['entry']; $place=[':entry']; $params=[':entry'=>$newId];
+        foreach($defaults as $col=>$val){ if(!$this->columnExists('creature_template',$col)) continue; $cols[]=$col; $place[]=':'.$col; $params[':'.$col]=$val; }
+        $sql='INSERT INTO creature_template(`'.implode('`,`',$cols).'`) VALUES('.implode(',',$place).')';
+        $st=$this->world->prepare($sql); $ok=$st->execute($params);
         if($ok){ Audit::log('creature','create',(string)$newId,['blank'=>true]); $row=$this->find($newId); if($row){ $this->appendDeletedLog('CREATE',$newId,Snapshot::buildInsert('creature_template',$row)); } return ['success'=>true,'message'=>Lang::get('app.creature.repository.success.created'),'new_id'=>$newId]; }
         return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.create_failed')];
     }
@@ -95,10 +100,61 @@ class CreatureRepository extends MultiServerRepository
     public function delete(int $id): array
     {
         if($id<=0) return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.invalid_id')];
-        $row=$this->find($id);
-        $st=$this->world->prepare('DELETE FROM creature_template WHERE entry=:id'); $st->execute([':id'=>$id]); $cnt=$st->rowCount(); Audit::log('creature','delete',(string)$id,['affected'=>$cnt]);
+        $row=$this->find($id); $cnt=0;
+        try{
+            $this->world->beginTransaction();
+            $st=$this->world->prepare('DELETE FROM creature_template WHERE entry=:id'); $st->execute([':id'=>$id]); $cnt=$st->rowCount();
+            if($cnt>0) $this->deleteDependentRows($id);
+            $this->world->commit();
+        }catch(\Throwable $e){
+            try{ $this->world->rollBack(); }catch(\Throwable $ignored){}
+            return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.sql_exec_error',['error'=>$e->getMessage()])];
+        }
+        Audit::log('creature','delete',(string)$id,['affected'=>$cnt]);
         if($row && $cnt){ $this->appendDeletedLog('DELETE',$id,Snapshot::buildInsert('creature_template',$row)); }
-        return ['success'=>true,'message'=>$cnt?Lang::get('app.creature.repository.success.deleted',['id'=>$id]):Lang::get('app.creature.repository.errors.no_rows_deleted')]; }
+        return ['success'=>true,'message'=>$cnt?Lang::get('app.creature.repository.success.deleted',['id'=>$id]):Lang::get('app.creature.repository.errors.no_rows_deleted')];
+    }
+
+    /**
+     * 模板删除必须连带清理按生物 ID 关联的子表行，否则留下孤儿数据。
+     * 各表的生物键列名不统一（模型/装备表用 CreatureID，addon 用 entry），逐表探测。
+     */
+    private function deleteDependentRows(int $id): void
+    {
+        $tables=[$this->modelTable()];
+        foreach(['creature_template_addon','creature_equip_template'] as $table){
+            if($this->tableExists($table)) $tables[]=$table;
+        }
+        foreach($tables as $table){
+            $column=$this->creatureKeyColumn($table);
+            if($column===null) continue;
+            $st=$this->world->prepare('DELETE FROM `'.$table.'` WHERE `'.$column.'`=:id');
+            $st->execute([':id'=>$id]);
+        }
+    }
+
+    /** 子表的生物键列名不统一，返回第一个存在者。 */
+    private function creatureKeyColumn(string $table): ?string
+    {
+        foreach(['CreatureID','entry'] as $column){
+            if($this->columnExists($table,$column)) return $column;
+        }
+        return null;
+    }
+
+    private function columnExists(string $table,string $column): bool
+    {
+        $st=$this->world->prepare('SELECT 1 FROM information_schema.columns WHERE table_name=:t AND column_name=:c');
+        $st->execute([':t'=>$table,':c'=>$column]);
+        return (bool)$st->fetchColumn();
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $st=$this->world->prepare('SELECT 1 FROM information_schema.tables WHERE table_name=:t');
+        $st->execute([':t'=>$table]);
+        return (bool)$st->fetchColumn();
+    }
 
     public function updatePartial(int $id, array $changes): array
     {
@@ -218,6 +274,5 @@ class CreatureRepository extends MultiServerRepository
     { $file=$this->logsDir().DIRECTORY_SEPARATOR.'creature_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
 
     private function currentUser(): string
-    { return $_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); }
+    { return \Acme\Panel\Support\Auth::user() ?? 'unknown'; }
 }
-

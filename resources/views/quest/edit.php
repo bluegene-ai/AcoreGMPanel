@@ -32,6 +32,9 @@
   <div class="toolbar-line top-line">
     <div class="toolbar-spacer"></div>
     <div class="toolbar-actions primary-actions">
+      <?php if($questEditCapabilities['update']): ?>
+      <button class="btn success" type="button" id="btn-save-quest"><?= htmlspecialchars(__('app.quest.edit.toolbar.save', [], '保存')) ?></button>
+      <?php endif; ?>
       <?php if($questEditCapabilities['logs']): ?>
       <button class="btn outline info" type="button" id="btn-open-quest-log"><?= htmlspecialchars(__('app.quest.edit.toolbar.log')) ?></button>
       <?php endif; ?>
@@ -137,7 +140,6 @@
           <select id="questLogType" class="quest-log-type-select">
             <option value="sql"><?= htmlspecialchars(__('app.quest.log_modal.types.sql')) ?></option>
             <option value="deleted"><?= htmlspecialchars(__('app.quest.log_modal.types.deleted')) ?></option>
-            <option value="actions"><?= htmlspecialchars(__('app.quest.log_modal.types.actions')) ?></option>
           </select>
         </label>
         <button class="btn info outline" type="button" id="btn-refresh-quest-log"><?= htmlspecialchars(__('app.quest.log_modal.refresh')) ?></button>
@@ -155,6 +157,11 @@
 <script type="application/json" data-panel-json data-global="QUEST_META"><?= json_encode(['enums'=>$cfg['enums'],'bitmasks'=>$cfg['bitmasks']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script type="application/json" data-panel-json data-global="FIELD_LABELS"><?= json_encode(array_map(fn($f)=>$f['label']??'', $cfg['fields']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script type="application/json" data-panel-json data-global="QUEST_HASH"><?= json_encode($hash, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
-<script src="<?= asset('js/bootstrap.bundle.min.js') ?>"></script>
-<script src="<?= asset('js/modules/quest_editor_core.js') ?>"></script>
+<script type="application/json" data-panel-json data-global="QUEST_EDITOR_TEXT"><?= json_encode([
+  'saveNoChanges' => __('app.quest.edit.toolbar.save_no_changes', [], '没有需要保存的改动'),
+  'saveSuccess' => __('app.quest.edit.toolbar.save_success', [], '任务已保存'),
+  'saveFailed' => __('app.quest.edit.toolbar.save_failed', [], '保存失败'),
+  'saveFailedWithReason' => __('app.quest.edit.toolbar.save_failed_with_reason', [], '保存失败: :reason'),
+], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script src="<?= ModuleAssets::assetPath('js/modules/quest_editor_core.js') ?>"></script>
 

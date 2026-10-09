@@ -53,13 +53,13 @@
 <div class="logs-summary" id="logsSummaryBox"></div>
 <div class="logs-output">
   <div class="logs-table-wrap">
-    <table class="logs-table">
+    <table class="table table--logs">
       <thead>
         <tr>
-          <th class="logs-col-time"><?= htmlspecialchars(__('app.logs.table.headers.time')) ?></th>
-          <th class="logs-col-server"><?= htmlspecialchars(__('app.logs.table.headers.server')) ?></th>
-          <th class="logs-col-actor"><?= htmlspecialchars(__('app.logs.table.headers.actor')) ?></th>
-          <th><?= htmlspecialchars(__('app.logs.table.headers.summary')) ?></th>
+          <th scope="col" class="logs-col-time"><?= htmlspecialchars(__('app.logs.table.headers.time')) ?></th>
+          <th scope="col" class="logs-col-server"><?= htmlspecialchars(__('app.logs.table.headers.server')) ?></th>
+          <th scope="col" class="logs-col-actor"><?= htmlspecialchars(__('app.logs.table.headers.actor')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.logs.table.headers.summary')) ?></th>
         </tr>
       </thead>
       <tbody id="logsTableBody">

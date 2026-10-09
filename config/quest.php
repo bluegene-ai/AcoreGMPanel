@@ -162,6 +162,8 @@ return [
             'RewardMailTemplateId' => ['label' => 'lang:app.quest.config.fields.form.RewardMailTemplateId.label', 'type' => 'int', 'min' => 0, 'default' => 0],
         ],
     ],
+    // 聚合编辑元数据：只被 QuestAggregateService 消费，而该类当前未接线。
+    // 保留理由见 QuestAggregateService 类头；接线前请按库中实际存在的表逐项降级。
     'metadata' => [
         'template_groups' => [
             'identity' => [

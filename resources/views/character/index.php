@@ -30,6 +30,7 @@
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
 <?php $hasCriteria = $load_all || $name!=='' || $guid>0 || $account!=='' || $levelMin>0 || $levelMax>0 || $filter_online!=='any' || $filter_ban!=='any'; ?>
 <form class="list-filter" method="get" action="">
+  <?php include __DIR__.'/../partials/server_field.php'; ?>
   <div class="list-filter__grid list-filter__grid--fit">
     <label class="list-filter__field list-filter__field--fit-name">
       <span><?= htmlspecialchars(__('app.character.index.search.name_label')) ?></span>
@@ -91,17 +92,11 @@
 </form>
 <?php if($hasCriteria): ?>
   <?php
-    $sortUrl = static function(?string $value): string {
-      $base = \Acme\Panel\Core\Url::to('/character');
-      $qs = $_GET;
-      unset($qs['page'], $qs['server']);
-      if($value === null || $value === ''){
-        unset($qs['sort']);
-      } else {
-        $qs['sort'] = $value;
-      }
-      $query = http_build_query($qs);
-      return $query ? ($base . '?' . $query) : $base;
+    include __DIR__.'/../partials/list_url.php';
+
+    // 排序与分页共用同一个拼装入口，且都带当前区。
+    $sortUrl = static function(?string $value) use ($list_url): string {
+      return $list_url('/character', ['sort' => $value]);
     };
 
     $nextSort = static function(string $column) use ($sort): string {
@@ -114,9 +109,17 @@
       return $asc;
     };
 
-    $isActive = static function(string $column) use ($sort): bool {
+    /** 排序链接的类：颜色之外还要有方向（箭头字形由外观批次美化）。 */
+    $sortAttrs = static function(string $column) use ($sort, $sort_direction): string {
       $cur = (string)$sort;
-      return $cur !== '' && str_starts_with($cur, $column . '_');
+      if($cur === '' || !str_starts_with($cur, $column . '_')) return 'table-sort';
+      return 'table-sort is-active ' . $sort_direction($cur);
+    };
+    $sortArrow = static function(string $column) use ($sort): string {
+      $cur = (string)$sort;
+      if($cur === '' || !str_starts_with($cur, $column . '_')) return '';
+      $arrow = str_ends_with($cur, '_desc') ? '▼' : '▲';
+      return ' <span class="table-sort__dir" aria-hidden="true">' . $arrow . '</span>';
     };
   ?>
   <?php $friendlyTime=function(int $seconds): string {
@@ -180,30 +183,31 @@
     </div>
   </div>
   <?php endif; ?>
-  <table class="table">
+  <div class="table-wrap">
+  <table class="table character-table">
     <thead>
       <tr>
         <?php if($characterCanBulk): ?>
-        <th class="char-select-col"><input type="checkbox" class="js-char-select-all" aria-label="select all"></th>
+        <th scope="col" class="char-select-col"><input type="checkbox" class="js-char-select-all" aria-label="<?= htmlspecialchars(__('app.account.bulk.select_all')) ?>"></th>
         <?php endif; ?>
-        <th><a class="table-sort<?= $isActive('guid')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('guid'))) ?>"><?= htmlspecialchars(__('app.character.index.table.guid')) ?></a></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.name')) ?></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.account')) ?></th>
-        <th><a class="table-sort<?= $isActive('level')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('level'))) ?>"><?= htmlspecialchars(__('app.character.index.table.level')) ?></a></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.class')) ?></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.race')) ?></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.map')) ?></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.zone')) ?></th>
-        <th><a class="table-sort<?= $isActive('online')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('online'))) ?>"><?= htmlspecialchars(__('app.character.index.table.online')) ?></a></th>
-        <th><a class="table-sort<?= $isActive('logout')?' is-active':'' ?>" href="<?= htmlspecialchars($sortUrl($nextSort('logout'))) ?>"><?= htmlspecialchars(__('app.character.index.table.last_logout')) ?></a></th>
-        <th><?= htmlspecialchars(__('app.character.index.table.actions')) ?></th>
+        <th scope="col"><a class="<?= $sortAttrs('guid') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('guid'))) ?>"><?= htmlspecialchars(__('app.character.index.table.guid')) ?><?= $sortArrow('guid') ?></a></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.name')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.account')) ?></th>
+        <th scope="col"><a class="<?= $sortAttrs('level') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('level'))) ?>"><?= htmlspecialchars(__('app.character.index.table.level')) ?><?= $sortArrow('level') ?></a></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.class')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.race')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.map')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.zone')) ?></th>
+        <th scope="col"><a class="<?= $sortAttrs('online') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('online'))) ?>"><?= htmlspecialchars(__('app.character.index.table.online')) ?><?= $sortArrow('online') ?></a></th>
+        <th scope="col"><a class="<?= $sortAttrs('logout') ?>" href="<?= htmlspecialchars($sortUrl($nextSort('logout'))) ?>"><?= htmlspecialchars(__('app.character.index.table.last_logout')) ?><?= $sortArrow('logout') ?></a></th>
+        <th scope="col"><?= htmlspecialchars(__('app.character.index.table.actions')) ?></th>
       </tr>
     </thead>
     <tbody>
     <?php foreach($pager->items as $row): ?>
       <tr>
         <?php if($characterCanBulk): ?>
-        <td><input type="checkbox" class="js-char-select" value="<?= (int)$row['guid'] ?>" aria-label="select"></td>
+        <td><input type="checkbox" class="js-char-select" value="<?= (int)$row['guid'] ?>" aria-label="<?= htmlspecialchars(__('app.character.index.table.select_row', ['name' => (string)$row['name']])) ?>"></td>
         <?php endif; ?>
         <td><?= (int)$row['guid'] ?></td>
         <td><?= character_link((int)$row['guid'], (string)$row['name']) ?></td>
@@ -265,16 +269,13 @@
         </td>
       </tr>
     <?php endforeach; ?>
-    <?php if(!$pager->items): ?><tr><td colspan="<?= $characterCanBulk ? 12 : 11 ?>" class="char-empty-cell">&<?= 'nbsp;' ?><?= htmlspecialchars(__('app.character.index.feedback.empty')) ?></td></tr><?php endif; ?>
+    <?php if(!$pager->items): ?><?php $colspan = $characterCanBulk ? 12 : 11; $label = __('app.character.index.feedback.empty'); $cell_class = 'char-empty-cell'; include __DIR__.'/../components/empty_state.php'; ?><?php endif; ?>
     </tbody>
   </table>
+  </div>
   <?php
     $page=$pager->page; $pages=$pager->pages;
-    $base = \Acme\Panel\Core\Url::to('/character');
-    $qs=$_GET; unset($qs['page'],$qs['server']); if(!empty($qs)){
-      $join = strpos($base,'?')!==false?'&':'?';
-      $base .= $join.http_build_query($qs);
-    }
+    $base = $list_url('/character');
     include __DIR__.'/../components/pagination.php';
   ?>
 <?php endif; ?>

@@ -204,6 +204,20 @@ return [
                     'loading' => 'Loading…',
                     'empty' => 'No mails',
                 ],
+                'money' => [
+                    'units' => [
+                        'gold' => 'g',
+                        'silver' => 's',
+                        'copper' => 'c',
+                    ],
+                ],
+                'errors' => [
+                    'network' => 'Network error, please retry',
+                    'load_failed' => 'Failed to load list',
+                ],
+                'draft' => [
+                    'restored' => 'Restored the unsent filter from your last visit',
+                ],
             ],
         ],
     ],

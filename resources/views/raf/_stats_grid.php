@@ -104,7 +104,7 @@ $rewardLogCards = [
               <?= (int) $rewardLogCard['value'] ?>
             </strong>
           <?php endif; ?>
-          <span class="raf-stat-card__hint"><?= htmlspecialchars($rewardLogCard['hint']) ?><?php if (!empty($rewardLogCard['hint_full'])): ?><span class="panel-hint" title="<?= htmlspecialchars((string) $rewardLogCard['hint_full']) ?>">i</span><?php endif; ?></span>
+          <span class="raf-stat-card__hint"><?= htmlspecialchars($rewardLogCard['hint']) ?><?php if (!empty($rewardLogCard['hint_full'])): ?><?= panel_hint((string) $rewardLogCard['hint_full']) ?><?php endif; ?></span>
           <span class="raf-stat-card__action"><?= htmlspecialchars(__('app.raf.stats.card_open')) ?></span>
         </button>
       <?php endforeach; ?>

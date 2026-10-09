@@ -395,22 +395,22 @@ $bondingOptions = [
         ?>
 
         <div class="au-table-wrap">
-          <table class="au-table" data-au-searchable>
+          <table class="table table--au" data-au-searchable>
             <thead>
               <tr>
-                <th class="au-col-check">
+                <th scope="col" class="au-col-check">
                   <input type="checkbox" data-au-select-all aria-label="<?= htmlspecialchars(__('app.auctionator.listing_detail.select_all')) ?>">
                 </th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.auction_id')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.startbid')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.buyout')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.current_bid')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.bidder')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.listing_detail.expires')) ?></th>
-                <th></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.auction_id')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.startbid')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.buyout')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.current_bid')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.bidder')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.listing_detail.expires')) ?></th>
+                <th scope="col"></th>
               </tr>
             </thead>
             <tbody>
@@ -582,19 +582,19 @@ $bondingOptions = [
         </div>
 
         <div class="au-table-wrap">
-          <table class="au-table" data-au-searchable>
+          <table class="table table--au" data-au-searchable>
             <thead>
               <tr>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.time')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.auction_id')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.item')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.count')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.house')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.seller')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.buyer')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.price')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.kind')) ?></th>
-                <th><?= htmlspecialchars(__('app.auctionator.sales.cut')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.time')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.auction_id')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.item')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.count')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.house')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.seller')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.buyer')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.price')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.kind')) ?></th>
+                <th scope="col"><?= htmlspecialchars(__('app.auctionator.sales.cut')) ?></th>
               </tr>
             </thead>
             <tbody>
@@ -762,8 +762,8 @@ $bondingOptions = [
             </form>
           <?php endif; ?>
           <div class="au-table-wrap">
-            <table class="au-table" data-au-searchable>
-              <thead><tr><th><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th><th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th><th></th></tr></thead>
+            <table class="table table--au" data-au-searchable>
+              <thead><tr><th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.item_id')) ?></th><th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th><th scope="col"></th></tr></thead>
               <tbody>
               <?php foreach (($policy['disabled'] ?? []) as $row): ?>
                 <tr>
@@ -823,15 +823,15 @@ $bondingOptions = [
           <?php endif; ?>
           <?php // 这张表只有 6 列，同样收缩到表格本身，不在卡片右侧留一条空边框 ?>
           <div class="au-table-wrap">
-            <table class="au-table" data-au-searchable>
+            <table class="table table--au" data-au-searchable>
               <thead>
                 <tr>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.class')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.subclass')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.bonding')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.max_count')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.stack_count')) ?></th>
-                  <th></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.class')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.subclass')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.bonding')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.max_count')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.stack_count')) ?></th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
@@ -937,13 +937,13 @@ $bondingOptions = [
         <?php else: ?>
           <?php // 4 列、每格几个字：允许折行，卡片就能贴到并排栅格给的那点宽度 ?>
           <div class="au-table-wrap">
-            <table class="au-table au-table--wrap" data-au-searchable>
+            <table class="table table--au table--au-wrap" data-au-searchable>
               <thead>
                 <tr>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality_items')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.quality_state')) ?></th>
-                  <th></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.quality')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.quality_items')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.quality_state')) ?></th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1057,21 +1057,21 @@ $bondingOptions = [
             </form>
           <?php endif; ?>
           <div class="au-table-wrap">
-            <table class="au-table" data-au-searchable>
+            <table class="table table--au" data-au-searchable>
               <thead>
                 <tr>
                   <?php // 物品 ID 与物品名同格，与挂单明细一致 ?>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.buyout_price')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.listing_totals')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?></th>
-                  <th><?= htmlspecialchars(__('app.auctionator.policy.enabled')) ?></th>
-                  <th></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.item_name')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.mode')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.bid_price')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.buyout_price')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.listing_totals')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.stack')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.hours')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.house')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.owner')) ?></th>
+                  <th scope="col"><?= htmlspecialchars(__('app.auctionator.policy.enabled')) ?></th>
+                  <th scope="col"></th>
                 </tr>
               </thead>
               <tbody>

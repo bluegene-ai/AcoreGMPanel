@@ -6,7 +6,7 @@
 
 namespace Acme\Panel\Http\Controllers\Mail;
 
-use Acme\Panel\Core\{Controller,Request,Response,Lang};
+use Acme\Panel\Core\{Config,Controller,Request,Response,Lang};
 use Acme\Panel\Domain\Mail\MailMutationHydrator;
 use Acme\Panel\Domain\Mail\MailRepository;
 use Acme\Panel\Support\{Auth,Audit,ServerContext,ServerList};
@@ -16,6 +16,21 @@ class MailController extends Controller
     private ?MailRepository $repo = null;
     private ?MailMutationHydrator $mutations = null;
     private ?\Throwable $repoError = null;
+
+    /**
+     * 500 响应体：只有 app.debug 打开时才带异常原文、文件与行号。
+     * 无条件回显会把绝对路径与内部结构交出去，而这条路径在权限检查之前也可能命中。
+     */
+    private function failureBody(string $heading, \Throwable $e): string
+    {
+        $detail = Config::get('app.debug', false)
+            ? '<pre style="white-space:pre-wrap;font-size:12px">'
+                . htmlspecialchars($e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine())
+                . '</pre>'
+            : '';
+
+        return '<h2>' . htmlspecialchars($heading) . '</h2>' . $detail;
+    }
 
     private function mutations(): MailMutationHydrator
     {
@@ -64,23 +79,13 @@ class MailController extends Controller
     public function index(Request $request): Response
     {
         try {
-            if($request->input('debug')==='ping'){
-                return $this->response(200,'PING OK server='.ServerContext::currentId().' time='.date('H:i:s'));
-            }
+            // 权限检查提到最前面：它后面的仓库初始化异常响应会带内部信息。
+            $this->requireListCapability();
 
-
-            foreach(['filter_sender','filter_receiver','filter_subject'] as $fk){
-                $val = $request->input($fk,'');
-                if(is_string($val) && (str_contains($val,'<?') || str_contains($val,'?>'))){
-
-                    $_GET[$fk] = '';
-                }
-            }
             if($this->repoError){
                 $heading = Lang::get('app.mail.errors.init_failed');
-                return $this->response(500,'<h2>'.$heading.'</h2><pre style="white-space:pre-wrap;font-size:12px">'.htmlspecialchars($this->repoError->getMessage().'\n'.$this->repoError->getFile().':'.$this->repoError->getLine()).'</pre>');
+                return $this->response(500, $this->failureBody($heading, $this->repoError));
             }
-            $this->requireListCapability();
 
             $this->switchServerAndRefresh($request, function (): void { $this->repo=new MailRepository(); });
 
@@ -116,7 +121,7 @@ class MailController extends Controller
         } catch(\Throwable $e) {
             error_log('[MAIL_INDEX_FATAL] '.$e->getMessage().' @'.$e->getFile().':'.$e->getLine());
             $heading = Lang::get('app.mail.errors.exception');
-            return $this->response(500,'<h2>'.$heading.'</h2><pre style="white-space:pre-wrap;font-size:12px">'.htmlspecialchars($e->getMessage().'\n'.$e->getFile().':'.$e->getLine())."</pre>");
+            return $this->response(500, $this->failureBody($heading, $e));
         }
     }
 

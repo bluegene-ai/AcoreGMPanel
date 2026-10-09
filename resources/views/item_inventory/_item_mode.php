@@ -32,11 +32,11 @@ $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
     <div class="ii-table-wrap">
       <table class="table" id="iiSearchTable">
         <thead><tr>
-          <th><?= htmlspecialchars(__('app.item_inventory.item.search.table.entry')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.item.search.table.name')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.item.search.table.quality')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.item.search.table.stackable')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.item.search.table.actions')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.item.search.table.entry')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.item.search.table.name')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.item.search.table.quality')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.item.search.table.stackable')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.item.search.table.actions')) ?></th>
         </tr></thead>
         <tbody><tr><td colspan="5" class="text-center muted"><?= htmlspecialchars(__('app.item_inventory.item.search.table.placeholder')) ?></td></tr></tbody>
       </table>
@@ -61,12 +61,12 @@ $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
       <div class="ii-table-wrap">
         <table class="table" id="iiOwnerTable">
           <thead><tr>
-            <th><input type="checkbox" id="iiSelectAll"></th>
-            <th><?= htmlspecialchars(__('app.item_inventory.owners.table.instance')) ?></th>
-            <th><?= htmlspecialchars(__('app.item_inventory.owners.table.character')) ?></th>
-            <th><?= htmlspecialchars(__('app.item_inventory.owners.table.count')) ?></th>
-            <th><?= htmlspecialchars(__('app.item_inventory.owners.table.location')) ?></th>
-            <th><?= htmlspecialchars(__('app.item_inventory.owners.table.container')) ?></th>
+            <th scope="col"><input type="checkbox" id="iiSelectAll"></th>
+            <th scope="col"><?= htmlspecialchars(__('app.item_inventory.owners.table.instance')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.item_inventory.owners.table.character')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.item_inventory.owners.table.count')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.item_inventory.owners.table.location')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.item_inventory.owners.table.container')) ?></th>
           </tr></thead>
           <tbody><tr><td colspan="6" class="text-center muted"><?= htmlspecialchars(__('app.item_inventory.owners.table.placeholder')) ?></td></tr></tbody>
         </table>
@@ -92,7 +92,7 @@ $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
         <label for="iiReplaceEntry"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_label')) ?></label>
         <input type="number" id="iiReplaceEntry" min="1" placeholder="<?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_placeholder')) ?>">
       </div>
-      <div class="muted small"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint')) ?>">i</span></div>
+      <div class="muted small"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint_short')) ?><?= panel_hint(__('app.item_inventory.modal.replace.entry_hint')) ?></div>
       <div id="iiReplaceFeedback" class="panel-flash panel-flash--inline"></div>
     </div>
     <footer class="modal-footer">

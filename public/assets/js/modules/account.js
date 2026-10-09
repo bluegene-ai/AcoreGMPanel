@@ -116,6 +116,13 @@
 	const feedbackManager = panel.feedback && typeof panel.feedback.show === 'function' ? panel.feedback : null;
 	const feedbackTarget = document.querySelector('#account-feedback');
 
+	/** 公共层缺失时的兜底：至少退回原生 confirm，而不是让危险操作静默失败。 */
+	const confirmDialog = typeof panel.confirm === 'function'
+		? panel.confirm.bind(panel)
+		: (options)=> Promise.resolve(window.confirm(String((options && options.message) || '')));
+	const panelPoll = typeof panel.poll === 'function' ? panel.poll.bind(panel) : null;
+	const renderFieldErrors = typeof panel.formErrors === 'function' ? panel.formErrors.bind(panel) : null;
+
 	function flash(message, type = 'info', timeout = 3000){
 		if(feedbackManager && feedbackTarget){
 			const severity = type === 'error' ? 'error' : (type === 'success' ? 'success' : 'info');
@@ -141,28 +148,87 @@
 		}
 	}
 
-	function showModal(title, contentHtml){
-		closeModal();
-		const markup = `<div class="modal-backdrop"><div class="modal-panel"><header><h3>${esc(title)}</h3><button class="modal-close" aria-label="close">&times;</button></header><div class="modal-body"></div><div class="modal-footer modal-footer-right"></div></div></div>`;
-		const wrapper = el(markup);
-		wrapper.querySelector('.modal-body').innerHTML = contentHtml;
-		// 只在点击关闭按钮时关闭，点遮罩不关闭：避免输入过程中误关（输入法回车/误点）
-		wrapper.addEventListener('click', event => {
-			const target = event.target;
-			if(target && target.classList && target.classList.contains('modal-close')){
-				closeModal();
-			}
+	const ACCOUNT_MODAL_ID = 'account-modal';
+	let accountModalRef = null;
+
+	/**
+	 * 弹窗统一走 Panel.Modal：焦点陷阱、Esc 关闭、关闭后焦点归还、点遮罩不误关（表单类）
+	 * 都由公共层负责。本模块只用 account-modal 一个槽位，重复调用不会叠出多层遮罩。
+	 */
+	function showModal(title, contentHtml, options){
+		const opts = options || {};
+		if(!window.Modal){
+			closeModal();
+			const markup = `<div class="modal-backdrop active"><div class="modal-panel"><header><h3>${esc(title)}</h3><button class="modal-close" aria-label="close">&times;</button></header><div class="modal-body"></div><div class="modal-footer modal-footer-right"></div></div></div>`;
+			const wrapper = el(markup);
+			wrapper.querySelector('.modal-body').innerHTML = contentHtml;
+			wrapper.addEventListener('click', event => {
+				const target = event.target;
+				if(target && target.classList && target.classList.contains('modal-close')) closeModal();
+			});
+			document.body.appendChild(wrapper);
+			wrapper.__footerEl = wrapper.querySelector('.modal-footer');
+			return wrapper;
+		}
+		accountModalRef = window.Modal.show({
+			id: ACCOUNT_MODAL_ID,
+			title: title,
+			content: contentHtml,
+			footer: opts.footer === undefined ? '' : opts.footer,
+			width: opts.width || '',
+			closeOnBackdrop: false
 		});
-		wrapper.classList.add('active');
-		document.body.appendChild(wrapper);
+		const wrapper = accountModalRef.el;
+		accountModalRef.footerEl.classList.add('modal-footer', 'modal-footer-right');
+		wrapper.__footerEl = accountModalRef.footerEl;
 		return wrapper;
 	}
 
 	function closeModal(){
-		const modal = document.querySelector('.modal-backdrop');
-		if(modal){
-			modal.remove();
+		const open = accountModalRef ? accountModalRef.el : document.querySelector('.modal-backdrop.active');
+		if(open && open.__poll && typeof open.__poll.stop === 'function') open.__poll.stop();
+		if(accountModalRef){
+			window.Modal.hide(accountModalRef.id);
+			accountModalRef = null;
+			return;
 		}
+		if(open && !window.Modal) open.remove();
+	}
+
+	/** 弹窗是否还开着：Panel.Modal 的元素不会从 DOM 移除，只能看 active 类。 */
+	function modalIsOpen(modal){
+		return !!(modal && modal.classList && modal.classList.contains('active'));
+	}
+
+	/**
+	 * 表单弹窗：公共 Panel.formModal 在 account-modal 槽位里渲染。
+	 * 目标实体在标题与只读回显里都写出来 —— 批量操作时"打错对象"是最贵的错误。
+	 */
+	function openFormModal(options){
+		const opts = options || {};
+		if(typeof panel.formModal !== 'function'){
+			// 公共层缺失时退回本模块的极简弹窗，至少不要让操作无声失败
+			const modal = showModal(opts.title, opts.body, {});
+			return {
+				modal,
+				form: modal.querySelector('form'),
+				showError(){},
+				showFieldErrors(){},
+				setBusy(){},
+				close: closeModal,
+				submit: async ()=>{ if(typeof opts.onSubmit === 'function') await opts.onSubmit(this); }
+			};
+		}
+		return panel.formModal({
+			id: ACCOUNT_MODAL_ID,
+			title: opts.title,
+			body: opts.body,
+			submitLabel: opts.submitLabel || translate('form.submit', 'Save'),
+			cancelLabel: opts.cancelLabel || translate('form.cancel', 'Cancel'),
+			danger: !!opts.danger,
+			width: opts.width || '',
+			onSubmit: opts.onSubmit
+		});
 	}
 
 	/**
@@ -458,9 +524,27 @@
 			.map(el => parseInt(el.value, 10))
 			.filter(v => Number.isFinite(v) && v > 0);
 	}
+	/** 目标账号的只读回显：批量或长列表里最容易搞错的就是"对谁下手"。 */
+	function targetEchoHtml(username, id, extra){
+		const label = translate('form.target', 'Target account');
+		const name = username ? String(username) : '';
+		const idLabel = id ? ` #${esc(id)}` : '';
+		const suffix = extra ? ` <span class="muted small">${esc(extra)}</span>` : '';
+		return `<div class="form-field"><label>${esc(label)}</label>`
+			+ `<div class="account-form-target" data-readonly="1"><strong>${esc(name)}</strong>${idLabel}${suffix}</div></div>`;
+	}
+
 	async function doDeleteAccount(id, username){
-		const confirmMsg = translate('delete.confirm', 'Delete this account?');
-		if(!confirm(confirmMsg)) return;
+		const requireText = String(username || ('#' + id));
+		const ok = await confirmDialog({
+			title: translate('delete.title', 'Delete account'),
+			message: translate('delete.confirm', 'Delete this account? This also deletes every character on it and cannot be undone.'),
+			requireText,
+			requireLabel: translate('delete.require_label', 'Type the account name to confirm'),
+			confirmLabel: translate('actions.delete', 'Delete'),
+			danger: true
+		});
+		if(!ok) return;
 		const res = await request('/account/api/delete', { method: 'POST', body: { id } });
 		if(res && res.success){
 			flash(translate('delete.success', 'Deleted'), 'success');
@@ -470,6 +554,79 @@
 		flash((res && res.message) ? res.message : translate('errors.request_failed', 'Request failed'), 'error');
 	}
 
+	/**
+	 * 封禁表单：时长（预设 + 自定义）+ 理由，目标账号只读回显。
+   * 单账号与批量共用同一确认流程。
+	 */
+	function openBanModal(options){
+		const opts = options || {};
+		const ids = opts.ids || [];
+		const single = ids.length === 1;
+		const targetText = single
+			? (opts.label || ('#' + ids[0]))
+			: translate('ban.bulk_target', ':count selected accounts', { count: ids.length });
+		const durationLabel = translate('ban.duration_label', 'Duration');
+		const customLabel = translate('ban.custom_hours', 'Custom hours (overrides the choice above)');
+		const reasonLabel = translate('ban.reason_label', 'Reason');
+		const defaultReason = translate('ban.default_reason', 'Panel ban');
+		const permanentLabel = translate('ban.permanent', 'Permanent');
+		const presets = [24, 72, 168, 720];
+		const optionsHtml = [`<option value="0">${esc(permanentLabel)}</option>`]
+			.concat(presets.map((hours)=> `<option value="${hours}"${hours === 24 ? ' selected' : ''}>${esc(formatBanDuration(hours * 3600))}</option>`))
+			.join('');
+
+		const body = `<form class="form account-ban-form">`
+			+ targetEchoHtml(targetText, single ? ids[0] : 0, single ? '' : translate('ban.bulk_target_hint', 'The same duration and reason apply to every selected account'))
+			+ `<div class="form-field">`
+			+ `<label for="account-ban-duration">${esc(durationLabel)}</label>`
+			+ `<select name="hours" id="account-ban-duration">${optionsHtml}</select>`
+			+ `<input type="number" name="custom_hours" min="0" max="87600" step="1" placeholder="${esc(customLabel)}">`
+			+ `</div>`
+			+ `<div class="form-field">`
+			+ `<label for="account-ban-reason">${esc(reasonLabel)}</label>`
+			+ `<input type="text" name="reason" id="account-ban-reason" maxlength="255" value="${esc(defaultReason)}" required>`
+			+ `</div>`
+			+ `<div class="form-error account-form-error" hidden></div>`
+			+ `</form>`;
+
+		openFormModal({
+			title: single ? translate('ban.title', 'Ban account') : translate('ban.bulk_title', 'Ban selected accounts'),
+			body,
+			submitLabel: translate('ban.actions.submit', 'Ban'),
+			danger: true,
+			onSubmit: async (ui)=>{
+				const data = ui.form ? new FormData(ui.form) : new FormData();
+				const customRaw = String(data.get('custom_hours') || '').trim();
+				const raw = customRaw !== '' ? customRaw : String(data.get('hours') || '0');
+				const hours = parseInt(raw, 10);
+				const reason = String(data.get('reason') || '').trim() || defaultReason;
+				const errors = [];
+				if(!Number.isFinite(hours) || hours < 0 || hours > 87600){
+					errors.push({ field: customRaw !== '' ? 'custom_hours' : 'hours', message: translate('ban.error_hours', 'Invalid duration') });
+				}
+				if(reason === '') errors.push({ field: 'reason', message: translate('ban.error_reason', 'Please enter a reason') });
+				if(errors.length){ ui.showFieldErrors(errors); return; }
+				ui.setBusy(true, translate('ban.submitting', 'Banning…'));
+				try{
+					const res = opts.apply
+						? await opts.apply({ hours, reason })
+						: await request('/account/api/ban', { method: 'POST', body: { id: ids[0], hours, reason } });
+					if(res && res.success){
+						closeModal();
+						flash(opts.successMessage || translate('ban.success', 'Account banned successfully'), 'success');
+						reloadAccountTable();
+						return;
+					}
+					ui.showError((res && res.message) ? res.message : translate('ban.failure', 'Failed to ban account'));
+				}catch(err){
+					ui.showError(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }));
+				}finally{
+					ui.setBusy(false);
+				}
+			}
+		});
+	}
+
 	async function doBulk(action){
 		const ids = selectedAccountIds();
 		if(!ids.length){
@@ -477,23 +634,32 @@
 			return;
 		}
 		if(action === 'delete'){
-			const confirmMsg = translate('delete.confirm', 'Delete selected accounts?');
-			if(!confirm(confirmMsg)) return;
+			const ok = await confirmDialog({
+				title: translate('bulk.delete_title', 'Delete selected accounts'),
+				message: translate('bulk.delete_confirm', 'Delete the selected accounts? Their characters go with them and this cannot be undone.'),
+				requireText: String(ids.length),
+				requireLabel: translate('bulk.delete_require_label', 'Type the number of selected accounts (:count)', { count: ids.length }),
+				confirmLabel: translate('actions.delete', 'Delete'),
+				danger: true
+			});
+			if(!ok) return;
 		}
-		let hours = 0;
-		let reason = '';
 		if(action === 'ban'){
-			hours = parseInt(prompt(translate('ban.prompt_hours', 'Ban hours (0=permanent):'), '0') || '0', 10);
-			if(!Number.isFinite(hours) || hours < 0){
-				flash(translate('ban.error_hours', 'Invalid hours'), 'error');
-				return;
-			}
-			reason = prompt(translate('ban.prompt_reason', 'Reason:'), translate('ban.default_reason', 'Panel ban')) || '';
+			openBanModal({
+				ids,
+				apply: (payload)=> request('/account/api/bulk', { method: 'POST', body: { action: 'ban', ids, hours: payload.hours, reason: payload.reason } }),
+				successMessage: translate('bulk.ban_success', 'Selected accounts banned')
+			});
+			return;
 		}
 		if(action === 'unban'){
-			if(!confirm(translate('ban.confirm_unban', 'Unban selected accounts?'))) return;
+			const ok = await confirmDialog({
+				message: translate('ban.confirm_unban', 'Unban selected accounts?'),
+				confirmLabel: translate('actions.unban', 'Unban')
+			});
+			if(!ok) return;
 		}
-		const res = await request('/account/api/bulk', { method: 'POST', body: { action, ids, hours, reason } });
+		const res = await request('/account/api/bulk', { method: 'POST', body: { action, ids, hours: 0, reason: '' } });
 		if(res && res.success){
 			flash(`OK: ${res.ok}/${res.requested}`, 'success');
 			reloadAccountTable();
@@ -590,7 +756,8 @@
 				const charName = btn.getAttribute('data-char');
 				if(!charName) return;
 				const confirmMsg = translate('characters.confirm_kick', 'Kick character :name?', { name: charName });
-				if(!confirm(confirmMsg)) return;
+				const proceed = await confirmDialog({ message: confirmMsg, confirmLabel: translate('actions.kick', 'Kick'), danger: true });
+				if(!proceed) return;
 				try{
 					const response = await request('/account/api/kick', { method: 'POST', body: { player: charName } });
 					if(response && response.success){
@@ -602,135 +769,122 @@
 					flash(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }), 'error');
 				}
 			});
+			/**
+			 * 在线状态轮询：公共层 Panel.poll 负责失败退避与隐藏标签页暂停，
+			 * 弹窗关闭（Panel.Modal 只切 active 类，不移除节点）时由 closeModal() 停表。
+			 */
 			const startPolling = () => {
-				if(modal.__pollTimer) return;
-				const intervalMs = 5000;
-				const poll = async () => {
-					if(modal.__pollStop) return;
-					if(!document.body.contains(modal)){
-						modal.__pollStop = true;
-						return;
-					}
-					try{
-						const statusRes = await request(`/account/api/characters-status?id=${encodeURIComponent(id)}`);
-						if(!statusRes || !statusRes.success) throw new Error(statusRes && statusRes.message ? statusRes.message : 'status_failed');
-						const statuses = statusRes.statuses || {};
-						const table = modal.querySelector('table');
-						if(!table) return;
-						table.querySelectorAll('tbody tr').forEach(tr => {
-							const guidCell = tr.querySelector('td');
-							if(!guidCell) return;
-							const guid = parseInt(guidCell.textContent.trim(), 10);
-							if(!guid || !(guid in statuses)) return;
-							const state = statuses[guid];
-							const statusCell = tr.querySelector('td:nth-child(4)');
-							if(!statusCell) return;
-							const kickBtn = statusCell.querySelector('button.action-kick-char');
-							const currentlyOnline = statusCell.querySelector('.status-online-alt') != null;
-							const nowOnline = !!state.online;
-							if(currentlyOnline === nowOnline){
-								if(!nowOnline && kickBtn && !kickBtn.disabled){
-									kickBtn.disabled = true;
-									kickBtn.setAttribute('title', offlineTooltip);
-								}
-								return;
+				if(modal.__poll || !panelPoll) return;
+				modal.__poll = panelPoll(async () => {
+					if(!modalIsOpen(modal)){ modal.__poll.stop(); return; }
+					const statusRes = await request(`/account/api/characters-status?id=${encodeURIComponent(id)}`);
+					if(!statusRes || !statusRes.success) throw new Error(statusRes && statusRes.message ? statusRes.message : 'status_failed');
+					const statuses = statusRes.statuses || {};
+					const table = modal.querySelector('table');
+					if(!table) return;
+					table.querySelectorAll('tbody tr').forEach(tr => {
+						const guidCell = tr.querySelector('td');
+						if(!guidCell) return;
+						const guid = parseInt(guidCell.textContent.trim(), 10);
+						if(!guid || !(guid in statuses)) return;
+						const state = statuses[guid];
+						const statusCell = tr.querySelector('td:nth-child(4)');
+						if(!statusCell) return;
+						const kickBtn = statusCell.querySelector('button.action-kick-char');
+						const currentlyOnline = statusCell.querySelector('.status-online-alt') != null;
+						const nowOnline = !!state.online;
+						if(currentlyOnline === nowOnline){
+							if(!nowOnline && kickBtn && !kickBtn.disabled){
+								kickBtn.disabled = true;
+								kickBtn.setAttribute('title', offlineTooltip);
 							}
-							let badge = statusCell.querySelector('.tag');
-							if(!badge){
-								badge = document.createElement('span');
-								statusCell.prepend(badge);
-							}
-							if(nowOnline){
-								badge.className = 'tag status-online-alt';
-								badge.textContent = onlineLabel;
-								if(kickBtn){
-									kickBtn.disabled = false;
-									kickBtn.removeAttribute('title');
-								}
-							}else{
-								badge.className = 'tag status-offline';
-								badge.textContent = offlineLabel;
-								if(kickBtn){
-									kickBtn.disabled = true;
-									kickBtn.setAttribute('title', offlineTooltip);
-								}
-							}
-						});
-					}catch(err){
-						if(!modal.__pollBackoff){
-							modal.__pollBackoff = true;
-							clearInterval(modal.__pollTimer);
-							modal.__pollTimer = setInterval(poll, 10000);
+							return;
 						}
-					}
-				};
-				modal.__pollTimer = setInterval(poll, intervalMs);
-				poll();
+						let badge = statusCell.querySelector('.tag');
+						if(!badge){
+							badge = document.createElement('span');
+							statusCell.prepend(badge);
+						}
+						if(nowOnline){
+							badge.className = 'tag status-online-alt';
+							badge.textContent = onlineLabel;
+							if(kickBtn){
+								kickBtn.disabled = false;
+								kickBtn.removeAttribute('title');
+							}
+						}else{
+							badge.className = 'tag status-offline';
+							badge.textContent = offlineLabel;
+							if(kickBtn){
+								kickBtn.disabled = true;
+								kickBtn.setAttribute('title', offlineTooltip);
+							}
+						}
+					});
+				}, 5000);
 			};
 			startPolling();
-			const observer = new MutationObserver(() => {
-				if(!document.body.contains(modal)){
-					modal.__pollStop = true;
-					if(modal.__pollTimer) clearInterval(modal.__pollTimer);
-					observer.disconnect();
-				}
-			});
-			observer.observe(document.body, { childList: true });
 		}catch(err){
 			modal.querySelector('.modal-body').innerHTML = `<div class="flash">${esc(translate('characters.fetch_failed', 'Failed to load characters: :message', { message: err.message }))}</div>`;
 		}
 	}
 
 	async function doSetGm(id, username, currentLevel){
-		const promptText = translate('gm.prompt_level', 'Set GM level (0-6):');
-		const value = prompt(promptText, currentLevel || 0);
-		if(value === null) return;
-		const gmLevel = parseInt(value, 10);
-		if(Number.isNaN(gmLevel) || gmLevel < 0 || gmLevel > 6){
-			flash(translate('gm.error_level', 'Invalid GM level'), 'error');
-			return;
-		}
-		try{
-			const res = await request('/account/api/set-gm', { method: 'POST', body: { id, gm: gmLevel } });
-			if(res && res.success){
-				flash(translate('gm.success', 'GM level updated'), 'success');
-				location.reload();
-			}else{
-				flash(translate('gm.failure', 'Failed to update GM level'), 'error');
+		const current = parseInt(currentLevel, 10);
+		const levelLabel = translate('gm.level_label', 'GM level');
+		const levelHint = translate('gm.level_hint', '0 = player, 6 = full administrator');
+		const options = [0,1,2,3,4,5,6].map((level)=>{
+			const selected = (!Number.isFinite(current) ? level === 0 : level === current) ? ' selected' : '';
+			return `<option value="${level}"${selected}>${level}</option>`;
+		}).join('');
+		const body = `<form class="form account-gm-form">`
+			+ targetEchoHtml(username, id)
+			+ `<div class="form-field"><label for="account-gm-level">${esc(levelLabel)}</label>`
+			+ `<select name="gm" id="account-gm-level">${options}</select>`
+			+ `<div class="muted small">${esc(levelHint)}</div></div>`
+			+ `<div class="form-error account-form-error" hidden></div>`
+			+ `</form>`;
+
+		openFormModal({
+			title: translate('gm.title', 'Set GM level'),
+			body,
+			submitLabel: translate('gm.actions.submit', 'Save'),
+			onSubmit: async (ui)=>{
+				const data = ui.form ? new FormData(ui.form) : new FormData();
+				const gmLevel = parseInt(String(data.get('gm') || '0'), 10);
+				if(!Number.isFinite(gmLevel) || gmLevel < 0 || gmLevel > 6){
+					ui.showFieldErrors([{ field: 'gm', message: translate('gm.error_level', 'Invalid GM level') }]);
+					return;
+				}
+				ui.setBusy(true);
+				try{
+					const res = await request('/account/api/set-gm', { method: 'POST', body: { id, gm: gmLevel } });
+					if(res && res.success){
+						closeModal();
+						flash(translate('gm.success', 'GM level updated'), 'success');
+						reloadAccountTable();
+						return;
+					}
+					ui.showError(translate('gm.failure', 'Failed to update GM level'));
+				}catch(err){
+					ui.showError(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }));
+				}finally{
+					ui.setBusy(false);
+				}
 			}
-		}catch(err){
-			flash(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }), 'error');
-		}
+		});
 	}
 
 	async function doBan(id, username){
-		const hoursPrompt = translate('ban.prompt_hours', 'Ban duration in hours (0 = permanent):');
-		const hoursRaw = prompt(hoursPrompt, '24');
-		if(hoursRaw === null) return;
-		const hours = parseInt(hoursRaw, 10);
-		if(Number.isNaN(hours) || hours < 0){
-			flash(translate('ban.error_hours', 'Invalid duration'), 'error');
-			return;
-		}
-		const reasonPrompt = translate('ban.prompt_reason', 'Ban reason:');
-		const defaultReason = translate('ban.default_reason', 'Panel ban');
-		const reason = (prompt(reasonPrompt, defaultReason) || defaultReason).trim();
-		try{
-			const res = await request('/account/api/ban', { method: 'POST', body: { id, hours, reason } });
-			if(res && res.success){
-				flash(translate('ban.success', 'Account banned successfully'), 'success');
-				reloadAccountTable();
-			}else{
-				flash(translate('ban.failure', 'Failed to ban account'), 'error');
-			}
-		}catch(err){
-			flash(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }), 'error');
-		}
+		openBanModal({ ids: [id], label: username || ('#' + id) });
 	}
 
 	async function doUnban(id){
-		const confirmMsg = translate('ban.confirm_unban', 'Unban this account?');
-		if(!confirm(confirmMsg)) return;
+		const ok = await confirmDialog({
+			message: translate('ban.confirm_unban', 'Unban this account?'),
+			confirmLabel: translate('actions.unban', 'Unban')
+		});
+		if(!ok) return;
 		try{
 			const res = await request('/account/api/unban', { method: 'POST', body: { id } });
 			if(res && res.success){
@@ -745,35 +899,49 @@
 	}
 
 	async function doChangePass(id, username){
-		const newPrompt = translate('password.prompt_new', 'Enter new password (min 8 chars):');
-		const password = prompt(newPrompt);
-		if(password === null) return;
-		if(password === ''){
-			flash(translate('password.error_empty', 'Password cannot be empty'), 'error');
-			return;
-		}
-		if(password.length < 8){
-			flash(translate('password.error_length', 'Password must be at least 8 characters'), 'error');
-			return;
-		}
-		const confirmPrompt = translate('password.prompt_confirm', 'Re-enter new password:');
-		const repeat = prompt(confirmPrompt);
-		if(repeat === null) return;
-		if(password !== repeat){
-			flash(translate('password.error_mismatch', 'Passwords do not match'), 'error');
-			return;
-		}
-		try{
-			const res = await request('/account/api/change-password', { method: 'POST', body: { id, username, password } });
-			if(res && res.success){
-				flash(translate('password.success', 'Password updated successfully (previous sessions invalidated)'), 'success');
-			}else{
-				const message = res && res.message ? res.message : translate('password.failure_generic', 'Unknown error');
-				flash(translate('password.failure', 'Failed to change password: :message', { message }), 'error');
+		const newLabel = translate('password.new_label', 'New password');
+		const confirmLabel = translate('password.confirm_label', 'Repeat new password');
+		const hint = translate('password.hint', 'At least 8 characters. Existing sessions are invalidated.');
+		const body = `<form class="form account-password-form">`
+			+ targetEchoHtml(username, id)
+			+ `<div class="form-field"><label for="account-new-password">${esc(newLabel)}</label>`
+			+ `<input type="password" name="password" id="account-new-password" minlength="8" autocomplete="new-password" required></div>`
+			+ `<div class="form-field"><label for="account-new-password-confirm">${esc(confirmLabel)}</label>`
+			+ `<input type="password" name="password_confirm" id="account-new-password-confirm" minlength="8" autocomplete="new-password" required></div>`
+			+ `<div class="muted small">${esc(hint)}</div>`
+			+ `<div class="form-error account-form-error" hidden></div>`
+			+ `</form>`;
+
+		openFormModal({
+			title: translate('password.title', 'Change password'),
+			body,
+			submitLabel: translate('password.actions.submit', 'Update password'),
+			onSubmit: async (ui)=>{
+				const data = ui.form ? new FormData(ui.form) : new FormData();
+				const password = String(data.get('password') || '');
+				const repeat = String(data.get('password_confirm') || '');
+				const errors = [];
+				if(password === '') errors.push({ field: 'password', message: translate('password.error_empty', 'Password cannot be empty') });
+				else if(password.length < 8) errors.push({ field: 'password', message: translate('password.error_length', 'Password must be at least 8 characters') });
+				if(repeat !== password) errors.push({ field: 'password_confirm', message: translate('password.error_mismatch', 'Passwords do not match') });
+				if(errors.length){ ui.showFieldErrors(errors); return; }
+				ui.setBusy(true, translate('password.submitting', 'Updating…'));
+				try{
+					const res = await request('/account/api/change-password', { method: 'POST', body: { id, username, password } });
+					if(res && res.success){
+						closeModal();
+						flash(translate('password.success', 'Password updated successfully (previous sessions invalidated)'), 'success');
+						return;
+					}
+					const message = res && res.message ? res.message : translate('password.failure_generic', 'Unknown error');
+					ui.showError(translate('password.failure', 'Failed to change password: :message', { message }));
+				}catch(err){
+					ui.showError(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }));
+				}finally{
+					ui.setBusy(false);
+				}
 			}
-		}catch(err){
-			flash(translate('errors.request_failed_message', 'Request failed: :message', { message: err.message }), 'error');
-		}
+		});
 	}
 
 	async function doUpdateEmail(id, username){
@@ -820,7 +988,8 @@
 			const data = new FormData(form);
 			const email = (data.get('email') || '').toString().trim();
 			if(!email || !email.includes('@')){
-				showError(translate('email.invalid', 'Invalid email'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'email', message: translate('email.invalid', 'Invalid email') }]);
+				else showError(translate('email.invalid', 'Invalid email'));
 				return;
 			}
 			showError('');
@@ -902,15 +1071,18 @@
 			const password = (data.get('password') || '').toString();
 			const confirmPassword = (data.get('password_confirm') || '').toString();
 			if(!newUsername || newUsername.length > 20){
-				showError(translate('rename.invalid_username', 'Invalid username'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'username', message: translate('rename.invalid_username', 'Invalid username') }]);
+				else showError(translate('rename.invalid_username', 'Invalid username'));
 				return;
 			}
 			if(password.length < 8){
-				showError(translate('rename.invalid_password', 'Password must be at least 8 characters'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'password', message: translate('rename.invalid_password', 'Password must be at least 8 characters') }]);
+				else showError(translate('rename.invalid_password', 'Password must be at least 8 characters'));
 				return;
 			}
 			if(password !== confirmPassword){
-				showError(translate('rename.password_mismatch', 'Passwords do not match'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'password_confirm', message: translate('rename.password_mismatch', 'Passwords do not match') }]);
+				else showError(translate('rename.password_mismatch', 'Passwords do not match'));
 				return;
 			}
 			showError('');
@@ -1024,15 +1196,18 @@
 			const email = (data.get('email') || '').toString().trim();
 			const gmlevel = parseInt((data.get('gmlevel') || '0').toString(), 10) || 0;
 			if(username === ''){
-				showError(translate('create.errors.username_required', 'Please enter a username'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'username', message: translate('create.errors.username_required', 'Please enter a username') }]);
+				else showError(translate('create.errors.username_required', 'Please enter a username'));
 				return;
 			}
 			if(password.length < 8){
-				showError(translate('create.errors.password_length', 'Password must be at least 8 characters'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'password', message: translate('create.errors.password_length', 'Password must be at least 8 characters') }]);
+				else showError(translate('create.errors.password_length', 'Password must be at least 8 characters'));
 				return;
 			}
 			if(password !== confirmPassword){
-				showError(translate('create.errors.password_mismatch', 'Passwords do not match'));
+				if(renderFieldErrors) renderFieldErrors(form, [{ field: 'password_confirm', message: translate('create.errors.password_mismatch', 'Passwords do not match') }]);
+				else showError(translate('create.errors.password_mismatch', 'Passwords do not match'));
 				return;
 			}
 			showError('');
@@ -1380,6 +1555,36 @@
 
 	console.log('[account] module ready');
 	initRowMenus();
+	initHotkeys();
 	fillIpLocations(document);
+
+	/**
+	 * 页面级快捷键：`/` 聚焦关键字框、Esc 清空各筛选框、Ctrl+Enter 提交查询。
+	 * 弹窗打开时不抢键（Esc 留给弹窗）。
+	 */
+	function initHotkeys(){
+		if(typeof panel.hotkeys !== 'function') return;
+		const filterForm = document.querySelector('form.list-filter');
+		if(!filterForm) return;
+		const keyword = filterForm.querySelector('input[name="search_value"], input[name="search_type"]');
+		const hasModalOpen = ()=> !!document.querySelector('.modal-backdrop.active');
+		panel.hotkeys({
+			'/': ()=>{ if(hasModalOpen()) return; const field = filterForm.querySelector('input[name="search_value"]'); if(field){ field.focus(); field.select(); } },
+			'escape': ()=>{
+				if(hasModalOpen()) return;
+				clearFilterFields(filterForm);
+				// Esc 在输入框里也要有反应：清空之后再取消焦点，否则用户会以为快捷键坏了
+				if(document.activeElement && filterForm.contains(document.activeElement)) document.activeElement.blur();
+			},
+			'ctrl+enter': ()=>{ if(hasModalOpen()) return; filterForm.requestSubmit ? filterForm.requestSubmit() : filterForm.submit(); }
+		});
+	}
+
+	function clearFilterFields(form){
+		['search_value', 'exclude_username'].forEach((name)=>{
+			const field = form.querySelector('[name="' + name + '"]');
+			if(field && field.value !== '') field.value = '';
+		});
+	}
 })();
 

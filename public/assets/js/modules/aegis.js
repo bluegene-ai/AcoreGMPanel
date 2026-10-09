@@ -8,7 +8,7 @@
   const opts = data.options || {};
   const defaults = data.defaults || {};
   const capabilities = window.PANEL_CAPABILITIES || {};
-  const can = key => capabilities[key] !== false;
+  const can = key => capabilities[key] === true;
 
   const searchParams = new URLSearchParams(location.search);
   const currentServer = searchParams.get('server') || '';

@@ -380,19 +380,14 @@
           showFlash(translate('codes.generated.copy_empty', 'Nothing to copy yet'), false);
           return;
         }
-        try {
-          if(navigator.clipboard && navigator.clipboard.writeText){
-            await navigator.clipboard.writeText(text);
-          } else {
-            output.removeAttribute('readonly');
-            output.select();
-            document.execCommand('copy');
-            output.setAttribute('readonly', 'readonly');
-          }
-          showFlash(translate('codes.generated.copied', 'Copied to clipboard'), true);
-        } catch(error){
-          showFlash(translate('codes.generated.copy_failed', 'Copy failed, please select manually'), false);
-        }
+        // 非安全上下文（http 内网）下 navigator.clipboard 不可用，降级与提示统一由 Panel.copy 负责
+        const copied = await Panel.copy(text);
+        showFlash(
+          copied
+            ? translate('codes.generated.copied', 'Copied to clipboard')
+            : translate('codes.generated.copy_failed', 'Copy failed, please select manually'),
+          copied
+        );
       });
     }
 

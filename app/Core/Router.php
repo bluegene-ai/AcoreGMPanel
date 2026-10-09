@@ -45,13 +45,15 @@ class Router
 	public function dispatch(Request $request): Response
 	{
 		$uri = rtrim($request->uri, '/') ?: '/';
+		$allowedMethods = [];
 
 		foreach ($this->routes as $route) {
-			if (!in_array($request->method, $route['methods'], true)) {
+			if ($route['path'] !== $uri) {
 				continue;
 			}
 
-			if ($route['path'] !== $uri) {
+			if (!in_array($request->method, $route['methods'], true)) {
+				$allowedMethods = array_merge($allowedMethods, $route['methods']);
 				continue;
 			}
 
@@ -81,7 +83,20 @@ class Router
 			return $runner($request);
 		}
 
-		return new Response('<h1>404 Not Found</h1>', 404);
+		// 路径命中但方法不符 → 405；路径不存在 → 404。
+		// API/XHR 一律回 JSON：否则前端只能靠解析失败猜服务端到底发生了什么。
+		$status = $allowedMethods === [] ? 404 : 405;
+		if ($status === 405) {
+			$methods = array_values(array_unique($allowedMethods));
+			header('Allow: ' . implode(', ', $methods));
+		}
+		if (Request::expectsJsonResponseForServer($request->server, $uri)) {
+			return Response::json([
+				'success' => false,
+				'error' => $status === 405 ? 'method_not_allowed' : 'not_found',
+			], $status);
+		}
+		return new Response('<h1>' . $status . ' ' . ($status === 405 ? 'Method Not Allowed' : 'Not Found') . '</h1>', $status);
 	}
 
 	public static function loadAndDispatch(Request $request): Response

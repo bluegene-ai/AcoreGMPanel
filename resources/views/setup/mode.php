@@ -171,7 +171,7 @@ $jsLocale = [
             <?= htmlspecialchars($card['title']) ?>
             <span class="mode-card__badge"><?= htmlspecialchars($card['badge']) ?></span>
           </div>
-          <p class="mode-card__desc"><?= htmlspecialchars($card['desc']) ?><span class="panel-hint" title="<?= htmlspecialchars((string) $card['desc_hint']) ?>">i</span></p>
+          <p class="mode-card__desc"><?= htmlspecialchars($card['desc']) ?><?= panel_hint((string) $card['desc_hint']) ?></p>
         </label>
       <?php endforeach; ?>
     </div>
@@ -196,7 +196,7 @@ $jsLocale = [
     <div class="setup-section__header">
       <div>
         <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['auth']['title'] ?? __('app.setup.mode.section.auth.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.mode.section.auth.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?>">i</span></p>
+        <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.mode.section.auth.hint_short')) ?><?= panel_hint((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?></p>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['auth']['pill'] ?? __('app.setup.mode.section.auth.pill'))) ?></span>
     </div>
@@ -240,7 +240,7 @@ $jsLocale = [
   </section>
 
   <footer class="setup-footer">
-    <div class="setup-disclaimer"><?= htmlspecialchars(__('app.setup.mode.footer.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?>">i</span></div>
+    <div class="setup-disclaimer"><?= htmlspecialchars(__('app.setup.mode.footer.hint_short')) ?><?= panel_hint((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?></div>
     <div class="setup-actions">
       <button class="btn primary" type="submit"><?= htmlspecialchars((string)($footer['submit'] ?? __('app.setup.mode.footer.submit'))) ?></button>
       <a href="<?= url('/setup?step=1') ?>" class="btn secondary"><?= htmlspecialchars((string)($footer['back'] ?? __('app.setup.mode.footer.back'))) ?></a>

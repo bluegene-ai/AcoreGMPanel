@@ -43,6 +43,8 @@
     return text;
   }
 
+  const editorText = window.QUEST_EDITOR_TEXT || {};
+
   const STRINGS = {
     apiNotReady: translate('api.not_ready', 'Panel API is not ready'),
     logsLoading: translate('logs.loading_placeholder', '-- Loading... --'),
@@ -66,6 +68,10 @@
     editorExecFailedWithReason: reason => translate('editor.exec_failed_with_reason', 'Execution failed: :reason', { reason: String(reason ?? '') }),
     editorCopySqlSuccess: translate('editor.copy_sql_success', 'SQL copied'),
     editorCopySqlFailedWithReason: reason => translate('editor.copy_sql_failed_with_reason', 'Copy failed: :reason', { reason: String(reason ?? '') }),
+    saveNoChanges: translate('editor.save_no_changes', editorText.saveNoChanges || 'No changes to save'),
+    saveSuccess: translate('editor.save_success', editorText.saveSuccess || 'Saved'),
+    saveFailed: translate('editor.save_failed', editorText.saveFailed || 'Failed to save'),
+    saveFailedWithReason: reason => translate('editor.save_failed_with_reason', editorText.saveFailedWithReason || 'Failed to save: :reason', { reason: String(reason ?? '') }),
     editorDiffCount: count => translate('editor.diff_count', ':count changes', { count }),
     editorRowsLabel: translate('editor.rows_label', 'Rows:'),
     editorResetPrompt: translate('editor.reset_prompt', 'Reset all changes and reload current database row?'),
@@ -350,6 +356,44 @@
       }catch(err){
         const reason = err?.message || err;
         questNotify(STRINGS.editorExecFailedWithReason(reason), 'error', { duration: 6000 });
+      }
+    });
+
+    const btnSaveQuest = document.getElementById('btn-save-quest');
+    btnSaveQuest?.addEventListener('click', async ()=>{
+      if(!Core) return;
+      const dirty = Core.getDirtyMap();
+      const changes = {};
+      Object.keys(dirty || {}).forEach(field=>{
+        if(field === 'ID' || field === 'template.ID') return;
+        const record = dirty[field] || {};
+        const next = record.new;
+        changes[field] = (next === null || typeof next === 'undefined') ? '' : next;
+      });
+      if(!Object.keys(changes).length){ questNotify(STRINGS.saveNoChanges, 'info'); return; }
+      const id = parseInt(Core.get('ID'), 10) || 0;
+      if(!id){ questNotify(STRINGS.saveFailed, 'error', { duration: 6000 }); return; }
+      const started = performance.now();
+      try{
+        const res = await apiPost('/quest/api/save', { id, changes });
+        const elapsed = (performance.now() - started).toFixed(1);
+        const saved = !!(res && res.success);
+        if(saved){
+          questNotify(STRINGS.saveSuccess, 'success');
+          try{
+            const rf = await apiPost('/quest/api/fetch', { id });
+            if(rf && rf.success && rf.quest){ applyRemoteRow(rf.quest); Core.rebaseline(rf.quest); }
+          }catch(err){
+            console.warn(STRINGS.refreshFailedConsole, err);
+          }
+          refreshQuestLogs('sql');
+        } else {
+          questNotify(res?.message || STRINGS.saveFailed, 'error', { duration: 6000 });
+        }
+        showExecStatus(saved, 'SAVE', elapsed, Array.isArray(res?.changed) ? res.changed.length : undefined);
+      }catch(err){
+        const reason = err?.message || err;
+        questNotify(STRINGS.saveFailedWithReason(reason), 'error', { duration: 6000 });
       }
     });
 

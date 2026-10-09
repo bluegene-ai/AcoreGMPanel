@@ -58,6 +58,18 @@ return array (
   array (
     'modules' => 
     array (
+      'account' => 
+      array (
+        'label' => 'Accounts',
+        'description' => 'Account management action records.',
+        'types' => 
+        array (
+          'actions' => 
+          array (
+            'label' => 'Action records',
+          ),
+        ),
+      ),
       'item_inventory' => 
       array (
         'label' => 'Items / Inventory',
@@ -67,6 +79,114 @@ return array (
           'actions' => 
           array (
             'label' => 'Action records',
+          ),
+        ),
+      ),
+      'item' => 
+      array (
+        'label' => 'Items',
+        'description' => 'Item edit and action logs.',
+        'types' => 
+        array (
+          'sql' => 
+          array (
+            'label' => 'SQL execution',
+          ),
+          'actions' => 
+          array (
+            'label' => 'Action records',
+          ),
+          'deleted' => 
+          array (
+            'label' => 'Delete records',
+          ),
+        ),
+      ),
+      'creature' => 
+      array (
+        'label' => 'Creatures',
+        'description' => 'Creature edit SQL, delete, and action records.',
+        'types' => 
+        array (
+          'sql' => 
+          array (
+            'label' => 'SQL execution',
+          ),
+          'deleted' => 
+          array (
+            'label' => 'Delete records',
+          ),
+          'actions' => 
+          array (
+            'label' => 'Action records',
+          ),
+        ),
+      ),
+      'character' => 
+      array (
+        'label' => 'Characters',
+        'description' => 'Character edit action records.',
+        'types' => 
+        array (
+          'actions' => 
+          array (
+            'label' => 'Action records',
+          ),
+        ),
+      ),
+      'quest' => 
+      array (
+        'label' => 'Quests',
+        'description' => 'Quest edit logs.',
+        'types' => 
+        array (
+          'sql' => 
+          array (
+            'label' => 'SQL execution',
+          ),
+          'deleted' => 
+          array (
+            'label' => 'Delete records',
+          ),
+        ),
+      ),
+      'mail' => 
+      array (
+        'label' => 'Mail',
+        'description' => 'Mail SQL and delete logs.',
+        'types' => 
+        array (
+          'sql' => 
+          array (
+            'label' => 'SQL execution',
+          ),
+          'deleted' => 
+          array (
+            'label' => 'Delete records',
+          ),
+        ),
+      ),
+      'massmail' => 
+      array (
+        'label' => 'Mass mail',
+        'description' => 'Mass mail execution records.',
+        'types' => 
+        array (
+          'actions' => 
+          array (
+            'label' => 'Action records',
+          ),
+        ),
+      ),
+      'server' => 
+      array (
+        'label' => 'Server',
+        'description' => 'Server switch and debug output.',
+        'types' => 
+        array (
+          'debug' => 
+          array (
+            'label' => 'Debug log',
           ),
         ),
       ),

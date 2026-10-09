@@ -162,6 +162,11 @@ return [
             'log' => 'View logs',
             'execute_sql' => 'Run SQL',
             'copy_sql' => 'Copy SQL',
+            'save' => 'Save',
+            'save_no_changes' => 'Nothing to save',
+            'save_success' => 'Quest saved',
+            'save_failed' => 'Save failed',
+            'save_failed_with_reason' => 'Save failed: :reason',
         ],
         'diff' => [
             'title' => 'Diff SQL preview',

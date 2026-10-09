@@ -815,8 +815,12 @@ return array (
         'list' => 
         array (
           'confirm_delete' => 'Delete item #:id?',
+          'delete_title' => 'Delete item',
+          'delete_require_label' => 'Type the item name or entry to confirm',
+          'delete_submit' => 'Delete',
           'delete_success' => 'Item deleted',
           'delete_failed' => 'Failed to delete item',
+          'delete_failed_network' => 'Network error, please retry',
           'delete_failed_with_reason' => 'Failed to delete item: :reason',
           'subclass' => 
           array (
@@ -885,6 +889,9 @@ return array (
           'failed' => 'Save failed',
           'failed_with_reason' => 'Save failed: :reason',
           'confirm_delete_item' => 'Delete item #:id?',
+          'delete_title' => 'Delete item',
+          'delete_require_label' => 'Type the item name or entry to confirm',
+          'delete_submit' => 'Delete',
           'delete_success' => 'Item deleted',
           'delete_failed' => 'Failed to delete item',
         ),

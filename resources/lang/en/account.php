@@ -43,6 +43,7 @@ return array (
     'last_ip' => 'Last IP',
     'ip_location' => 'IP location',
     'actions' => 'Actions',
+    'select_row' => 'Select account :name',
     'view_characters' => 'View this account\'s characters in character management',
   ),
   'status' => 
@@ -104,6 +105,12 @@ return array (
     'delete' => 'Delete',
     'more' => 'More',
   ),
+  'form' => 
+  array (
+    'target' => 'Target account',
+    'cancel' => 'Cancel',
+    'submit' => 'Save',
+  ),
   'bulk' => 
   array (
     'select_all' => 'Select all',
@@ -111,10 +118,16 @@ return array (
     'ban' => 'Bulk ban',
     'unban' => 'Bulk unban',
     'no_selection' => 'Select at least one account first',
+    'delete_title' => 'Delete selected accounts',
+    'delete_confirm' => 'Delete the selected accounts? Their characters go with them and this cannot be undone.',
+    'delete_require_label' => 'Type the number of selected accounts (:count) to confirm',
+    'ban_success' => 'Selected accounts banned',
   ),
   'delete' => 
   array (
+    'title' => 'Delete account',
     'confirm' => 'Delete this account? All characters on the account are removed as well and this cannot be undone.',
+    'require_label' => 'Type the account name to confirm',
     'success' => 'Deleted',
     'blocked_online' => 'The account still has an online character (:name); kick it offline first.',
     'characters_failed' => 'Failed to delete characters: :message',
@@ -141,6 +154,19 @@ End: :end',
     'error_hours' => 'Invalid duration',
     'prompt_reason' => 'Ban reason:',
     'default_reason' => 'Panel ban',
+    'title' => 'Ban account',
+    'bulk_title' => 'Ban selected accounts',
+    'bulk_target' => ':count selected accounts',
+    'bulk_target_hint' => 'The same duration and reason apply to every selected account',
+    'duration_label' => 'Duration',
+    'custom_hours' => 'Custom hours (overrides the choice above)',
+    'reason_label' => 'Reason',
+    'error_reason' => 'Please enter a reason',
+    'submitting' => 'Banning…',
+    'actions' => 
+    array (
+      'submit' => 'Ban',
+    ),
     'success' => 'Account banned successfully',
     'failure' => 'Failed to ban account',
     'confirm_unban' => 'Unban this account?',
@@ -182,6 +208,13 @@ End: :end',
     'error_level' => 'Invalid GM level',
     'success' => 'GM level updated',
     'failure' => 'Failed to update GM level',
+    'title' => 'Set GM level',
+    'level_label' => 'GM level',
+    'level_hint' => '0 = player, 6 = full administrator',
+    'actions' => 
+    array (
+      'submit' => 'Save',
+    ),
   ),
   'password' => 
   array (
@@ -193,6 +226,15 @@ End: :end',
     'success' => 'Password updated successfully (previous sessions invalidated)',
     'failure' => 'Failed to change password: :message',
     'failure_generic' => 'Unknown error',
+    'title' => 'Change password',
+    'new_label' => 'New password',
+    'confirm_label' => 'Repeat new password',
+    'hint' => 'At least 8 characters. Existing sessions are invalidated.',
+    'submitting' => 'Updating…',
+    'actions' => 
+    array (
+      'submit' => 'Update password',
+    ),
   ),
   'email' => 
   array (

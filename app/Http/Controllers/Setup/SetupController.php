@@ -440,6 +440,9 @@ class SetupController
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
+        if (($guard = $this->guardNotInstalled()) !== null) {
+            return $guard;
+        }
         $action = $req->post['action'] ?? '';
         if (!Csrf::verify($req->post['_csrf'] ?? null)) {
             return Response::json(['success' => false, 'message' => 'CSRF invalid'], 419);
@@ -451,6 +454,25 @@ class SetupController
             'admin_save' => $this->handleAdminSave($req),
             default => Response::json(['success' => false, 'message' => 'Unknown action']),
         };
+    }
+
+    /**
+     * 安装态守卫：面板已安装时拒绝一切安装写入口与探针。
+     *
+     * index() 早就有这个判断，但 post() 与 apiRealms() 没有 —— apiRealms 会用请求里的
+     * host/port/user/pass 直接 new PDO()，等于把安装器留成了公开的任意 MySQL 连接器。
+     */
+    private function guardNotInstalled(): ?Response
+    {
+        $installed = is_file($this->generatedInstallLockPath()) && Config::get('auth.admin.username');
+        if (!$installed) {
+            return null;
+        }
+
+        return Response::json([
+            'success' => false,
+            'message' => Lang::get('app.setup.flash.already_installed'),
+        ], 403);
     }
 
     private function handleModeSave(Request $req): Response
@@ -540,6 +562,13 @@ class SetupController
             return Response::json([
                 'success' => false,
                 'message' => Lang::get('app.setup.admin.errors.password_mismatch'),
+            ]);
+        }
+        // 安装器是唯一能设定面板口令的入口，这里必须有强度下限。
+        if (strlen($pass) < 8) {
+            return Response::json([
+                'success' => false,
+                'message' => Lang::get('app.setup.admin.errors.password_too_short'),
             ]);
         }
 
@@ -942,6 +971,9 @@ class SetupController
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
+        }
+        if (($guard = $this->guardNotInstalled()) !== null) {
+            return $guard;
         }
 
         $source = $req->method === 'POST' ? $req->post : $req->get;

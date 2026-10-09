@@ -489,6 +489,9 @@ return [
     'js' => [
         'modules' => [
             'auctionator' => [
+                'errors' => [
+                    'network' => 'Network error, please retry',
+                ],
                 'confirm' => [
                     'disabled_remove' => 'Remove this item from the seller blacklist?',
                     'itemclass_delete' => 'Delete this class row? The class will no longer be picked by the seller.',

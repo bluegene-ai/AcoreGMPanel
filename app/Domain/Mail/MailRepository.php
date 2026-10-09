@@ -8,6 +8,7 @@ namespace Acme\Panel\Domain\Mail;
 
 use PDO;
 use Acme\Panel\Support\Audit;
+use Acme\Panel\Support\Auth;
 use Acme\Panel\Domain\Support\ReadModelCache;
 use Acme\Panel\Domain\Support\MultiServerRepository;
 use Acme\Panel\Support\ServerContext;
@@ -222,7 +223,7 @@ class MailRepository extends MultiServerRepository
     private function logsDir(): string
     { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
     private function currentUser(): string
-    { return $_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown'); }
+    { return Auth::user() ?? 'unknown'; }
     private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
     { $file=$this->logsDir().DIRECTORY_SEPARATOR.'mail_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
     private function appendDeletedLog(string $action,int $id,string $sql): void

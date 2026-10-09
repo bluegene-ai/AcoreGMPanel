@@ -124,7 +124,7 @@ final class GameNameResolver
         'school_mask' => 225,
     ];
 
-    private const DBC_ROW_CACHE_VERSION = 1;
+    private const DBC_ROW_CACHE_VERSION = 2;
 
     /** 客户端 16 个语种的标准顺序（DBC 里以此顺序连续存放字符串） */
     private const DBC_LOCALE_ORDER = [
@@ -139,8 +139,18 @@ final class GameNameResolver
     /** @var array<string, array<int, array<string,int>>> 按需数值表（表 + 字段集合 + 规则版本） */
     private static array $rowCache = [];
 
+    /** @var array<string, array<int, string>> 按 id 直查到的名字（物品/任务的按需路径） */
+    private static array $nameById = [];
+
+    /** @var array<string, array<int, true>> 按 id 查询后确认无名，同一请求内不再回库 */
+    private static array $nameMisses = [];
+
     /**
      * 批量解析，返回 id => name（未解析到的 id 不在结果里）。
+     *
+     * 物品/任务走 `WHERE id IN (...)` 直查：这两个类型的基础表有 46k / 9.5k 行，
+     * 整表映射（1.4 MB JSON）对"只问几个名字"的批量场景不划算。其余类型仍走名字映射。
+     *
      * @param int[] $ids
      * @return array<int, string>
      */
@@ -157,6 +167,10 @@ final class GameNameResolver
 
         if ($ids === []) {
             return [];
+        }
+
+        if ($type === 'item' || $type === 'quest') {
+            return self::namesByIds($type, $ids);
         }
 
         $map = self::map($type);
@@ -222,6 +236,194 @@ final class GameNameResolver
     {
         self::$maps = [];
         self::$rowCache = [];
+        self::$nameById = [];
+        self::$nameMisses = [];
+    }
+
+    /**
+     * 按 id 直查物品/任务名，语义与整表构建一致：语种表在该语种下只要有名字就覆盖基础表，
+     * 否则回退基础表列；查到的名字按 id 记忆在请求内复用。
+     *
+     * @param int[] $ids
+     * @return array<int, string>
+     */
+    private static function namesByIds(string $type, array $ids): array
+    {
+        $out = [];
+        $pending = [];
+        foreach ($ids as $id) {
+            $name = self::$nameById[$type][$id] ?? null;
+            if ($name !== null) {
+                $out[$id] = $name;
+                continue;
+            }
+            if (isset(self::$nameMisses[$type][$id])) {
+                continue;
+            }
+            $pending[] = $id;
+        }
+
+        if ($pending === []) {
+            return $out;
+        }
+
+        $fetched = [];
+        foreach (array_chunk($pending, 500) as $chunk) {
+            $fetched += $type === 'quest' ? self::questNamesByIds($chunk) : self::itemNamesByIds($chunk);
+        }
+
+        foreach ($pending as $id) {
+            $name = $fetched[$id] ?? '';
+            if ($name !== '') {
+                self::$nameById[$type][$id] = $name;
+                $out[$id] = $name;
+                continue;
+            }
+            self::$nameMisses[$type][$id] = true;
+        }
+
+        return $out;
+    }
+
+    /**
+     * 物品名：本地化表优先，逐行回退 `item_template.name`（与 MailRepository 的 COALESCE 回退一致）。
+     *
+     * 语种列按请求的 id 走主键（ID,locale）的连接查找，不整表扫描——整表按语种取名字会退化成
+ * 按 locale 过滤会让 (ID,locale) 主键退化为全索引扫描；按 id 的 IN 查询可走主键。
+     *
+     * @param int[] $ids
+     * @return array<int, string>
+     */
+    private static function itemNamesByIds(array $ids): array
+    {
+        $columns = self::tableColumns('item_template');
+        if ($columns === []) {
+            return [];
+        }
+
+        $baseNameColumn = self::firstExistingColumn($columns, ['name', 'Name']);
+
+        foreach (['item_template_locale', 'locales_item'] as $localeTable) {
+            if (!self::tableExists($localeTable)) {
+                continue;
+            }
+            $localeColumns = self::tableColumns($localeTable);
+            $nameColumn = self::firstExistingColumn($localeColumns, ['Name', 'name']);
+            $localeColumn = self::firstExistingColumn($localeColumns, ['locale']);
+            if ($nameColumn === null || $localeColumn === null) {
+                continue;
+            }
+
+            [$in, $params] = self::idFilter($ids);
+            $params[':locale'] = self::localeKey();
+            $localeName = self::quoteIdentifier($nameColumn);
+            $localeKeyColumn = self::quoteIdentifier($localeColumn);
+
+            if ($baseNameColumn === null) {
+                return self::queryMap(
+                    'SELECT ID AS id, ' . $localeName . ' AS name'
+                    . ' FROM ' . self::quoteIdentifier($localeTable)
+                    . ' WHERE ' . $localeKeyColumn . ' = :locale AND ID IN (' . $in . ')',
+                    $params
+                );
+            }
+
+            return self::queryMap(
+                'SELECT i.entry AS id, COALESCE(NULLIF(TRIM(li.' . $localeName . "), ''), i."
+                . self::quoteIdentifier($baseNameColumn) . ') AS name'
+                . ' FROM item_template i LEFT JOIN ' . self::quoteIdentifier($localeTable) . ' li'
+                . ' ON li.ID = i.entry AND li.' . $localeKeyColumn . ' = :locale'
+                . ' WHERE i.entry IN (' . $in . ')',
+                $params
+            );
+        }
+
+        if ($baseNameColumn === null) {
+            return [];
+        }
+
+        [$in, $params] = self::idFilter($ids);
+
+        return self::queryMap(
+            'SELECT entry AS id, ' . self::quoteIdentifier($baseNameColumn) . ' AS name'
+            . ' FROM item_template WHERE entry IN (' . $in . ')',
+            $params
+        );
+    }
+
+    /**
+     * 任务名：quest_template_locale.Title 优先，逐行回退 quest_template.LogTitle。
+     * @param int[] $ids
+     * @return array<int, string>
+     */
+    private static function questNamesByIds(array $ids): array
+    {
+        $columns = self::tableColumns('quest_template');
+        if ($columns === []) {
+            return [];
+        }
+
+        $baseColumn = self::firstExistingColumn($columns, ['LogTitle', 'Title']);
+
+        if (self::tableExists('quest_template_locale')) {
+            $localeColumns = self::tableColumns('quest_template_locale');
+            $titleColumn = self::firstExistingColumn($localeColumns, ['Title', 'LogTitle']);
+            $localeColumn = self::firstExistingColumn($localeColumns, ['locale']);
+            if ($titleColumn !== null && $localeColumn !== null) {
+                [$in, $params] = self::idFilter($ids);
+                $params[':locale'] = self::localeKey();
+                $title = self::quoteIdentifier($titleColumn);
+                $localeKeyColumn = self::quoteIdentifier($localeColumn);
+
+                if ($baseColumn === null) {
+                    return self::queryMap(
+                        'SELECT ID AS id, ' . $title . ' AS name'
+                        . ' FROM quest_template_locale'
+                        . ' WHERE ' . $localeKeyColumn . ' = :locale AND ID IN (' . $in . ')',
+                        $params
+                    );
+                }
+
+                return self::queryMap(
+                    'SELECT q.ID AS id, COALESCE(NULLIF(TRIM(ql.' . $title . "), ''), q."
+                    . self::quoteIdentifier($baseColumn) . ') AS name'
+                    . ' FROM quest_template q LEFT JOIN quest_template_locale ql'
+                    . ' ON ql.ID = q.ID AND ql.' . $localeKeyColumn . ' = :locale'
+                    . ' WHERE q.ID IN (' . $in . ')',
+                    $params
+                );
+            }
+        }
+
+        if ($baseColumn === null) {
+            return [];
+        }
+
+        [$in, $params] = self::idFilter($ids);
+
+        return self::queryMap(
+            'SELECT ID AS id, ' . self::quoteIdentifier($baseColumn) . ' AS name'
+            . ' FROM quest_template WHERE ID IN (' . $in . ')',
+            $params
+        );
+    }
+
+    /**
+     * IN 占位符与绑定参数（id 按整数绑定，命名参数与 queryMap 的绑定方式一致）。
+     * @param int[] $ids
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private static function idFilter(array $ids): array
+    {
+        $placeholders = [];
+        $params = [];
+        foreach (array_values($ids) as $index => $id) {
+            $name = ':id' . $index;
+            $placeholders[] = $name;
+            $params[$name] = (int) $id;
+        }
+
+        return [implode(', ', $placeholders), $params];
     }
 
     /**
@@ -291,15 +493,15 @@ final class GameNameResolver
             return [];
         }
 
-        $cacheKey = 'spellfacts|' . implode(',', $fields) . '|' . $version;
+        $cacheKey = 'spellfacts|' . implode(',', $fields) . '|' . $version . '|' . self::idsFingerprint($ids);
         $cached = self::$rowCache[$cacheKey] ?? null;
         if ($cached === null) {
-            $fromDisk = self::loadSpellFactsFromDisk($fields, $version);
+            $fromDisk = self::loadSpellFactsFromDisk($fields, $version, $ids);
             if ($fromDisk !== null) {
                 $cached = $fromDisk;
             } else {
-                $cached = self::buildSpellFacts($fields);
-                self::persistSpellFacts($fields, $version, $cached);
+                $cached = self::buildSpellFacts($fields, $ids);
+                self::persistSpellFacts($fields, $version, $ids, $cached);
             }
             self::$rowCache[$cacheKey] = $cached;
         }
@@ -464,10 +666,13 @@ final class GameNameResolver
     /**
      * 逐条流式读取，只保留点名的 id 与字段（Spell.dbc 5 万多条也只物化需要的那些）。
      *
-     * @param int[] $fields
+     * $ids 传空数组表示不过滤（保留全表），供需要整张表的调用方使用。
+     *
+     * @param string[] $fields SPELL_FIELDS 里的键
+     * @param int[]    $ids    只保留这些 spellId；空数组 = 全部
      * @return array<int,array<string,int>>
      */
-    private static function buildSpellFacts(array $fields): array
+    private static function buildSpellFacts(array $fields, array $ids = []): array
     {
         $spec = self::DBC_SPECS['spell'];
         $path = self::dbcDirectory() . DIRECTORY_SEPARATOR . $spec['file'];
@@ -487,11 +692,15 @@ final class GameNameResolver
 
         // id 字段（下标 0）必须在读取集合里：它是记录的键
         $wanted = array_values(array_unique(array_merge([(int) self::SPELL_FIELDS['id']], array_values($indexes))));
+        $keep = $ids === [] ? null : array_flip(array_map('intval', $ids));
 
         $out = [];
         foreach ($reader->records($wanted) as $record) {
             $id = (int) ($record[(int) self::SPELL_FIELDS['id']] ?? 0);
             if ($id <= 0) {
+                continue;
+            }
+            if ($keep !== null && !isset($keep[$id])) {
                 continue;
             }
 
@@ -554,19 +763,94 @@ final class GameNameResolver
         return (float) ($unpacked[1] ?? 0.0);
     }
 
-    private static function loadSpellFactsFromDisk(array $fields, string $version): ?array
+    /** id 集合的稳定指纹：排序去重后取 sha1 前 12 位，保证同一批 id 命中同一份缓存。 */
+    private static function idsFingerprint(array $ids): string
     {
-        return self::decodeRowCache(self::rowCacheFile('spellfacts', $fields, $version));
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        sort($ids);
+
+        return substr(sha1(implode(',', $ids)), 0, 12);
     }
 
-    private static function persistSpellFacts(array $fields, string $version, array $rows): void
+    /**
+     * spellfacts 缓存文件。
+     *
+     * 两点与通用 rowCacheFile() 不同：
+     *  - 键里带 id 集合指纹：只落盘被点名的那几十行，而不是整张 Spell.dbc（原先单文件 52 MB）；
+     *  - 键里带 DBC 文件身份（路径 + mtime + 大小）而不是区服编号：两个区共用同一份 Spell.dbc 时
+     *    共享一份缓存，各区自备 DBC 时自然隔离。
+     */
+    private static function spellFactsCacheFile(array $fields, string $version, array $ids): string
     {
-        self::writeRowCache(self::rowCacheFile('spellfacts', $fields, $version), [
+        $key = substr(sha1(implode(',', $fields) . '|' . $version . '|' . self::idsFingerprint($ids)), 0, 12);
+        $base = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'cache'
+            . DIRECTORY_SEPARATOR . 'game_names';
+
+        return $base . DIRECTORY_SEPARATOR . 'rows_' . self::dbcIdentity('spell') . '_spellfacts_' . $key . '.json';
+    }
+
+    /** 已解析 DBC 文件的身份指纹；文件不存在时退化为目录名，避免调用方拿到空串。 */
+    private static function dbcIdentity(string $type): string
+    {
+        static $cache = [];
+        if (isset($cache[$type])) {
+            return $cache[$type];
+        }
+
+        $spec = self::DBC_SPECS[$type] ?? null;
+        $path = $spec === null ? '' : self::dbcDirectory() . DIRECTORY_SEPARATOR . $spec['file'];
+        $stat = $path !== '' && is_file($path) ? @stat($path) : false;
+        $material = $stat === false
+            ? 'absent|' . $path
+            : $path . '|' . (int) $stat['mtime'] . '|' . (int) $stat['size'];
+
+        return $cache[$type] = 'dbc' . substr(sha1($material), 0, 12);
+    }
+
+    private static function loadSpellFactsFromDisk(array $fields, string $version, array $ids): ?array
+    {
+        return self::decodeRowCache(self::spellFactsCacheFile($fields, $version, $ids));
+    }
+
+    private static function persistSpellFacts(array $fields, string $version, array $ids, array $rows): void
+    {
+        $file = self::spellFactsCacheFile($fields, $version, $ids);
+        self::writeRowCache($file, [
             'type' => 'spellfacts',
             'fields' => $fields,
             'rule_version' => $version,
+            'ids_fingerprint' => self::idsFingerprint($ids),
             'rows' => $rows,
         ]);
+        self::pruneSpellFactsCaches($file);
+    }
+
+    /**
+     * 保留最多的 $keep 份 spellfacts 缓存（含刚写入的那份），删除更早的。
+     * 键里带 id 指纹后文件会随调用方的 id 集合增长，必须封顶，否则又会积累成几百 MB。
+     */
+    private static function pruneSpellFactsCaches(string $justWritten, int $keep = 8): void
+    {
+        $files = glob(dirname($justWritten) . DIRECTORY_SEPARATOR . 'rows_*_spellfacts_*.json') ?: [];
+        if (count($files) <= $keep) {
+            return;
+        }
+
+        $entries = [];
+        foreach ($files as $file) {
+            $mtime = @filemtime($file);
+            $entries[] = ['file' => $file, 'mtime' => $mtime === false ? 0 : $mtime];
+        }
+        usort($entries, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+
+        $kept = 0;
+        foreach ($entries as $entry) {
+            if ($entry['file'] === $justWritten || $kept < $keep) {
+                $kept++;
+                continue;
+            }
+            @unlink($entry['file']);
+        }
     }
 
     private static function loadRowsFromDisk(string $type, array $fields, string $version): ?array
@@ -931,6 +1215,12 @@ final class GameNameResolver
 
     private static function tableExists(string $table): bool
     {
+        static $cache = [];
+        if (array_key_exists($table, $cache)) {
+            return $cache[$table];
+        }
+
+        $cache[$table] = false;
         try {
             $stmt = self::world()->prepare(
                 'SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()'
@@ -939,10 +1229,12 @@ final class GameNameResolver
             $stmt->bindValue(':table', $table, PDO::PARAM_STR);
             $stmt->execute();
 
-            return $stmt->fetchColumn() !== false;
+            $cache[$table] = $stmt->fetchColumn() !== false;
         } catch (Throwable $exception) {
-            return false;
+            $cache[$table] = false;
         }
+
+        return $cache[$table];
     }
 
     private static function tableColumns(string $table): array

@@ -47,15 +47,15 @@ $rewardText = static function (array $question) use ($itemLabel): string {
   <div class="tv-empty"><?= htmlspecialchars(__('app.trivia.questions.empty')) ?></div>
 <?php else: ?>
   <div class="tv-table-wrap">
-    <table class="tv-table">
+    <table class="table table--tv">
       <thead>
         <tr>
-          <th>ID</th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.question')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.answer_index')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.reward_preset')) ?></th>
-          <th><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
-          <th></th>
+          <th scope="col">ID</th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.question')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.answer_index')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.reward_preset')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
+          <th scope="col"></th>
         </tr>
       </thead>
       <tbody>

@@ -46,13 +46,6 @@ final class ItemInventoryLog
 
     public static function currentUser(): string
     {
-        $candidates = [$_SESSION['panel_user'] ?? null, $_SESSION['admin_user'] ?? null, $_SESSION['username'] ?? null];
-        foreach ($candidates as $candidate) {
-            if (is_string($candidate) && $candidate !== '') {
-                return $candidate;
-            }
-        }
-
-        return 'unknown';
+        return \Acme\Panel\Support\Auth::user() ?? 'unknown';
     }
 }

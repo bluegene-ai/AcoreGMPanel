@@ -65,15 +65,15 @@ $buildSortUrl = function(string $col) use ($filters,$curSort,$toggleDir) {
 <table class="table quest-table">
     <thead>
         <tr>
-            <th class="quest-table__col-id"><a href="<?= htmlspecialchars($buildSortUrl('ID')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.id')) ?><?= $curSort==='ID' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
-            <th class="quest-table__col-title"><?= htmlspecialchars(__('app.quest.index.table.headers.title')) ?></th>
-            <th class="quest-table__col-min-level"><a href="<?= htmlspecialchars($buildSortUrl('MinLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.min_level')) ?><?= $curSort==='MinLevel' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
-            <th class="quest-table__col-level"><a href="<?= htmlspecialchars($buildSortUrl('QuestLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.level')) ?><?= $curSort==='QuestLevel' ? ($curDir==='ASC' ? ' ▲' : ' ▼') : '' ?></a></th>
-            <th class="quest-table__col-type"><?= htmlspecialchars(__('app.quest.index.table.headers.type')) ?></th>
-            <th class="quest-table__col-reward-xp"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_xp')) ?></th>
-            <th class="quest-table__col-reward-money"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_money')) ?></th>
-            <th class="quest-table__col-reward-items"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_items')) ?></th>
-            <th class="quest-table__col-actions"><?= htmlspecialchars(__('app.quest.index.table.headers.actions')) ?></th>
+            <th scope="col" class="quest-table__col-id"><a href="<?= htmlspecialchars($buildSortUrl('ID')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.id')) ?><?= $curSort==='ID' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
+            <th scope="col" class="quest-table__col-title"><?= htmlspecialchars(__('app.quest.index.table.headers.title')) ?></th>
+            <th scope="col" class="quest-table__col-min-level"><a href="<?= htmlspecialchars($buildSortUrl('MinLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.min_level')) ?><?= $curSort==='MinLevel' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
+            <th scope="col" class="quest-table__col-level"><a href="<?= htmlspecialchars($buildSortUrl('QuestLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.level')) ?><?= $curSort==='QuestLevel' ? ($curDir==='ASC' ? ' ▲' : ' ▼') : '' ?></a></th>
+            <th scope="col" class="quest-table__col-type"><?= htmlspecialchars(__('app.quest.index.table.headers.type')) ?></th>
+            <th scope="col" class="quest-table__col-reward-xp"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_xp')) ?></th>
+            <th scope="col" class="quest-table__col-reward-money"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_money')) ?></th>
+            <th scope="col" class="quest-table__col-reward-items"><?= htmlspecialchars(__('app.quest.index.table.headers.reward_items')) ?></th>
+            <th scope="col" class="quest-table__col-actions"><?= htmlspecialchars(__('app.quest.index.table.headers.actions')) ?></th>
         </tr>
     </thead>
     <tbody>
@@ -199,7 +199,6 @@ include __DIR__.'/../components/pagination.php';
                     <select id="questLogType" class="quest-log-type-select">
                         <option value="sql"><?= htmlspecialchars(__('app.quest.log_modal.types.sql')) ?></option>
                         <option value="deleted"><?= htmlspecialchars(__('app.quest.log_modal.types.deleted')) ?></option>
-                        <option value="actions"><?= htmlspecialchars(__('app.quest.log_modal.types.actions')) ?></option>
                     </select>
                 </label>
                 <button class="btn info outline" type="button" id="btn-refresh-quest-log"><?= htmlspecialchars(__('app.quest.log_modal.refresh')) ?></button>

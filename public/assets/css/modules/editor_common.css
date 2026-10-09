@@ -1,12 +1,12 @@
 /* ==== Shared Editor Layout (Item / Creature) ==== */
 .item-edit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:16px;align-items:start;}
-.item-edit-grid details{background:#141b1f;border:1px solid var(--c-border);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;gap:8px;overflow:visible;}
+.item-edit-grid details{background:var(--c-surface-1);border:1px solid var(--c-border);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;gap:8px;overflow:visible;}
 .item-edit-grid details.flags-section{grid-column:1/-1;}
 .item-edit-grid details[open]{border-color:#345067;}
 .item-edit-grid summary{cursor:pointer;font-weight:600;letter-spacing:.5px;color:var(--c-accent);outline:none;margin:-8px -12px 4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.06);}
 .item-edit-grid .field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px;}
 .item-edit-grid label{display:flex;flex-direction:column;font-size:12px;gap:4px;}
-.item-edit-grid textarea{background:#121a21;border:1px solid var(--c-border);color:var(--c-text);padding:8px;border-radius:6px;font-size:13px;}
+.item-edit-grid textarea{background:var(--c-surface-input);border:1px solid var(--c-border);color:var(--c-text);padding:8px;border-radius:6px;font-size:13px;}
 .flags-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
 .flag-item{display:flex;flex-direction:column;gap:4px;padding:4px 6px;background:#11171d;border:1px solid var(--c-border);border-radius:6px;}
 .flag-input-row{display:flex;align-items:center;gap:6px;}

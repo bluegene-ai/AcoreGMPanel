@@ -24,6 +24,14 @@ class Request
         $request = new self();
         $request->method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $request->uri = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
+
+        // 在唯一入口把 PHP 标签序列清空，并同时写回超全局。
+        // 视图里有 17 处直接读 $_GET 构造链接与分页串，只在 Request 副本上净化会变成
+        // "控制器看到的"和"视图看到的"两份数据（MailController 历史上就因此留下一段
+        // 只对视图生效的过滤）。
+        $_GET = self::stripTagSequences($_GET);
+        $_POST = self::stripTagSequences($_POST);
+
         $request->get = $_GET;
         $request->post = $_POST;
         $request->headers = self::captureHeaders($_SERVER);
@@ -36,12 +44,29 @@ class Request
                 $json = json_decode($raw, true);
 
                 if (is_array($json)) {
-                    $request->post = $json;
+                    $request->post = self::stripTagSequences($json);
                 }
             }
         }
 
         return $request;
+    }
+
+    /** 递归地把含 PHP 标签序列的字符串清空（数组按原结构递归）。 */
+    private static function stripTagSequences(array $input): array
+    {
+        foreach ($input as $key => $value) {
+            if (is_array($value)) {
+                $input[$key] = self::stripTagSequences($value);
+                continue;
+            }
+
+            if (is_string($value) && (str_contains($value, '<?') || str_contains($value, '?>'))) {
+                $input[$key] = '';
+            }
+        }
+
+        return $input;
     }
 
     public function input(string $key, $default = null)

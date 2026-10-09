@@ -943,7 +943,7 @@ class BossController extends Controller
             ServerContext::set($currentId);
         }
 
-        $service = new BossConfigTransferService($this->repo(), $targetRepo);
+        $service = new BossConfigTransferService($this->repo(), $targetRepo, $targetId);
         try {
             $result = $service->copyExt($groups, $includeMain);
         } catch (Throwable $exception) {
@@ -982,15 +982,22 @@ class BossController extends Controller
 
         $targetName = trim((string) ($servers[$targetId]['name'] ?? ''));
         $success = !empty($result['ok']) && !empty($reloadResult['success']);
+        $partial = !empty($result['partial']);
+        $message = $success
+            ? Lang::get('app.boss.feedback.ext_copied', [
+                'server' => $targetName !== '' ? $targetName : (string) $targetId,
+                'columns' => (string) ((int) ($result['ext_columns'] ?? 0) + (int) ($result['main_columns'] ?? 0)),
+            ])
+            : Lang::get('app.boss.errors.copy_failed');
+        if ($partial) {
+            $message .= ' ' . Lang::get('app.boss.feedback.ext_copy_partial', [], '目标区服只写入了部分配置，请检查后重试。');
+        }
 
         return $this->json([
             'success' => $success,
-            'message' => $success
-                ? Lang::get('app.boss.feedback.ext_copied', [
-                    'server' => $targetName !== '' ? $targetName : (string) $targetId,
-                    'columns' => (string) ((int) ($result['ext_columns'] ?? 0) + (int) ($result['main_columns'] ?? 0)),
-                ])
-                : Lang::get('app.boss.errors.copy_failed'),
+            'partial' => $partial,
+            'rolled_back' => !empty($result['rolled_back']),
+            'message' => $message,
             'payload' => [
                 'result' => $result,
                 'reload' => $reloadResult,

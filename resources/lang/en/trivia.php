@@ -380,6 +380,7 @@ return [
                     'import_done' => 'Imported :inserted questions, skipped :skipped rows.',
                 ],
                 'errors' => [
+                    'network' => 'Network error, please retry',
                     'command_failed' => 'Command execution failed.',
                     'load_failed' => 'Failed to load data.',
                     'settings_save_failed' => 'Saving settings failed.',

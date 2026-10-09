@@ -35,6 +35,17 @@ class Bootstrap
 
         self::useOwnSessionStorage();
 
+        // 会话 cookie 收紧到面板自己的路径并换掉默认名：WWW 根下还有 application /
+        // keira / template / tools 等应用共用同一 vhost，默认 PHPSESSID + path=/ 会让
+        // 它们的 cookie 与面板互相覆盖、互相读取。
+        $base = rtrim((string) Config::get('app.base_path', ''), '/');
+        session_set_cookie_params([
+            'path' => $base !== '' ? $base : '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        session_name('AGMPSESSID');
+
         session_start();
     }
 
@@ -256,7 +267,13 @@ class Bootstrap
         } elseif ($base !== '' && !str_starts_with($reqPath, $base)) {
         }
 
-        if (isset($_GET['__diag']) && ($_GET['__diag'] === '1' || $_GET['__diag'] === 'base')) {
+        // 诊断输出只在调试模式且已登录时开放：它会打印绝对路径与运行环境。
+        if (
+            Config::get('app.debug', false)
+            && \Acme\Panel\Support\Auth::check()
+            && isset($_GET['__diag'])
+            && ($_GET['__diag'] === '1' || $_GET['__diag'] === 'base')
+        ) {
             header('Content-Type: text/plain; charset=utf-8');
 
             echo 'base_path=' . $base . "\n";

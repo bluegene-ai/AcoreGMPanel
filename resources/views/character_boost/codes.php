@@ -190,19 +190,19 @@ include dirname(__DIR__) . '/components/page_header.php';
       <table class="table table--compact cb-table-min cb-codes-table">
         <thead>
           <tr>
-            <th class="cb-col-id">
+            <th scope="col" class="cb-col-id">
               <a href="#" id="boostCodesSortId" class="cb-sort-link">
                 <span><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.id')) ?></span>
                 <span id="boostCodesSortIdIcon" class="cb-sort-icon"></span>
               </a>
             </th>
-            <th><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.template')) ?></th>
-            <th><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.code')) ?></th>
-            <th class="cb-col-status"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.status')) ?></th>
-            <th><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_by')) ?></th>
-            <th class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_at')) ?></th>
-            <th class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.created_at')) ?></th>
-            <th class="cb-col-act"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.actions')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.template')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.code')) ?></th>
+            <th scope="col" class="cb-col-status"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.status')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_by')) ?></th>
+            <th scope="col" class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.used_at')) ?></th>
+            <th scope="col" class="cb-col-time"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.created_at')) ?></th>
+            <th scope="col" class="cb-col-act"><?= htmlspecialchars(__('app.character_boost.codes.manage.columns.actions')) ?></th>
           </tr>
         </thead>
         <tbody id="boostCodesManageTbody">

@@ -34,7 +34,6 @@
     13=>__('app.creature.edit.type_enum.13'),
   ];
   $flagConfig = $creatureCfg['flags'] ?? [];
-  $serverParam = isset($_GET['server']) ? (int)$_GET['server'] : null;
   $creatureEditCapabilities = is_array($__pageCapabilities ?? null)
     ? $__pageCapabilities
     : [
@@ -131,8 +130,9 @@
 <?php if($creatureEditCapabilities['update']): ?>
 <button class="btn success" id="btn-add-model" type="button"><?= htmlspecialchars(__('app.creature.edit.actions.add_model')) ?></button>
 <?php endif; ?>
+<div class="table-wrap">
 <table class="table" id="table-models" data-creature="<?= $id ?>">
-  <thead><tr><th><?= htmlspecialchars(__('app.creature.edit.models.table.index')) ?></th><th><?= htmlspecialchars(__('app.creature.edit.models.table.display_id')) ?></th><th><?= htmlspecialchars(__('app.creature.edit.models.table.scale')) ?></th><th><?= htmlspecialchars(__('app.creature.edit.models.table.probability')) ?></th><th><?= htmlspecialchars(__('app.creature.edit.models.table.verified_build')) ?></th><th><?= htmlspecialchars(__('app.creature.edit.models.table.actions')) ?></th></tr></thead>
+  <thead><tr><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.index')) ?></th><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.display_id')) ?></th><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.scale')) ?></th><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.probability')) ?></th><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.verified_build')) ?></th><th scope="col"><?= htmlspecialchars(__('app.creature.edit.models.table.actions')) ?></th></tr></thead>
   <tbody>
     <?php foreach($models as $m): ?>
       <tr data-idx="<?= (int)$m['Idx'] ?>" data-display="<?= (int)$m['CreatureDisplayID'] ?>" data-scale="<?= htmlspecialchars((string)$m['DisplayScale']) ?>" data-prob="<?= htmlspecialchars((string)$m['Probability']) ?>" data-vb="<?= htmlspecialchars((string)$m['VerifiedBuild']) ?>">
@@ -142,6 +142,7 @@
     <?php endforeach; if(!$models): ?><tr><td colspan="6" class="muted creature-models-empty"><?= htmlspecialchars(__('app.creature.edit.models.empty')) ?></td></tr><?php endif; ?>
   </tbody>
 </table>
+</div>
 
 <!-- 模型 Modal -->
 <div class="modal-backdrop creature-modal-hidden" id="modal-model">

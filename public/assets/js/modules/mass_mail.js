@@ -62,6 +62,21 @@
   }
 
   const formatNumber = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  /**
+   * 数值上限由服务端渲染进 DOM（#goldAmount 的 max、#mmItemsEditor 的 data-item-max），
+   * 前端只读取，不再各写一份魔数。
+   */
+  function goldCopperLimit(){
+    const el = qs('#goldAmount');
+    const value = parseInt(el ? (el.getAttribute('max') || '') : '', 10);
+    return Number.isFinite(value) && value > 0 ? value : 2147483647;
+  }
+  function itemCountLimit(){
+    const el = qs('#mmItemsEditor');
+    const value = parseInt(el ? (el.dataset.itemMax || '') : '', 10);
+    return Number.isFinite(value) && value > 0 ? value : 1000;
+  }
   async function post(path,data){
     if(window.Panel && Panel.api){
       try{
@@ -490,43 +505,58 @@
     f.addEventListener('submit', async e=>{ e.preventDefault(); const data={}; if(typeof syncItemsToHidden==='function') syncItemsToHidden(); new FormData(f).forEach((v,k)=> data[k]=v);
 
       const invalid = validateSendForm(data, f);
-      if(invalid){ toast(invalid, 'error'); return; }
+      if(invalid && invalid.length){
+        if(typeof Panel.formErrors === 'function') Panel.formErrors(f, invalid);
+        toast(invalid[0].message, 'error');
+        return;
+      }
 
       if(await needConfirm(data,f)){
         pendingSendData=data; openConfirm(buildSummary(data,f)); return; }
       await actuallySend(data);
     });
 
-    /** 提交前的本地校验：给出可操作的中文提示，而不是让服务端抛一句错误 */
+    /**
+     * 提交前的本地校验：返回 [{field, message}]，由 Panel.formErrors 逐字段标红并定位。
+     * 只报第一条会让用户来回提交好几轮。
+     */
     function validateSendForm(data, form){
+      const errors = [];
       const action = data.action;
-      if(!action){ return translate('send.validation.action', 'Please choose an action'); }
+      if(!action){ errors.push({ field: 'action', message: translate('send.validation.action', 'Please choose an action') }); }
 
       const subject = String(data.subject || '').trim();
-      if(!subject){ return translate('send.validation.subject', 'Please enter a subject'); }
+      if(!subject) errors.push({ field: 'subject', message: translate('send.validation.subject', 'Please enter a subject') });
 
       if(action === 'send_item' || action === 'send_item_gold'){
         const items = parseItems(data.items);
         if(!items.length){
-          return translate('send.validation.items', 'Please add at least one item (ID:quantity)');
-        }
-        const dupes = items.map(it => it.id).filter((id, index, arr) => arr.indexOf(id) !== index);
-        if(dupes.length){
-          return translate('send.validation.duplicate_item', 'Item #:id is listed twice', { id: dupes[0] });
+          errors.push({ field: 'items', message: translate('send.validation.items', 'Please add at least one item (ID:quantity)') });
+        } else {
+          const dupes = items.map(it => it.id).filter((id, index, arr) => arr.indexOf(id) !== index);
+          if(dupes.length){
+            errors.push({ field: 'items', message: translate('send.validation.duplicate_item', 'Item #:id is listed twice', { id: dupes[0] }) });
+          }
+          const itemMax = itemCountLimit();
+          const overLimit = items.find((it)=> it.count > itemMax);
+          if(overLimit){
+            errors.push({ field: 'items', message: translate('send.validation.item_count_over', 'Quantity per item must not exceed :limit (item #:id)', { limit: itemMax, id: overLimit.id }) });
+          }
         }
       }
 
       if(action === 'send_gold' || action === 'send_item_gold'){
         const amount = parseInt(data.amount || '0', 10) || 0;
-        if(amount <= 0){ return translate('send.validation.gold', 'Please enter a gold amount'); }
+        if(amount <= 0) errors.push({ field: 'amount', message: translate('send.validation.gold', 'Please enter a gold amount') });
+        else if(amount > goldCopperLimit()) errors.push({ field: 'amount', message: translate('send.validation.gold_over', 'Amount must not exceed :limit copper', { limit: goldCopperLimit() }) });
       }
 
       if(data.target_type === 'custom'){
         const lines = String(data.custom_char_list || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-        if(!lines.length){ return translate('send.validation.custom_empty', 'Please enter the character list'); }
+        if(!lines.length) errors.push({ field: 'custom_char_list', message: translate('send.validation.custom_empty', 'Please enter the character list') });
       }
 
-      return null;
+      return errors;
     }
   }
 
@@ -626,7 +656,14 @@
   async function onConfirmOk(){ if(confirming) return; confirming=true; const data=pendingSendData; pendingSendData=null; closeConfirm(); if(data){ await actuallySend(data); } confirming=false; }
   async function actuallySend(data){
     disableBtn('#btnMassSend',true,translate('status.sending','Sending…'));
-    const res=await post('/api/send',data);
+    // 群发按 200 一批在服务端跑完才回包：这里给出可见的三态进度（排队 / 执行中 Ns / 完成）
+    const progress = startSendProgress(data);
+    let res = null;
+    try{
+      res = await post('/api/send',data);
+    } finally {
+      progress.stop();
+    }
     disableBtn('#btnMassSend',false);
 
     const ok = !!(res && res.success);
@@ -634,6 +671,39 @@
     toast(message, ok ? 'success' : 'error');
     refreshLogs();
     if(typeof previewRecipients === 'function'){ previewRecipients({ authoritative: true }); }
+  }
+
+  /**
+   * 群发进度条：显示目标人数与已用时间。服务端当前一次性返回结果（没有 job id），
+   * 所以这里只能给"执行中 + 计时"的可信进度，而不是伪造的百分比。
+   */
+  function startSendProgress(data){
+    const host = qs('#mmProgress');
+    const label = qs('#mmProgressLabel');
+    const targets = (data && data.target_type === 'online')
+      ? translate('progress.online','all online characters')
+      : countTargets(data || {}, qs('#massSendForm') || document) > 0
+        ? String(countTargets(data || {}, qs('#massSendForm') || document))
+        : translate('progress.custom','the listed characters');
+    const started = Date.now();
+    if(host) host.hidden = false;
+    const render = ()=>{
+      const seconds = ((Date.now() - started) / 1000).toFixed(1);
+      if(label){
+        label.textContent = translate('progress.running','Sending to :targets · elapsed :seconds s',{ targets, seconds });
+      }
+    };
+    render();
+    const timer = window.setInterval(render, 500);
+    return {
+      stop(){
+        window.clearInterval(timer);
+        if(label){
+          const seconds = ((Date.now() - started) / 1000).toFixed(1);
+          label.textContent = translate('progress.done','Finished · elapsed :seconds s',{ seconds });
+        }
+      }
+    };
   }
 
   function disableBtn(sel,dis,text){ const b=qs(sel); if(!b) return; if(text){ if(!b.dataset.orig) b.dataset.orig=b.textContent; if(dis) b.textContent=text; }
@@ -693,7 +763,9 @@
     const tb=qs('#massMailLogTable tbody');
     if(!tb) return;
     if(!rows.length){
-      tb.innerHTML=`<tr class="js-log-empty"><td colspan="7" class="text-center muted">${esc(translate('logs.empty','No logs yet'))}</td></tr>`;
+      tb.innerHTML = (typeof Panel.emptyRow === 'function')
+        ? Panel.emptyRow(7, translate('logs.empty','No logs yet'), { rowClassName: 'js-log-empty', cellClassName: 'text-center muted' })
+        : `<tr class="js-log-empty"><td colspan="7" class="text-center muted">${esc(translate('logs.empty','No logs yet'))}</td></tr>`;
       return;
     }
     const nameSeparator=translate('logs.item_name_separator',' - ');
@@ -766,13 +838,69 @@
     if(filter){ filter.addEventListener('input', applyLogFilter); }
   }
 
+  /**
+   * 深链接预填：角色详情页的「给该角色发邮件/物品」带 ?prefill_target=<角色名>，
+   * 这里把收件方式切到自定义列表并填好名字，省掉手工复制粘贴。
+   */
+  function applyPrefill(){
+    const target = new URLSearchParams(window.location.search).get('prefill_target');
+    if(!target) return;
+    const form = qs('#massSendForm');
+    if(!form) return;
+    const targetSel = qs('#mmTargetType', form);
+    const listInput = qs('#mmCustomList', form);
+    if(targetSel) targetSel.value = 'custom';
+    if(listInput && String(listInput.value).trim() === '') listInput.value = target;
+    if(targetSel) targetSel.dispatchEvent(new Event('change', { bubbles: true }));
+    toast(translate('send.prefill_applied', 'Recipient list prefilled with :name', { name: target }), 'info');
+  }
+
   function init(){
     bindAnnounce();
     bindMassSend();
     bindLogs();
+    bindDrafts();
+    applyPrefill();
     const confirmModal=qs('#mmConfirmModal');
-    if(confirmModal){ confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) closeConfirm(); }); }
+    if(confirmModal){
+      confirmModal.addEventListener('click',e=>{ if(e.target===confirmModal) closeConfirm(); });
+    }
+    // 确认弹窗是自己渲染的 markup，Esc 只关它一个（不碰页面上其它弹窗）
+    document.addEventListener('keydown', e=>{
+      if(e.key !== 'Escape') return;
+      const modal = qs('#mmConfirmModal');
+      if(!modal || !modal.classList.contains('active')) return;
+      const others = qsa('.modal-backdrop.active').filter(node=> node !== modal);
+      if(others.length) return;
+      e.preventDefault();
+      closeConfirm();
+    });
     refreshLogs();
+  }
+
+  /**
+   * 草稿与脏数据守卫：群发表单含主题/正文/收件人/动态物品行，关页即静默丢弃是最大的风险点。
+   * 公告表单只存草稿（提交即发，没有"半成品"以外的状态）。
+   */
+  function bindDrafts(){
+    if(typeof Panel.unsavedGuard !== 'function') return;
+    const server = new URLSearchParams(window.location.search).get('server') || '';
+    const sendForm = qs('#massSendForm');
+    if(sendForm){
+      Panel.unsavedGuard(sendForm, {
+        draftKey: 'mass_mail.draft:' + server + ':' + window.location.pathname,
+        message: translate('draft.leave','There is an unsent batch in this form. Leave the page?'),
+        leaveLabel: translate('draft.leave_confirm','Discard the draft'),
+        onRestore(){ toast(translate('draft.restored','Restored the unsent draft from your last visit'), 'info'); }
+      });
+    }
+    const announceForm = qs('#massAnnounceForm');
+    if(announceForm){
+      Panel.unsavedGuard(announceForm, {
+        draftKey: 'mass_mail.announce:' + server + ':' + window.location.pathname,
+        blockUnload: false
+      });
+    }
   }
   // 模块可能在文档仍解析时执行；用 panel 的 ready 助手（覆盖 loading 与 interactive），
   // 别用经典 readyState 判断式——它在 interactive 状态会静默跳过 init()。

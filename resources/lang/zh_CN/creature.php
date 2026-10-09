@@ -622,6 +622,7 @@ return array (
         'errors' => 
         array (
           'panel_api_not_ready' => 'Panel API 未就绪',
+          'network' => '网络中断，请重试',
         ),
         'exec' => 
         array (

@@ -17,7 +17,8 @@ final class Lang
 
     private static array $cache = [];
 
-    private static array $cacheMtime = [];
+    /** @var array<string, true> 本请求已 stat 过的语言文件（mtime 只查一次） */
+    private static array $validated = [];
 
 
     private static array $available = [];
@@ -128,31 +129,28 @@ final class Lang
         return is_array($value) ? $value : null;
     }
 
+    /**
+     * 取语言包，每个文件在本请求内只做一次 is_file/require。
+     *
+     * 语言包是只读资源，改文件即改部署；`Lang::get()` 单页会调用数百次，
+     * 每次先 stat 只是把重复的磁盘元数据查询压在翻译热路径上。
+     */
     private static function loadFile(string $locale, string $file): ?array
     {
         $cacheKey = $locale . ':' . $file;
-        $path = dirname(__DIR__, 2) . '/resources/lang/' . $locale . '/' . $file . '.php';
-
-        $mtime = 0;
-        if (is_file($path)) {
-            $mtime = (int) (filemtime($path) ?: 0);
-        }
-
-        if (array_key_exists($cacheKey, self::$cache)
-            && array_key_exists($cacheKey, self::$cacheMtime)
-            && self::$cacheMtime[$cacheKey] === $mtime
-        ) {
+        if (isset(self::$validated[$cacheKey])) {
             return self::$cache[$cacheKey];
         }
+        self::$validated[$cacheKey] = true;
 
-        if (!is_file($path)) {
-            self::$cache[$cacheKey] = null;
-            self::$cacheMtime[$cacheKey] = 0;
-            return null;
+        $path = dirname(__DIR__, 2) . '/resources/lang/' . $locale . '/' . $file . '.php';
+        self::$cache[$cacheKey] = null;
+
+        if (is_file($path)) {
+            $data = require $path;
+            self::$cache[$cacheKey] = is_array($data) ? $data : null;
         }
-        $data = require $path;
-        self::$cache[$cacheKey] = is_array($data) ? $data : null;
-        self::$cacheMtime[$cacheKey] = $mtime;
+
         return self::$cache[$cacheKey];
     }
 

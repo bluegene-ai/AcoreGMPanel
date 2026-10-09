@@ -10,6 +10,7 @@ return array (
   ),
   'nav' => 
   array (
+    'breadcrumb' => '面包屑导航',
     'home' => '首页',
     'account' => '账号',
     'character' => '角色',
@@ -41,6 +42,10 @@ return array (
   'common' => 
   array (
     'performance' => '性能',
+    'empty' => 
+    array (
+      'no_data' => '暂无数据',
+    ),
     'loading' => '加载中…',
     'online_total_label' => '在线 / 总数',
     'online_total_title' => '当前在线玩家 / 该服务器的总角色数',
@@ -57,6 +62,7 @@ return array (
       'missing_id' => '缺少 id',
       'missing_ip' => '缺少 IP',
       'missing_player' => '缺少 player',
+      'invalid_player' => '角色名不合法（只允许 2–16 个字母）',
       'missing_params' => '缺少必要参数',
       'required' => '此字段为必填项',
       'number' => '请输入数字',
@@ -103,6 +109,12 @@ return array (
   array (
     'previous' => '上一页',
     'next' => '下一页',
+    'label' => '分页',
+    'page' => '第 :page 页',
+    'range' => '第 :from-:to 条，共 :total 条',
+    'total' => '共 :total 条',
+    'jump_label' => '跳至',
+    'jump_submit' => '跳转',
   ),
   'server' => 
   array (

@@ -13,7 +13,9 @@ class AuthMiddleware
 {
     public function handle(Request $request, callable $next): Response
     {
-        if (defined('PANEL_CLI_AUTH_BYPASS') && PANEL_CLI_AUTH_BYPASS) {
+        // 命令行校验脚本需要绕过登录（tools/verify_*.php 注入 $_SESSION 后直接调控制器）。
+        // 旁路必须绑定 CLI：只判常量的话，任何一次 define() 都会让整站鉴权失效。
+        if (PHP_SAPI === 'cli' && defined('PANEL_CLI_AUTH_BYPASS') && PANEL_CLI_AUTH_BYPASS) {
             return $next($request);
         }
         if(!Auth::check()){

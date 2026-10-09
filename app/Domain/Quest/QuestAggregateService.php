@@ -1,7 +1,17 @@
 <?php
 /**
- * File: app/Domain/Quest/QuestAggregateService.php
- * Purpose: Defines class QuestAggregateService for the app/Domain/Quest module.
+ * 任务聚合编辑：一次读写一个任务散落在多张子表里的数据（目标 / 详情 / 奖励 / POI / 本地化 / 任务给予者等）。
+ *
+ * 当前状态：**已实现但未接线**。三个 API 端点（`/quest/api/editor/{load,save,preview}`）因长期零调用者
+ * 当前未挂载 API 端点，全类无调用点；任务编辑器走单表部分更新（`QuestRepository::updatePartial`）。
+ *
+ * **不要当作死代码删除**：它是这些子表唯一的编辑实现，而线上库里有真实数据（world 库的
+ * creature_queststarter / creature_questender / quest_poi / quest_poi_points / quest_template_locale /
+ * quest_template_addon / quest_offer_reward / quest_request_items / quest_details 均有大量行），
+ * 删掉即等于放弃这些子表的可编辑性。要恢复能力就重新挂端点并接 UI。
+ *
+ * 接线前须知：本库不存在 quest_objectives / quest_objectives_locale / quest_reward_choice_items /
+ * quest_reward_reputation，而 config/quest.php 的聚合元数据列了它们；按表存在性逐项降级（见 $tableExistsCache）。
  */
 
 namespace Acme\Panel\Domain\Quest;
@@ -377,13 +387,25 @@ class QuestAggregateService extends MultiServerRepository
             }
         }
 
+        $staleIds = [];
         foreach($existingById as $id => $_row){
             if(!in_array($id, $kept, true)){
-                $stmt = $pdo->prepare('DELETE FROM `quest_objectives` WHERE `ID`=:id LIMIT 1');
-                $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-                $stmt->execute();
-                $deleted += $stmt->rowCount();
+                $staleIds[] = (int)$id;
             }
+        }
+        if($staleIds !== []){
+            $placeholders = [];
+            $params = [];
+            foreach($staleIds as $index => $id){
+                $placeholders[] = ':id'.$index;
+                $params[':id'.$index] = $id;
+            }
+            $stmt = $pdo->prepare('DELETE FROM `quest_objectives` WHERE `ID` IN ('.implode(',', $placeholders).')');
+            foreach($params as $param => $value){
+                $stmt->bindValue($param, $value, PDO::PARAM_INT);
+            }
+            $stmt->execute();
+            $deleted += $stmt->rowCount();
         }
 
         return ['created' => $created, 'updated' => $updated, 'deleted' => $deleted];
@@ -408,14 +430,13 @@ class QuestAggregateService extends MultiServerRepository
             $del = $pdo->prepare('DELETE FROM `'.$table.'` WHERE `ID`=:id');
             $del->bindValue(':id', $questId, PDO::PARAM_INT);
             $del->execute();
-            $inserted = 0;
+            $payload = [];
             foreach($rows as $row){
                 if(!is_array($row)) continue;
                 $row['ID'] = $questId;
-                $this->insertRow($pdo, $table, $row);
-                $inserted++;
+                $payload[] = $row;
             }
-            $stats[$key] = ['inserted' => $inserted];
+            $stats[$key] = ['inserted' => $this->insertRows($pdo, $table, $payload)];
         }
         return $stats;
     }
@@ -445,15 +466,26 @@ class QuestAggregateService extends MultiServerRepository
                 $del = $pdo->prepare('DELETE FROM `'.$cfg['table'].'` WHERE `'.$cfg['quest'].'`=:quest');
                 $del->bindValue(':quest', $questId, PDO::PARAM_INT);
                 $del->execute();
-                $insert = $pdo->prepare('INSERT INTO `'.$cfg['table'].'`(`'.$cfg['entity'].'`,`'.$cfg['quest'].'`) VALUES(:entity,:quest)');
                 $count = 0;
-                if(is_array($values)){
-                    foreach($values as $value){
-                        $insert->bindValue(':entity', (int)$value, PDO::PARAM_INT);
-                        $insert->bindValue(':quest', $questId, PDO::PARAM_INT);
-                        $insert->execute();
-                        $count++;
+                if(is_array($values) && $values !== []){
+                    $tuples = [];
+                    $params = [];
+                    foreach(array_values($values) as $index => $value){
+                        $entityParam = ':entity'.$index;
+                        $questParam = ':quest'.$index;
+                        $tuples[] = '('.$entityParam.','.$questParam.')';
+                        $params[$entityParam] = (int)$value;
+                        $params[$questParam] = $questId;
                     }
+                    $insert = $pdo->prepare(
+                        'INSERT INTO `'.$cfg['table'].'`(`'.$cfg['entity'].'`,`'.$cfg['quest'].'`)'
+                        .' VALUES'.implode(',', $tuples)
+                    );
+                    foreach($params as $param => $value){
+                        $this->bindValue($insert, $param, $value);
+                    }
+                    $insert->execute();
+                    $count = count($values);
                 }
                 $stats[$role][$type] = ['inserted' => $count];
             }
@@ -473,16 +505,15 @@ class QuestAggregateService extends MultiServerRepository
             $del = $pdo->prepare('DELETE FROM `'.$table.'` WHERE `ID`=:id');
             $del->bindValue(':id', $questId, PDO::PARAM_INT);
             $del->execute();
-            $inserted = 0;
+            $payload = [];
             if(is_array($rows)){
                 foreach($rows as $row){
                     if(!is_array($row)) continue;
                     $row['ID'] = $questId;
-                    $this->insertRow($pdo, $table, $row);
-                    $inserted++;
+                    $payload[] = $row;
                 }
             }
-            $stats[$key] = ['inserted' => $inserted];
+            $stats[$key] = ['inserted' => $this->insertRows($pdo, $table, $payload)];
         }
         return $stats;
     }
@@ -497,12 +528,13 @@ class QuestAggregateService extends MultiServerRepository
             $del->bindValue(':id', $questId, PDO::PARAM_INT);
             $del->execute();
             $inserted = 0;
+            $payload = [];
             foreach(is_array($headers)?$headers:[] as $row){
                 if(!is_array($row)) continue;
                 $row['QuestID'] = $questId;
-                $this->insertRow($pdo, 'quest_poi', $row);
-                $inserted++;
+                $payload[] = $row;
             }
+            $inserted = $this->insertRows($pdo, 'quest_poi', $payload);
             $stats['headers'] = ['inserted' => $inserted];
         } else {
             $stats['headers'] = ['skipped' => true];
@@ -511,14 +543,13 @@ class QuestAggregateService extends MultiServerRepository
             $del = $pdo->prepare('DELETE FROM `quest_poi_points` WHERE `QuestID`=:id');
             $del->bindValue(':id', $questId, PDO::PARAM_INT);
             $del->execute();
-            $inserted = 0;
+            $payload = [];
             foreach(is_array($points)?$points:[] as $row){
                 if(!is_array($row)) continue;
                 $row['QuestID'] = $questId;
-                $this->insertRow($pdo, 'quest_poi_points', $row);
-                $inserted++;
+                $payload[] = $row;
             }
-            $stats['points'] = ['inserted' => $inserted];
+            $stats['points'] = ['inserted' => $this->insertRows($pdo, 'quest_poi_points', $payload)];
         } else {
             $stats['points'] = ['skipped' => true];
         }
@@ -599,14 +630,52 @@ class QuestAggregateService extends MultiServerRepository
 
     private function insertRow(PDO $pdo, string $table, array $data): void
     {
-        $cols = array_keys($data);
-        $placeholders = array_map(fn($c) => ':'.$c, $cols);
-        $sql = 'INSERT INTO `'.$table.'`(`'.implode('`,`', $cols).'`) VALUES('.implode(',', $placeholders).')';
-        $stmt = $pdo->prepare($sql);
-        foreach($data as $col => $value){
-            $this->bindValue($stmt, ':'.$col, $value === '' ? null : $value);
+        $this->insertRows($pdo, $table, [$data]);
+    }
+
+    /**
+     * 一次 INSERT 写入多行，返回写入行数。
+     *
+     * 列集合不同的行分成独立语句（同一条 VALUES 列表必须同列）；一批奖励/关联号
+     * 现在只发一条语句，而不是每行一次往返。
+     *
+     * @param array<int,array<string,mixed>> $rows
+     */
+    private function insertRows(PDO $pdo, string $table, array $rows): int
+    {
+        $groups = [];
+        foreach($rows as $row){
+            if(!is_array($row) || $row === []) continue;
+            $groups[implode(',', array_keys($row))][] = $row;
         }
-        $stmt->execute();
+
+        $inserted = 0;
+        foreach($groups as $group){
+            $cols = array_keys($group[0]);
+            $tuples = [];
+            $params = [];
+            foreach($group as $index => $row){
+                $placeholders = [];
+                foreach($cols as $col){
+                    $param = ':v'.$index.'_'.preg_replace('/[^A-Za-z0-9_]/', '', $col);
+                    $placeholders[] = $param;
+                    $value = $row[$col] ?? null;
+                    $params[$param] = $value === '' ? null : $value;
+                }
+                $tuples[] = '('.implode(',', $placeholders).')';
+            }
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO `'.$table.'`(`'.implode('`,`', $cols).'`) VALUES'.implode(',', $tuples)
+            );
+            foreach($params as $param => $value){
+                $this->bindValue($stmt, $param, $value);
+            }
+            $stmt->execute();
+            $inserted += count($group);
+        }
+
+        return $inserted;
     }
 
     private function bindValue(\PDOStatement $stmt, string $param, $value): void
@@ -1042,7 +1111,7 @@ class QuestAggregateService extends MultiServerRepository
 
     private function currentUser(): string
     {
-        return $_SESSION['admin_user'] ?? ($_SESSION['username'] ?? 'unknown');
+        return \Acme\Panel\Support\Auth::user() ?? 'unknown';
     }
 
     private function buildInsertStatement(string $table, array $data): string

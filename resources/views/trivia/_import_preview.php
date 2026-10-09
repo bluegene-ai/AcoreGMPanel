@@ -44,14 +44,14 @@ $format = (string) ($import['format'] ?? '');
 
   <?php if ($rows !== []): ?>
     <div class="tv-table-wrap">
-      <table class="tv-table tv-table--compact">
+      <table class="table table--tv table--tv-compact">
         <thead>
           <tr>
-            <th>#</th>
-            <th><?= htmlspecialchars(__('app.trivia.fields.question')) ?></th>
-            <th><?= htmlspecialchars(__('app.trivia.fields.answer_index')) ?></th>
-            <th><?= htmlspecialchars(__('app.trivia.fields.reward_preset')) ?></th>
-            <th><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
+            <th scope="col">#</th>
+            <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.question')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.answer_index')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.reward_preset')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.trivia.fields.status')) ?></th>
           </tr>
         </thead>
         <tbody>

@@ -37,12 +37,12 @@
     <div class="ii-table-wrap">
       <table class="table" id="iiCharTable">
         <thead><tr>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.guid')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.name')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.level')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.race')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.account')) ?></th>
-          <th><?= htmlspecialchars(__('app.item_inventory.character.chars.table.actions')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.guid')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.name')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.level')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.race')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.account')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.actions')) ?></th>
         </tr></thead>
         <tbody><tr><td colspan="6" class="text-center muted"><?= htmlspecialchars(__('app.item_inventory.character.chars.table.empty')) ?></td></tr></tbody>
       </table>

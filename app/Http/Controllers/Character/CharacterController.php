@@ -13,7 +13,7 @@ use Acme\Panel\Domain\CharacterBoost\CharacterBoostGuardException;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostNotFoundException;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostService;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostSoapException;
-use Acme\Panel\Support\{Auth,Audit,LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{Auth,Audit,LogPath,ServerContext,ServerList,SoapCommand};
 use Acme\Panel\Support\GameNameResolver;
 use Acme\Panel\Support\SoapService;
 
@@ -364,32 +364,6 @@ class CharacterController extends Controller
         ]);
     }
 
-    public function apiNames(Request $request): Response
-    {
-        if(!Auth::check()) {
-            return $this->json(['success'=>false,'message'=>Lang::get('app.auth.errors.not_logged_in')],403);
-        }
-
-        $this->requireCharacterListCapability();
-
-        $state = $this->prepareCharacterNameLookupState($request);
-        if($state['type'] === ''){
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_params')],422);
-        }
-
-        if(!$state['ids']){
-            return $this->json(['success'=>true,'type'=>$state['type'],'names'=>[]]);
-        }
-
-        try {
-            $names = GameNameResolver::resolveMany($state['type'], $state['ids']);
-        } catch(\Throwable $e) {
-            return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.query_failed',['message'=>$e->getMessage()])],500);
-        }
-
-        return $this->json(['success'=>true,'type'=>$state['type'],'names'=>$names]);
-    }
-
     /**
      * 角色详情页需要用到的全部 ID → 文本映射：一次性解析（缓存命中后只是读 JSON），
      * 页面首屏直接显示名称，不依赖外部网站或前端异步补名。
@@ -465,28 +439,6 @@ class CharacterController extends Controller
     {
         return [
             'guid' => max(0, (int) $request->input('guid', 0)),
-        ];
-    }
-
-    private function prepareCharacterNameLookupState(Request $request): array
-    {
-        $type = $this->normalizedEnum(
-            $request,
-            'type',
-            ['spell', 'skill', 'achievement', 'achievementcriteria', 'quest', 'faction', 'item'],
-            ''
-        );
-        $raw = $this->normalizedString($request, 'ids');
-        $parts = preg_split('/\s*,\s*/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $ids = array_values(array_unique(array_filter(array_map('intval', $parts), static fn($value) => $value > 0)));
-
-        if (count($ids) > 400) {
-            $ids = array_slice($ids, 0, 400);
-        }
-
-        return [
-            'type' => $type,
-            'ids' => $ids,
         ];
     }
 
@@ -582,7 +534,8 @@ class CharacterController extends Controller
         if($guid<=0) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_id')],422);
         $summary = $this->repo()->findSummary($guid);
         if(!$summary) return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.not_found')],404);
-        $name = $summary['name'];
+        $name = SoapCommand::characterName((string) $summary['name']);
+        if ($name === null) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_player')],422);
         $soap = new SoapService();
         $res = $soap->execute('.kick '.$name);
         $this->logCharacterAction('kick',$res['success']?'success':'fail',['guid'=>$guid,'name'=>$name,'ip'=>$request->ip(),'message'=>$res['message'] ?? null]);
@@ -604,9 +557,9 @@ class CharacterController extends Controller
         $summary = $this->repo()->findSummary($guid);
         if(!$summary){ return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.not_found')],404); }
         if(!empty($summary['online'])){
-            $name = (string)($summary['name'] ?? '');
-            if($name === ''){
-                return $this->json(['success'=>false,'message'=>Lang::get('app.character.actions.blocked_online')],422);
+            $name = SoapCommand::characterName((string)($summary['name'] ?? ''));
+            if($name === null){
+                return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_player')],422);
             }
             $soap = new SoapService();
             $kickRes = $soap->execute('.kick '.$name);

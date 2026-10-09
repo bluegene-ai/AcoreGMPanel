@@ -524,6 +524,63 @@ return array (
     934 => 'The Frostborn',
     935 => 'Valiance Expedition',
   ),
+  'repository' => 
+  array (
+    'errors' => 
+    array (
+      'invalid_new_id' => 'Invalid new ID.',
+      'id_exists' => 'ID already exists.',
+      'copy_source_missing' => 'Source entry not found.',
+      'copy_failed' => 'Failed to copy creature template.',
+      'create_failed' => 'Failed to create creature template.',
+      'invalid_id' => 'Invalid ID.',
+      'no_rows_deleted' => 'No rows were deleted.',
+      'no_changes' => 'No changes to apply.',
+      'no_valid_fields' => 'No valid columns provided.',
+      'no_value_changes' => 'Values remain unchanged.',
+      'update_failed' => 'Update failed.',
+      'model_invalid' => 'Invalid model data.',
+      'model_index_limit' => 'Model index limit reached.',
+      'model_add_failed' => 'Failed to add model.',
+      'model_update_failed' => 'Failed to update model.',
+      'model_delete_failed' => 'No model was deleted.',
+      'sql_empty' => 'SQL cannot be empty.',
+      'sql_multi' => 'Multiple statements are not allowed.',
+      'sql_parse_column' => 'Unable to parse column: :column',
+      'sql_invalid_column' => 'Column :column is not allowed.',
+      'sql_update_where' => 'UPDATE must end with WHERE entry = <number>; an optional LIMIT 1 is allowed.',
+      'sql_only_update_insert' => 'Only UPDATE or INSERT creature_template statements are allowed.',
+      'sql_exec_error' => 'Execution failed: :error',
+    ),
+    'success' => 
+    array (
+      'copied' => 'Creature template copied (source #:source)',
+      'created' => 'Creature template created.',
+      'deleted' => 'Deleted creature #:id.',
+      'updated' => 'Update completed.',
+      'model_added' => 'Model added.',
+      'model_updated' => 'Model updated.',
+      'model_deleted' => 'Model deleted.',
+      'sql_action_inserted' => 'Inserted',
+      'sql_action_affected' => 'Affected',
+      'sql_rows' => ':action rows: :count',
+    ),
+    'info_labels' => 
+    array (
+      0 => 'General',
+      1 => 'Group',
+      21 => 'Profession',
+      41 => 'PvP',
+      62 => 'Raid',
+      81 => 'Dungeon',
+      82 => 'World Event',
+      83 => 'Legendary',
+      84 => 'Escort',
+      85 => 'Heroic',
+      88 => 'Raid (10 player)',
+      89 => 'Raid (25 player)',
+    ),
+  ),
   'js' => 
   array (
     'modules' => 
@@ -565,6 +622,7 @@ return array (
         'errors' => 
         array (
           'panel_api_not_ready' => 'Panel API is not ready',
+          'network' => 'Network error, please retry',
         ),
         'exec' => 
         array (

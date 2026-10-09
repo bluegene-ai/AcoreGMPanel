@@ -12,10 +12,35 @@ $__pageHeaderNote = trim((string)($__pageHeader['note'] ?? ''));
 $__pageHeaderNoteHint = trim((string)($__pageHeader['note_hint'] ?? ''));
 $__pageHeaderActions = is_array($__pageHeader['actions'] ?? null) ? $__pageHeader['actions'] : [];
 
-if ($__pageHeaderTitle === '' && $__pageHeaderIntro === '' && $__pageHeaderNote === '' && $__pageHeaderActions === []) {
+    // 面包屑由 PageMetadata::resolve() 提供（每个视图都有登记）。
+$__pageBreadcrumbs = is_array($__pageMeta['breadcrumbs'] ?? null) ? $__pageMeta['breadcrumbs'] : [];
+
+if ($__pageHeaderTitle === '' && $__pageHeaderIntro === '' && $__pageHeaderNote === '' && $__pageHeaderActions === [] && $__pageBreadcrumbs === []) {
     return;
 }
 ?>
+<?php if ($__pageBreadcrumbs !== []): ?>
+  <?php $__pageBreadcrumbLast = count($__pageBreadcrumbs) - 1; ?>
+  <nav class="breadcrumb" aria-label="<?= htmlspecialchars(__('app.nav.breadcrumb')) ?>">
+    <ol class="breadcrumb__list">
+      <?php foreach ($__pageBreadcrumbs as $__pageBreadcrumbIndex => $__pageBreadcrumb): ?>
+        <?php
+          $__pageBreadcrumbLabel = (string) ($__pageBreadcrumb['label'] ?? '');
+          $__pageBreadcrumbUrl = (string) ($__pageBreadcrumb['url'] ?? '');
+          $__pageBreadcrumbCurrent = $__pageBreadcrumbIndex === $__pageBreadcrumbLast;
+        ?>
+        <?php if ($__pageBreadcrumbLabel === '') { continue; } ?>
+        <li class="breadcrumb__item">
+          <?php if ($__pageBreadcrumbCurrent || $__pageBreadcrumbUrl === ''): ?>
+            <span aria-current="page"><?= htmlspecialchars($__pageBreadcrumbLabel) ?></span>
+          <?php else: ?>
+            <a href="<?= htmlspecialchars($__pageBreadcrumbUrl) ?>"><?= htmlspecialchars($__pageBreadcrumbLabel) ?></a>
+          <?php endif; ?>
+        </li>
+      <?php endforeach; ?>
+    </ol>
+  </nav>
+<?php endif; ?>
 <div class="page-header">
   <div class="page-header__main">
     <?php if ($__pageHeaderTitle !== ''): ?>
@@ -24,13 +49,13 @@ if ($__pageHeaderTitle === '' && $__pageHeaderIntro === '' && $__pageHeaderNote 
     <?php if ($__pageHeaderIntro !== ''): ?>
       <p class="page-header__intro muted">
         <?= htmlspecialchars($__pageHeaderIntro) ?>
-        <?php if ($__pageHeaderIntroHint !== ''): ?><span class="panel-hint" title="<?= htmlspecialchars($__pageHeaderIntroHint) ?>">i</span><?php endif; ?>
+        <?php if ($__pageHeaderIntroHint !== ''): ?><?= panel_hint($__pageHeaderIntroHint) ?><?php endif; ?>
       </p>
     <?php endif; ?>
     <?php if ($__pageHeaderNote !== ''): ?>
       <div class="page-header__note muted">
         <?= htmlspecialchars($__pageHeaderNote) ?>
-        <?php if ($__pageHeaderNoteHint !== ''): ?><span class="panel-hint" title="<?= htmlspecialchars($__pageHeaderNoteHint) ?>">i</span><?php endif; ?>
+        <?php if ($__pageHeaderNoteHint !== ''): ?><?= panel_hint($__pageHeaderNoteHint) ?><?php endif; ?>
       </div>
     <?php endif; ?>
   </div>

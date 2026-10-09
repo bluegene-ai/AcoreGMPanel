@@ -1,0 +1,3 @@
+# 配置目录（config/generated 下含数据库与 SOAP 凭据、管理员口令哈希）。
+# 只被子进程 require，不允许经 HTTP 读取。
+Require all denied

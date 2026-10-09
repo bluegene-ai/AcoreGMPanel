@@ -92,6 +92,14 @@ return [
     'confirm' => [
         'stop_all' => 'Stop worldserver and authserver? They will stay down until you start them again.',
         'stop_service' => 'Stop :service? It will stay down until you start it again.',
+        'restart_all' => 'Restart worldserver and authserver? Connected players are disconnected.',
+        'restart_all_gate' => 'Type RESTART to confirm restarting every service',
+    ],
+
+    'danger' => [
+        'zone_label' => 'Destructive actions',
+        'zone_hint' => 'These commands affect every player on this realm and cannot be rolled back automatically.',
+        'require_text' => 'Type to confirm',
     ],
 
     'notices' => [
@@ -220,9 +228,17 @@ return [
                 'actions' => [
                     'start' => 'Start',
                     'stop' => 'Stop',
+                    'restart' => 'Restart',
                 ],
                 'confirm' => [
                     'stop_service' => 'Stop :service?',
+                    'stop_all' => 'Stop worldserver and authserver? They will stay down until you start them again.',
+                    'restart_all' => 'Restart worldserver and authserver? Connected players are disconnected.',
+                    'restart_all_gate' => 'Type RESTART to confirm restarting every service',
+                    'restart_service' => 'Restart :service?',
+                    'require_text_label' => 'Type to confirm',
+                    'cancel' => 'Cancel',
+                    'submit' => 'Confirm',
                 ],
                 'supervisor' => [
                     'running' => 'supervisor running',

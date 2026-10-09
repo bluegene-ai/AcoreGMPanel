@@ -10,6 +10,7 @@ return array (
   ),
   'nav' => 
   array (
+    'breadcrumb' => 'Breadcrumb',
     'home' => 'Home',
     'account' => 'Accounts',
     'character' => 'Characters',
@@ -41,6 +42,10 @@ return array (
   'common' => 
   array (
     'performance' => 'Performance',
+    'empty' => 
+    array (
+      'no_data' => 'No data',
+    ),
     'loading' => 'Loading…',
     'online_total_label' => 'Online / Total',
     'online_total_title' => 'Online players / total characters on this realm',
@@ -57,6 +62,7 @@ return array (
       'missing_id' => 'Missing id',
       'missing_ip' => 'Missing IP',
       'missing_player' => 'Missing player',
+      'invalid_player' => 'Invalid character name (2-16 letters only)',
       'missing_params' => 'Missing required parameters',
       'required' => 'This field is required',
       'number' => 'Please enter a number',
@@ -103,6 +109,12 @@ return array (
   array (
     'previous' => 'Previous page',
     'next' => 'Next page',
+    'label' => 'Pagination',
+    'page' => 'Page :page',
+    'range' => ':from-:to of :total',
+    'total' => ':total total',
+    'jump_label' => 'Go to',
+    'jump_submit' => 'Go',
   ),
   'server' => 
   array (

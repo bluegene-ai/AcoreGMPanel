@@ -914,11 +914,11 @@
     if(!dom.copyBtn) return;
     dom.copyBtn.addEventListener('click', () => {
       if(!state.lastSql){ return; }
-      navigator.clipboard.writeText(state.lastSql).then(()=>{
-        Feedback.success(dom.flashBox, STRINGS.copySuccess);
-      }).catch(()=>{
-        Feedback.error(dom.flashBox, STRINGS.copyFailed);
-      });
+      // 非安全上下文下 navigator.clipboard 不可用，降级由 Panel.copy 统一处理
+      Panel.copy(state.lastSql, { feedback: (ok)=>{
+        if(ok) Feedback.success(dom.flashBox, STRINGS.copySuccess);
+        else Feedback.error(dom.flashBox, STRINGS.copyFailed);
+      } });
     });
   }
 

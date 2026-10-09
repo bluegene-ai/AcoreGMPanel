@@ -60,7 +60,7 @@ $extDefaultFor = static function (string $extName, array $extDefaults): ?string 
   </div>
   <p class="muted boss-config-note">
     <?= htmlspecialchars(__('app.boss.ext.note')) ?>
-    <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.ext.note_hint')) ?>">i</span>
+    <?= panel_hint(__('app.boss.ext.note_hint')) ?>
   </p>
 
   <form id="bossExtConfigForm" class="boss-config-form" autocomplete="off"
@@ -113,7 +113,7 @@ $extDefaultFor = static function (string $extName, array $extDefaults): ?string 
               <?php if ($extIsClassReward): ?>
                 <p class="muted boss-config-note">
                   <?= htmlspecialchars(__('app.boss.ext.class_map.note_short')) ?>
-                  <span class="panel-hint" title="<?= htmlspecialchars(__('app.boss.ext.class_map.note')) ?>">i</span>
+                  <?= panel_hint(__('app.boss.ext.class_map.note')) ?>
                 </p>
               <?php endif; ?>
               <div class="boss-config-columns">
@@ -135,7 +135,7 @@ $extDefaultFor = static function (string $extName, array $extDefaults): ?string 
                     // 提示默认收进 ⓘ 悬浮提示；要当场看到的（单位/留空语义）在 config/boss.php 标 hint_visible
                     $extHintVisible = !empty($extField['hint_visible']);
                     $extHintBadge = ($extHint !== '' && !$extHintVisible)
-                        ? ' <span class="panel-hint" title="' . htmlspecialchars($extHint, ENT_QUOTES, 'UTF-8') . '">i</span>'
+                        ? ' ' . panel_hint($extHint)
                         : '';
                     $extLongKinds = ['lines', 'keyedlines', 'keyedintlist'];
                     $extIsLong = in_array($extKind, $extLongKinds, true);

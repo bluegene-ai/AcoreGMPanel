@@ -162,6 +162,11 @@ return [
             'log' => '查看日志',
             'execute_sql' => '执行 SQL',
             'copy_sql' => '复制 SQL',
+            'save' => '保存',
+            'save_no_changes' => '没有需要保存的改动',
+            'save_success' => '任务已保存',
+            'save_failed' => '保存失败',
+            'save_failed_with_reason' => '保存失败: :reason',
         ],
         'diff' => [
             'title' => '差异 SQL 预览',

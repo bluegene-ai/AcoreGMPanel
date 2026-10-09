@@ -57,12 +57,18 @@
   async function post(path, body) {
     const url = withServer(path);
     if (api && typeof api.post === 'function') return api.post(url, body || {});
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body: JSON.stringify(body || {})
-    });
-    return response.json();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(body || {})
+      });
+      return response.json();
+    } catch (error) {
+      // 网络层失败包成同一个形状：调用方只看 success/message，原始异常留给控制台
+      console.error('[auctionator] request failed', error);
+      return { success: false, message: t('errors.network', 'Network error, please retry'), raw: String(error) };
+    }
   }
 
   /**
@@ -101,7 +107,7 @@
 
   /** 兜底：局部刷新拿不到可信页面时（会话过期、请求失败）才整页跳。 */
   function reload(delay) {
-    window.setTimeout(function () { window.location.reload(); }, delay || 0);
+    window.setTimeout(function () { if (window.Panel && typeof window.Panel.reload === 'function') { window.Panel.reload(); return; } window.location.reload(); }, delay || 0);
   }
 
   /**
@@ -377,16 +383,27 @@
    * 两种 GM 上架入口（addlist 表单与 ".auctionator add"）都用"模式 + 两个单价"，模式决定用哪个单价，
    * 所以字段跟着模式切换，预览要写出整组价格（单价 × 堆叠）。
    */
-  // 金额显示：页面里所有铜币数值都按"金/银/铜"呈现，单位取模块语言文件（英文界面是 g/s/c）。
+  // 金额显示：页面里所有铜币数值都按"金/银/铜"呈现，单位统一走 Panel.money（模块语言包），
+  // 不再各写一份拼接与中文 fallback。
   function moneyUnit(key, fallback) {
     return t('money.' + key, fallback);
   }
 
   function copperText(value) {
     const copper = Math.max(0, Math.floor(Number(value) || 0));
-    return Math.floor(copper / 10000) + moneyUnit('gold', '金')
-      + Math.floor((copper % 10000) / 100) + moneyUnit('silver', '银')
-      + (copper % 100) + moneyUnit('copper', '铜');
+    if (window.Panel && typeof window.Panel.money === 'function') {
+      return window.Panel.money(copper, {
+        module: 'auctionator',
+        separator: '',
+        always: true,
+        units: {
+          gold: moneyUnit('gold', 'g'),
+          silver: moneyUnit('silver', 's'),
+          copper: moneyUnit('copper', 'c')
+        }
+      });
+    }
+    return copper + moneyUnit('copper', 'c');
   }
 
   /**

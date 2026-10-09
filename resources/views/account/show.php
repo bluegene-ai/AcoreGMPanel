@@ -72,10 +72,10 @@ $accountShowCharacterListUrl = $accountShowUsername !== ''
       <table class="table table--compact">
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.account.show.characters.table.guid')) ?></th>
-            <th><?= htmlspecialchars(__('app.account.show.characters.table.name')) ?></th>
-            <th><?= htmlspecialchars(__('app.account.show.characters.table.level')) ?></th>
-            <th><?= htmlspecialchars(__('app.account.show.characters.table.status')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.account.show.characters.table.guid')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.account.show.characters.table.name')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.account.show.characters.table.level')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.account.show.characters.table.status')) ?></th>
           </tr>
         </thead>
         <tbody>

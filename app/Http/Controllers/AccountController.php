@@ -11,7 +11,7 @@ use Acme\Panel\Support\{Auth,Audit,Csrf,IpLocationService};
 use Acme\Panel\Support\SoapService;
 use Acme\Panel\Domain\Account\AccountMutationHydrator;
 use Acme\Panel\Domain\Account\AccountRepository;
-use Acme\Panel\Support\{ClientIp,LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{ClientIp,LogPath,ServerContext,ServerList,SoapCommand};
 
 class AccountController extends Controller
 {
@@ -630,7 +630,10 @@ class AccountController extends Controller
     {
         $this->requireAccountKickCapability();
         $this->maybeSwitchServer($request);
-    $player=(string)$request->input('player',''); if($player==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_player')],422);
+    $playerRaw=(string)$request->input('player',''); if($playerRaw==='') return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.missing_player')],422);
+        // 角色名走白名单校验：转义过的名字核心会当成不存在的角色，合格才允许拼进命令。
+        $player = SoapCommand::characterName($playerRaw);
+        if ($player === null) return $this->json(['success'=>false,'message'=>Lang::get('app.common.validation.invalid_player')],422);
         $soap = new SoapService();
         $res = $soap->execute('.kick '.$player);
         if($res['success']){ Audit::log('account','kick',"player=$player"); }

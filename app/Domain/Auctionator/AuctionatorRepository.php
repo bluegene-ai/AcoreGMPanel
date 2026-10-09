@@ -13,12 +13,16 @@ declare(strict_types=1);
 namespace Acme\Panel\Domain\Auctionator;
 
 use Acme\Panel\Domain\Support\MultiServerRepository;
+use Acme\Panel\Support\TransientCache;
 use PDO;
 use Throwable;
 
 final class AuctionatorRepository extends MultiServerRepository
 {
     private array $warnings = [];
+
+    /** @var array<string, bool|null> information_schema 探测结果（键含连接与表/列） */
+    private array $schemaCache = [];
 
     public function warnings(): array
     {
@@ -28,9 +32,32 @@ final class AuctionatorRepository extends MultiServerRepository
 
     /**
      * Bot/player listing counters for the dashboard.
+     *
+     * 4 次全表聚合按区服 + bot 缓存 45 秒：`auctionhouse` 会随挂单量增长，
+     * 而仪表盘每次打开都会重新问一遍同样的问题。
+     *
      * @return array{ok: bool, total: int, bot: int, player: int, bid_only: int, with_buyout: int, distinct_items: int, min_id: int, max_id: int, min_expire: int, max_expire: int, by_house: array<int, int>, bot_mail: int}
      */
     public function listingStats(int $botGuid): array
+    {
+        $cacheKey = 's' . $this->serverId . '_bot' . $botGuid;
+        $cached = TransientCache::get('auctionator_listing', $cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $stats = $this->computeListingStats($botGuid);
+        if ($stats['ok']) {
+            TransientCache::set('auctionator_listing', $cacheKey, $stats, 45);
+        }
+
+        return $stats;
+    }
+
+    /**
+     * @return array{ok: bool, total: int, bot: int, player: int, bid_only: int, with_buyout: int, distinct_items: int, min_id: int, max_id: int, min_expire: int, max_expire: int, by_house: array<int, int>, bot_mail: int}
+     */
+    private function computeListingStats(int $botGuid): array
     {
         $stats = [
             'ok' => false, 'total' => 0, 'bot' => 0, 'player' => 0, 'bid_only' => 0,
@@ -994,6 +1021,11 @@ final class AuctionatorRepository extends MultiServerRepository
 
     private function hasTable(string $table, PDO $pdo): ?bool
     {
+        $cacheKey = spl_object_id($pdo) . ':table:' . $table;
+        if (array_key_exists($cacheKey, $this->schemaCache)) {
+            return $this->schemaCache[$cacheKey];
+        }
+
         try {
             $statement = $pdo->prepare(
                 'SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table'
@@ -1001,11 +1033,11 @@ final class AuctionatorRepository extends MultiServerRepository
             $statement->execute([':table' => $table]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
 
-            return $row !== false && (int) ($row['n'] ?? 0) > 0;
+            return $this->schemaCache[$cacheKey] = $row !== false && (int) ($row['n'] ?? 0) > 0;
         } catch (Throwable $exception) {
             $this->warn('hasTable(' . $table . '): ' . $exception->getMessage());
 
-            return null;
+            return $this->schemaCache[$cacheKey] = null;
         }
     }
 
@@ -1015,6 +1047,11 @@ final class AuctionatorRepository extends MultiServerRepository
      */
     private function hasColumn(string $table, string $column, PDO $pdo): ?bool
     {
+        $cacheKey = spl_object_id($pdo) . ':column:' . $table . '.' . $column;
+        if (array_key_exists($cacheKey, $this->schemaCache)) {
+            return $this->schemaCache[$cacheKey];
+        }
+
         try {
             $statement = $pdo->prepare(
                 'SELECT COUNT(*) AS n FROM information_schema.columns
@@ -1023,11 +1060,11 @@ final class AuctionatorRepository extends MultiServerRepository
             $statement->execute([':table' => $table, ':column' => $column]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
 
-            return $row !== false && (int) ($row['n'] ?? 0) > 0;
+            return $this->schemaCache[$cacheKey] = $row !== false && (int) ($row['n'] ?? 0) > 0;
         } catch (Throwable $exception) {
             $this->warn('hasColumn(' . $table . '.' . $column . '): ' . $exception->getMessage());
 
-            return null;
+            return $this->schemaCache[$cacheKey] = null;
         }
     }
 

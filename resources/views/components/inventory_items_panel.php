@@ -53,14 +53,14 @@ $iiPanelConfig = [
   <div class="ii-table-wrap">
     <table class="table" id="iiItemTable">
       <thead><tr>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.instance_guid')) ?></th>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.item_id')) ?></th>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.name')) ?></th>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.count')) ?></th>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.location')) ?></th>
-        <th><?= htmlspecialchars(__('app.item_inventory.items.table.actions')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.instance_guid')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.item_id')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.name')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.count')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.location')) ?></th>
+        <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.actions')) ?></th>
         <?php if ($iiShowSelect): ?>
-          <th><?= htmlspecialchars(__('app.item_inventory.items.table.owners')) ?></th>
+          <th scope="col"><?= htmlspecialchars(__('app.item_inventory.items.table.owners')) ?></th>
         <?php endif; ?>
       </tr></thead>
       <tbody><tr><td colspan="<?= $iiColumnCount ?>" class="text-center muted"><?= htmlspecialchars(__('app.item_inventory.items.table.empty')) ?></td></tr></tbody>

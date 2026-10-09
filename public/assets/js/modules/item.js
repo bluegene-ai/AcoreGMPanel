@@ -138,14 +138,30 @@ function initList(){
     }
   }); }
   qsa('.action-delete').forEach(btn=> btn.addEventListener('click',async ()=>{
-    const id=Number(btn.dataset.id); if(!confirm(translate('list.confirm_delete','Delete item #:id?',{id}))) return;
+    const id=Number(btn.dataset.id);
+    const label=btn.dataset.name||('#'+id);
+    const ok=await Panel.confirm({
+      title:translate('list.delete_title','Delete item'),
+      message:translate('list.confirm_delete','Delete item #:id?',{id}),
+      requireText: label,
+      requireLabel:translate('list.delete_require_label','Type the item name or id to confirm'),
+      confirmLabel:translate('list.delete_submit','Delete'),
+      danger:true
+    });
+    if(!ok) return;
     try{
       const res=await Panel.api.post('/item/api/delete',{entry:id});
-      if(res.success){ itemNotify(translate('list.delete_success','Item deleted'),'success',{duration:1000}); setTimeout(()=>location.reload(),400); }
+      if(res.success){
+        itemNotify(translate('list.delete_success','Item deleted'),'success',{duration:1000});
+        if(typeof Panel.reloadRegion==='function'){
+          const done=await Panel.reloadRegion('table.item-table', window.location.href);
+          if(!done) Panel.reload();
+        } else { location.reload(); }
+      }
       else { itemNotify(res.message||translate('list.delete_failed','Delete failed'),'error',{duration:5000}); }
     }catch(e){
-      const reason = e?.message || e;
-      itemNotify(translate('list.delete_failed_with_reason','Delete failed: :reason',{reason}),'error',{duration:5000});
+      console.error('[item] delete failed', e);
+      itemNotify(translate('list.delete_failed_network','Network error, please retry'),'error',{duration:5000});
     }
   }));
   const logBtn=qs('#btn-item-sql-log');
@@ -387,7 +403,7 @@ function initEdit(){
   }
 
   const fullModeBox=qs('#sqlFullMode'); if(fullModeBox){ fullModeBox.addEventListener('change',updateDiffPreview); }
-  const copyBtn=qs('#btn-copy-diff-inline'); if(copyBtn){ copyBtn.addEventListener('click',()=>{ const pre=qs('#itemDiffSqlLive'); if(!pre) return; navigator.clipboard.writeText(pre.textContent||''); itemNotify(translate('common.copy_success','Copied'),'success'); }); }
+  const copyBtn=qs('#btn-copy-diff-inline'); if(copyBtn){ copyBtn.addEventListener('click',()=>{ const pre=qs('#itemDiffSqlLive'); if(!pre) return; Panel.copy(pre.textContent||'', { feedback: (ok)=> itemNotify(ok ? translate('common.copy_success','Copied') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') }); }); }
   const execBtn=qs('#btn-exec-diff-sql'); if(execBtn){ execBtn.addEventListener('click', async ()=>{
     const pre=qs('#itemDiffSqlLive'); if(!pre) return; const sql=pre.textContent.trim();
     const {diff}=gatherDiff();
@@ -398,7 +414,7 @@ function initEdit(){
       return;
     }
     if(!/^UPDATE\s+`?item_template`?/i.test(sql.split('\n')[0])){ itemNotify(translate('exec.only_item_template_update','Only UPDATE on item_template is allowed'),'error'); return; }
-    if(!confirm(translate('exec.confirm_run_diff','Run the current SQL?'))) return;
+    if(!await Panel.confirm({ message:translate('exec.confirm_run_diff','Run the current SQL?'), danger:true, confirmLabel:translate('exec.submit','Run') })) return;
     const box=qs('#itemDiffSqlExecResult'); const status=qs('#sqlExecStatus'); const summary=qs('#sqlExecSummary'); const msgs=qs('#sqlExecMessages'); const timing=qs('#sqlExecTiming'); const sampleWrap=qs('#sqlExecSampleWrapper'); const sampleBox=qs('#sqlExecSample');
     function show(){ if(box) box.classList.add('item-sql-section__exec-result--visible'); }
     function setStatus(ok){
@@ -445,7 +461,7 @@ function initEdit(){
         const clearBtn=qs('#btn-clear-exec-result'); const hideBtn=qs('#btn-hide-exec-result'); const copyBtn=qs('#btn-copy-exec-json');
         if(clearBtn && !clearBtn.__bound){ clearBtn.addEventListener('click',()=>{ summary.innerHTML=''; msgs.textContent=''; sampleWrap && sampleWrap.classList.remove('item-sql-section__sample-wrapper--visible'); status.classList.remove('item-sql-section__status--visible','item-sql-section__status--success','item-sql-section__status--error'); timing.textContent=''; }); clearBtn.__bound=true; }
         if(hideBtn && !hideBtn.__bound){ hideBtn.addEventListener('click',()=>{ box.classList.remove('item-sql-section__exec-result--visible'); }); hideBtn.__bound=true; }
-        if(copyBtn && !copyBtn.__bound){ copyBtn.addEventListener('click',()=>{ navigator.clipboard.writeText(JSON.stringify(res,null,2)); itemNotify(translate('exec.copy_json_success','Copied JSON'),'success'); }); copyBtn.__bound=true; }
+        if(copyBtn && !copyBtn.__bound){ copyBtn.addEventListener('click',()=>{ Panel.copy(JSON.stringify(res,null,2), { feedback: (ok)=> itemNotify(ok ? translate('exec.copy_json_success','Copied JSON') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') }); }); copyBtn.__bound=true; }
       })();
     }catch(e){
       const reason = e?.message || e;
@@ -484,7 +500,7 @@ function initEdit(){
       if(wrap && !wrap.__diffBound){
         wrap.addEventListener('click',e=>{
           if(e.target && e.target.getAttribute('data-action')==='copy-diff-sql'){
-            const pre=wrap.querySelector('#diff-sql-preview'); if(pre){ navigator.clipboard.writeText(pre.textContent||''); itemNotify(translate('common.copy_success','Copied'),'success'); }
+            const pre=wrap.querySelector('#diff-sql-preview'); if(pre){ Panel.copy(pre.textContent||'', { feedback: (ok)=> itemNotify(ok ? translate('common.copy_success','Copied') : translate('common.copy_failed','Copy failed'), ok ? 'success' : 'error') }); }
           }
         });
         wrap.__diffBound=true;
@@ -494,7 +510,20 @@ function initEdit(){
     }
   }); }
   const delBtn=qs('#btn-delete-item'); if(delBtn){ delBtn.addEventListener('click',async ()=>{
-    const id=Number(delBtn.dataset.id); if(!confirm(translate('save.confirm_delete_item','Delete item #:id?',{id}))) return; const res=await Panel.api.post('/item/api/delete',{entry:id}); if(res.success){ itemNotify(translate('save.delete_success','Item deleted'),'success',{duration:2000}); window.location=Panel.url('/item'); } else { itemNotify(res.message||translate('save.delete_failed','Delete failed'),'error'); }
+    const id=Number(delBtn.dataset.id);
+    const entryLabel=(delBtn.dataset.name||'').trim()||String(id);
+    const ok=await Panel.confirm({
+      title:translate('save.delete_title','Delete item'),
+      message:translate('save.confirm_delete_item','Delete item #:id?',{id}),
+      requireText:entryLabel,
+      requireLabel:translate('save.delete_require_label','Type the item name or entry to confirm'),
+      confirmLabel:translate('save.delete_submit','Delete'),
+      danger:true
+    });
+    if(!ok) return;
+    const res=await Panel.api.post('/item/api/delete',{entry:id});
+    if(res.success){ itemNotify(translate('save.delete_success','Item deleted'),'success',{duration:2000}); window.location=Panel.url('/item'); }
+    else { itemNotify(res.message||translate('save.delete_failed','Delete failed'),'error'); }
   }); }
 
 

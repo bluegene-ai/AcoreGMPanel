@@ -28,7 +28,7 @@
     ? panelLocale.createModuleTranslator('mail')
     : null;
   const capabilities = window.PANEL_CAPABILITIES || {};
-  const can = key => capabilities[key] !== false;
+  const can = key => capabilities[key] === true;
   const hasBulkActions = can('mark_read') || can('delete');
   const columnCount = () => hasBulkActions ? 10 : 9;
 
@@ -62,8 +62,10 @@
     sort: window.MAIL_STATE?.sort || 'id',
     dir: (window.MAIL_STATE?.dir || 'DESC').toUpperCase(),
     limit: Number(window.MAIL_STATE?.limit) || 50,
-    page: Number(window.MAIL_STATE?.page) || 1
+    page: Number(window.MAIL_STATE?.page) || 1,
+    total: null
   };
+  let mailPager = null;
 
   const filterForm = qs('#mail-filter-form');
   const table = qs('#mailTable');
@@ -137,13 +139,15 @@
     return `<span class="${cls}">${escapeHtml(label)}</span>`;
   }
   function formatMoney(value){
+    // 单位走语言包（modules.mail.money.units.*）；中英文与金额单位不再各写一套
+    if(typeof window.Panel?.money === 'function') return window.Panel.money(value, { module: 'mail' });
     let amount = Number(value || 0);
     if(!Number.isFinite(amount) || amount < 0) amount = 0;
     amount = Math.floor(amount);
     const gold = Math.floor(amount / 10000);
     const silver = Math.floor((amount % 10000) / 100);
     const copper = amount % 100;
-    return `${gold}金${silver}银${copper}铜`;
+    return `${gold}g ${silver}s ${copper}c`;
   }
 
   function selectedIds(){
@@ -206,6 +210,7 @@
       const res = await apiPost('/mail/api/list', payload);
       if(res && res.success){
         renderTable(res.rows || []);
+        state.total = Number(res.total ?? 0);
         updateTotal(res.total ?? 0);
         renderPagination(res.page ?? state.page, res.pages ?? 1, res.limit ?? state.limit);
         applySortIndicators();
@@ -218,20 +223,22 @@
         mailNotify(res?.message || translateStatus('load_failed', 'Failed to load list'), 'error');
       }
     } catch(err){
+      console.error('[mail] list request failed', err);
       if(tbody){
         const failedText = escapeHtml(translateStatus('load_failed', 'Failed to load list'));
         tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center text-danger">${failedText}</td></tr>`;
       }
-      const errorText = `${translateStatus('load_failed', 'Failed to load list')}: ${err?.message || err}`;
-      mailNotify(errorText, 'error', { duration: 6000 });
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error', { duration: 6000 });
     }
   }
 
   function renderTable(rows){
     if(!tbody) return;
+    const emptyRow = (label)=> (typeof window.Panel?.emptyRow === 'function')
+      ? window.Panel.emptyRow(columnCount(), label, { cellClassName: 'text-center muted' })
+      : `<tr><td colspan="${columnCount()}" class="text-center muted">${escapeHtml(label)}</td></tr>`;
     if(!rows || !rows.length){
-      const emptyText = escapeHtml(translate('table.empty', 'No records'));
-      tbody.innerHTML = `<tr><td colspan="${columnCount()}" class="text-center muted">${emptyText}</td></tr>`;
+      tbody.innerHTML = emptyRow(translate('table.empty', 'No records'));
       return;
     }
     const now = nowSeconds();
@@ -293,6 +300,23 @@
   function renderPagination(page, pages, limit){
     state.page = page;
     state.limit = limit;
+    if(typeof window.Panel?.paginate === 'function' && table){
+      // 分页只有一套实现：服务端 components/pagination.php 的同一套标记与 aria-current
+      let host = qs('.pagination-host');
+      if(!host){
+        host = document.createElement('div');
+        host.className = 'pagination-host';
+        table.parentNode.insertBefore(host, table.nextSibling);
+      }
+      mailPager = window.Panel.paginate(host, {
+        page,
+        pages,
+        total: state.total,
+        perPage: limit,
+        onNavigate: (target)=> fetchList({ page: target })
+      });
+      return;
+    }
     let nav = qs('.pagination-bar');
     if(pages <= 1){
       if(nav) nav.hidden = true;
@@ -320,7 +344,10 @@
       a.className = 'pg' + (disabled ? ' disabled' : '');
       a.dataset.page = String(pg);
       a.textContent = label;
-      if(pg === page && !disabled) a.classList.add('active');
+      if(pg === page && !disabled){
+        a.classList.add('active');
+        a.setAttribute('aria-current', 'page');
+      }
       a.addEventListener('click', e=>{
         e.preventDefault();
         if(disabled || pg === page) return;
@@ -420,9 +447,9 @@
         mailNotify(res?.message || translateStatus('logs_failed', 'Failed to load mail logs'), 'error', { duration: 6000 });
       }
     } catch(err){
+      console.error('[mail] log fetch failed', err);
       if(box) box.textContent = translate('logs.failed', '-- Load failed --');
-      const errMsg = `${translateStatus('logs_failed', 'Failed to load mail logs')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error', { duration: 6000 });
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error', { duration: 6000 });
     }
   }
 
@@ -484,16 +511,18 @@
         if(btn) btn.disabled = false;
       }
     } catch(err){
-      const errMsg = `${translateStatus('mark_failed', 'Failed to mark as read')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error');
+      console.error('[mail] mark-read failed', err);
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error');
       if(btn) btn.disabled = false;
     }
   }
 
   async function deleteOne(id){
     if(!id) return;
-    const confirmDelete = translate('confirm.delete_one', 'Delete this mail (system/GM)?');
-    if(!confirm(confirmDelete)) return;
+    const proceed = (typeof window.Panel?.confirm === 'function')
+      ? await window.Panel.confirm({ message: translate('confirm.delete_one', 'Delete this mail (system/GM)?'), danger: true, confirmLabel: translate('actions.delete', 'Delete') })
+      : window.confirm(translate('confirm.delete_one', 'Delete this mail (system/GM)?'));
+    if(!proceed) return;
     try{
       const res = await apiPost('/mail/api/delete', { mail_id: id });
       if(res && res.success){
@@ -503,8 +532,8 @@
         mailNotify(res?.message || translateStatus('delete_failed', 'Delete failed'), 'error');
       }
     } catch(err){
-      const errMsg = `${translateStatus('delete_failed', 'Delete failed')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error');
+      console.error('[mail] delete failed', err);
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error');
     }
   }
 
@@ -521,16 +550,18 @@
         mailNotify(res?.message || translateStatus('bulk_mark_failed', 'Bulk mark failed'), 'error');
       }
     } catch(err){
-      const errMsg = `${translateStatus('bulk_mark_failed', 'Bulk mark failed')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error');
+      console.error('[mail] bulk mark failed', err);
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error');
     }
   }
 
   async function bulkDelete(){
     const ids = selectedIds();
     if(!ids.length) return;
-    const confirmDelete = translate('confirm.delete_selected', 'Delete selected mails?');
-    if(!confirm(confirmDelete)) return;
+    const proceed = (typeof window.Panel?.confirm === 'function')
+      ? await window.Panel.confirm({ message: translate('confirm.delete_selected', 'Delete selected mails?'), danger: true, confirmLabel: translate('actions.delete', 'Delete') })
+      : window.confirm(translate('confirm.delete_selected', 'Delete selected mails?'));
+    if(!proceed) return;
     try{
       const res = await apiPost('/mail/api/delete-bulk', { ids: ids.join(',') });
       if(res && res.success){
@@ -541,8 +572,8 @@
         mailNotify(res?.message || translateStatus('bulk_delete_failed', 'Bulk delete failed'), 'error');
       }
     } catch(err){
-      const errMsg = `${translateStatus('bulk_delete_failed', 'Bulk delete failed')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error');
+      console.error('[mail] bulk delete failed', err);
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error');
     }
   }
 
@@ -640,8 +671,8 @@
         hideModal('#modal-mail-detail');
       }
     } catch(err){
-      const errMsg = `${translateStatus('detail_failed', 'Failed to load mail detail')}: ${err?.message || err}`;
-      mailNotify(errMsg, 'error');
+      console.error('[mail] detail fetch failed', err);
+      mailNotify(translate('errors.network', 'Network error, please retry'), 'error');
       hideModal('#modal-mail-detail');
     }
   }
@@ -733,11 +764,13 @@
   }
 
   function hideAllModals(){
-    document.querySelectorAll('.modal-backdrop.active').forEach(el=>{
-      el.classList.remove('active');
-      el.classList.add('mail-modal-hidden');
-    });
-    document.body.classList.remove('modal-open');
+    // 只关最上层的那个：Esc 不该一次抹掉叠起来的弹窗
+    const open = Array.prototype.slice.call(document.querySelectorAll('.modal-backdrop.active'));
+    const top = open[open.length - 1];
+    if(!top) return;
+    top.classList.remove('active');
+    top.classList.add('mail-modal-hidden');
+    if(!document.querySelector('.modal-backdrop.active')) document.body.classList.remove('modal-open');
   }
 
   if(!window.__mailModalBound){
@@ -763,7 +796,24 @@
     enhanceInitialPagination();
     applySortIndicators();
     updateBulkState();
+    bindFilterDraft();
     if(can('stats')) loadStats();
+  }
+
+  /**
+   * 筛选条件草稿：改到一半就点走的人，回来还能看到上次输入。
+   * 这是 GET 查询表单（提交即导航），所以只存草稿、不拦导航。
+   */
+  function bindFilterDraft(){
+    if(!filterForm || typeof window.Panel?.unsavedGuard !== 'function') return;
+    const server = new URLSearchParams(window.location.search).get('server') || '';
+    window.Panel.unsavedGuard(filterForm, {
+      draftKey: 'mail.filter:' + server + ':' + window.location.pathname,
+      blockUnload: false,
+      onRestore(){
+        mailNotify(translate('draft.restored', 'Restored the unsent filter from your last visit'), 'info', { duration: 3000 });
+      }
+    });
   }
 
   if(document.readyState === 'loading'){

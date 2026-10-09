@@ -26,7 +26,7 @@ use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
     <div class="toolbar-actions primary-actions">
       <button class="btn outline" type="button" id="btn-compact-toggle" data-label-normal="<?= htmlspecialchars(__('app.item.edit.compact.normal')) ?>" data-label-compact="<?= htmlspecialchars(__('app.item.edit.compact.compact')) ?>"><?= htmlspecialchars(__('app.item.edit.compact.compact')) ?></button>
       <?php if($itemEditCapabilities['delete']): ?>
-      <button class="btn danger" id="btn-delete-item" data-id="<?= (int)$item['entry'] ?>"><?= htmlspecialchars(__('app.item.edit.delete')) ?></button>
+      <button class="btn danger" id="btn-delete-item" data-id="<?= (int)$item['entry'] ?>" data-name="<?= htmlspecialchars((string)($item['name'] ?? '')) ?>"><?= htmlspecialchars(__('app.item.edit.delete')) ?></button>
       <?php endif; ?>
       <?php if($itemEditCapabilities['update']): ?>
       <button class="btn success" type="button" id="btn-save-item-top"><?= htmlspecialchars(__('app.item.edit.save')) ?></button>
@@ -153,7 +153,7 @@ use Acme\Panel\Core\ItemMeta; use Acme\Panel\Support\ConfigLocalization; ?>
   <button type="button" class="btn success btn-sm" id="btn-exec-diff-sql"><?= htmlspecialchars(__('app.item.edit.actions.execute')) ?></button>
   <?php endif; ?>
   </h2>
-  <div class="muted item-sql-section__hint"><?= htmlspecialchars(__('app.item.edit.diff.hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.item.edit.diff.hint')) ?>">i</span></div>
+  <div class="muted item-sql-section__hint"><?= htmlspecialchars(__('app.item.edit.diff.hint_short')) ?><?= panel_hint(__('app.item.edit.diff.hint')) ?></div>
   <pre id="itemDiffSqlLive" class="sql-result mono item-sql-section__live-box"><?= htmlspecialchars(__('app.item.edit.diff.placeholder')) ?></pre>
   <div id="itemDiffSqlExecResult" class="sql-exec-result item-sql-section__exec-result">
     <div class="result-head item-sql-section__result-head">

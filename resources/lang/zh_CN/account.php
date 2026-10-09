@@ -43,6 +43,7 @@ return array (
     'last_ip' => '最后IP',
     'ip_location' => 'IP归属地',
     'actions' => '操作',
+    'select_row' => '选择账号 :name',
     'view_characters' => '在角色管理中查看该账号的角色',
   ),
   'status' => 
@@ -104,6 +105,12 @@ return array (
     'delete' => '删除',
     'more' => '更多',
   ),
+  'form' => 
+  array (
+    'target' => '目标账号',
+    'cancel' => '取消',
+    'submit' => '保存',
+  ),
   'bulk' => 
   array (
     'select_all' => '全选',
@@ -111,10 +118,16 @@ return array (
     'ban' => '批量封禁',
     'unban' => '批量解封',
     'no_selection' => '请先选择至少一项',
+    'delete_title' => '批量删除账号',
+    'delete_confirm' => '确认删除所选账号？其下全部角色会一并删除，且不可恢复。',
+    'delete_require_label' => '请照打所选账号数量（:count）以确认',
+    'ban_success' => '所选账号已封禁',
   ),
   'delete' => 
   array (
+    'title' => '删除账号',
     'confirm' => '确认删除该账号？此操作将同时删除该账号下的全部角色，且不可恢复。',
+    'require_label' => '请照打该账号名以确认',
     'success' => '删除成功',
     'blocked_online' => '账号下存在在线角色（:name），请先踢下线。',
     'characters_failed' => '删除角色失败：:message',
@@ -184,6 +197,19 @@ return array (
     'error_hours' => '封禁时长无效',
     'prompt_reason' => '封禁理由：',
     'default_reason' => 'Panel 封禁',
+    'title' => '封禁账号',
+    'bulk_title' => '批量封禁所选账号',
+    'bulk_target' => '已选 :count 个账号',
+    'bulk_target_hint' => '所选账号共用下面的时长与理由',
+    'duration_label' => '封禁时长',
+    'custom_hours' => '自定义小时数（覆盖上面的选择）',
+    'reason_label' => '封禁理由',
+    'error_reason' => '请填写封禁理由',
+    'submitting' => '封禁中…',
+    'actions' => 
+    array (
+      'submit' => '封禁',
+    ),
     'success' => '封禁成功',
     'failure' => '封禁失败',
     'confirm_unban' => '确认解封该账号？',
@@ -225,6 +251,13 @@ return array (
     'error_level' => 'GM 级别无效',
     'success' => 'GM 等级已更新',
     'failure' => 'GM 等级更新失败',
+    'title' => '设置 GM 等级',
+    'level_label' => 'GM 等级',
+    'level_hint' => '0 = 普通玩家，6 = 最高管理员',
+    'actions' => 
+    array (
+      'submit' => '保存',
+    ),
   ),
   'password' => 
   array (
@@ -236,6 +269,15 @@ return array (
     'success' => '密码修改成功（旧会话已失效）',
     'failure' => '改密失败：:message',
     'failure_generic' => '未知错误',
+    'title' => '修改密码',
+    'new_label' => '新密码',
+    'confirm_label' => '再次输入新密码',
+    'hint' => '至少 8 位；修改后该账号的旧会话立即失效。',
+    'submitting' => '提交中…',
+    'actions' => 
+    array (
+      'submit' => '修改密码',
+    ),
   ),
   'create' => 
   array (

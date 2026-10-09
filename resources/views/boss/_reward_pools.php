@@ -97,18 +97,18 @@ foreach ($poolRows as $poolRow) {
       <table class="table boss-table boss-table--sticky">
         <thead>
           <tr>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.pool_id')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.sort_order')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.name')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.enabled')) ?></th>
-            <th class="boss-num"><?= htmlspecialchars(__('app.boss.pools.columns.chance')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.winner_mode')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.class_filter')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.items')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.gold')) ?></th>
-            <th><?= htmlspecialchars(__('app.boss.pools.columns.announce')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.pool_id')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.sort_order')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.name')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.enabled')) ?></th>
+            <th scope="col" class="boss-num"><?= htmlspecialchars(__('app.boss.pools.columns.chance')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.winner_mode')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.class_filter')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.items')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.gold')) ?></th>
+            <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.announce')) ?></th>
             <?php if ($poolCanWrite): ?>
-              <th><?= htmlspecialchars(__('app.boss.pools.columns.actions')) ?></th>
+              <th scope="col"><?= htmlspecialchars(__('app.boss.pools.columns.actions')) ?></th>
             <?php endif; ?>
           </tr>
         </thead>

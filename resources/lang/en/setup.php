@@ -213,6 +213,7 @@ return array (
       'username_required' => 'Username is required',
       'password_required' => 'Password is required',
       'password_mismatch' => 'Passwords do not match',
+      'password_too_short' => 'Password must be at least 8 characters',
     ),
     'submit' => 'Save and generate config',
     'back' => 'Back to connection test',
