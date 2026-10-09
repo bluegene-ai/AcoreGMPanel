@@ -6,6 +6,10 @@
 /storage/cache/*
 !/storage/cache/.gitkeep
 
+# Session files
+/storage/sessions/*
+!/storage/sessions/.gitkeep
+
 # IP geolocation database (not committed)
 /storage/ip_geo/*.mmdb
 !/storage/ip_geo/.gitkeep

@@ -29,9 +29,31 @@ class Bootstrap
 
     private static function ensureSessionStarted(): void
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            return;
         }
+
+        self::useOwnSessionStorage();
+
+        session_start();
+    }
+
+    /**
+     * Keep session files inside the panel's storage tree: the OS temp directory is not
+     * guaranteed to be writable by the web server account, which fails every request.
+     */
+    private static function useOwnSessionStorage(): void
+    {
+        if (trim((string) ini_get('session.save_path')) !== '') {
+            return;
+        }
+
+        $dir = dirname(__DIR__, 2) . '/storage/sessions';
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return;
+        }
+
+        ini_set('session.save_path', $dir);
     }
 
     private static function pushWarnFlash(string $message): void
