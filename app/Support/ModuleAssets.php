@@ -11,6 +11,7 @@ final class ModuleAssets
     ];
 
     private const PANEL_SCRIPT_ASSET = 'js/panel.js';
+    private const BOOT_SCRIPT_ASSET = 'js/boot.js';
 
     private const VIEW_MODULES = [
         'account.' => 'account',
@@ -341,6 +342,17 @@ final class ModuleAssets
     public static function panelScriptUrl(): string
     {
         return self::assetPath(self::PANEL_SCRIPT_ASSET);
+    }
+
+    /**
+     * 首屏标记脚本（给 <html> 打 js 标记）。
+     *
+     * 必须外链：面板 CSP 为 script-src 'self' https:，没有 unsafe-inline/nonce，
+     * 内联脚本会被浏览器拦掉。外部文件也保留了"脚本没跑成功就不折叠导航"的语义。
+     */
+    public static function bootScriptUrl(): string
+    {
+        return self::assetPath(self::BOOT_SCRIPT_ASSET);
     }
 
     public static function clientGlobalsForPage(?string $module, array $pageCapabilities = []): array

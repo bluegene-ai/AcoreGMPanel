@@ -30,9 +30,9 @@ use Acme\Panel\Support\ModuleAssets;
 <meta charset="UTF-8">
 <title><?= htmlspecialchars((string)($__layoutHead['title'] ?? __('app.app.title_suffix'))) ?></title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<?php // 移动端把导航收成可折叠面板：先给 <html> 打 js 标记，样式据此决定"默认收起"。
-      // 没有它时导航保持展开（今天的形态），JS 失效也不会把菜单弄丢。 ?>
-<script>document.documentElement.classList.add('js');</script>
+<?php // 移动端导航按 <html> 上的 js 标记决定"默认收起"；没有标记时保持展开，菜单不会丢。
+      // 走外链：面板 CSP 没有 unsafe-inline/nonce，内联脚本会被浏览器拦掉。 ?>
+<script src="<?= \Acme\Panel\Support\ModuleAssets::bootScriptUrl() ?>"></script>
 <?php if((string)($__layoutHead['description'] ?? '') !== ''): ?>
 <meta name="description" content="<?= htmlspecialchars((string)$__layoutHead['description'], ENT_QUOTES, 'UTF-8') ?>">
 <?php endif; ?>

@@ -24,6 +24,10 @@
 .boss-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 .boss-stat-card{min-height:112px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(180deg,rgba(33,24,16,.94),rgba(14,18,24,.98));}
 .boss-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+/* 生成 / 击杀 / 重置：三个动作按钮并排一行 */
+.boss-action-grid--three{grid-template-columns:repeat(3,minmax(0,1fr));}
+/* 其余动作组是 2 栏；数量为奇数时最后一张跨满整行，别在右边空出一个格子。 */
+.boss-action-grid:not(.boss-action-grid--three) > :last-child:nth-child(odd){grid-column:1 / -1;}
 .boss-action-card{display:flex;flex-direction:column;gap:12px;justify-content:space-between;}
 .boss-action-card__body{display:flex;flex-direction:column;gap:8px;}
 .boss-action-card__body strong{color:#fff3df;}

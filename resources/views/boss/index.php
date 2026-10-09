@@ -298,31 +298,28 @@ $bossTabs['log'] = __('app.boss.tabs.log');
           <h3><?= htmlspecialchars(__('app.boss.actions.groups.combat')) ?></h3>
           <p class="muted"><?= htmlspecialchars(__('app.boss.actions.groups.combat_help')) ?></p>
         </div>
-        <div class="boss-action-grid">
-          <div class="boss-action-card">
+        <div class="boss-action-grid boss-action-grid--three">
+          <div class="boss-action-card" title="<?= htmlspecialchars(__('app.boss.actions.spawn_help')) ?>">
             <div class="boss-action-card__body">
               <strong><?= htmlspecialchars(__('app.boss.actions.spawn')) ?></strong>
-              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.spawn_help')) ?></p>
             </div>
             <button type="button" class="btn warn" id="bossSpawnBtn" data-boss-action="spawn">
               <?= htmlspecialchars(__('app.boss.actions.spawn')) ?>
             </button>
           </div>
 
-          <div class="boss-action-card boss-action-card--danger">
+          <div class="boss-action-card boss-action-card--danger" title="<?= htmlspecialchars(__('app.boss.actions.kill_help')) ?>">
             <div class="boss-action-card__body">
               <strong><?= htmlspecialchars(__('app.boss.actions.kill')) ?></strong>
-              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.kill_help')) ?></p>
             </div>
             <button type="button" class="btn danger" id="bossKillBtn" data-boss-action="kill">
               <?= htmlspecialchars(__('app.boss.actions.kill')) ?>
             </button>
           </div>
 
-          <div class="boss-action-card boss-action-card--danger">
+          <div class="boss-action-card boss-action-card--danger" title="<?= htmlspecialchars(__('app.boss.actions.clear_help')) ?>">
             <div class="boss-action-card__body">
               <strong><?= htmlspecialchars(__('app.boss.actions.clear')) ?></strong>
-              <p class="muted"><?= htmlspecialchars(__('app.boss.actions.clear_help')) ?></p>
             </div>
             <button type="button" class="btn outline danger" id="bossClearBtn" data-boss-action="clear">
               <?= htmlspecialchars(__('app.boss.actions.clear')) ?>

@@ -35,7 +35,7 @@ include dirname(__DIR__) . '/components/page_header.php';
 
 <div class="cb-hub">
   <?php if ($boostCapabilities['apply']): ?>
-  <section class="cb-hub__card cb-hub__card--apply">
+  <section class="cb-hub__card">
     <h3 class="cb-section-title"><?= htmlspecialchars(__('app.character_boost.admin.apply.title')) ?></h3>
     <p class="cb-hub__note muted small"><?= htmlspecialchars(__('app.character_boost.admin.apply.note_short', ['realm' => (string) $boostRealmId])) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.character_boost.admin.apply.note', ['realm' => (string) $boostRealmId])) ?>">i</span></p>
 
@@ -170,7 +170,7 @@ include dirname(__DIR__) . '/components/page_header.php';
   </section>
 
   <?php if ($boostCapabilities['apply']): ?>
-  <section class="cb-hub__card cb-hub__card--wide">
+  <section class="cb-hub__card">
     <div class="cb-hub__card-head">
       <h3 class="cb-section-title m-0"><?= htmlspecialchars(__('app.character_boost.admin.history.title')) ?></h3>
       <button class="btn btn-sm outline" type="button" id="boostHistoryRefresh"><?= htmlspecialchars(__('app.character_boost.admin.history.refresh')) ?></button>

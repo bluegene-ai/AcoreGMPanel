@@ -178,7 +178,8 @@ final class PageHeaderData
         if (isset($data['page_header']) && is_array($data['page_header']))
             $overrides = $data['page_header'];
 
-        foreach (['title', 'intro', 'note', 'actions'] as $key) {
+        // 顶层 $data['title'] 是页面 <title>，不是标题块文案：混进来会盖掉视图里登记的更具体标题。
+        foreach (['intro', 'note', 'actions'] as $key) {
             if (array_key_exists($key, $data))
                 $overrides[$key] = $data[$key];
         }

@@ -66,7 +66,7 @@ $buildSortUrl = function(string $col) use ($filters,$curSort,$toggleDir) {
     <thead>
         <tr>
             <th class="quest-table__col-id"><a href="<?= htmlspecialchars($buildSortUrl('ID')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.id')) ?><?= $curSort==='ID' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
-            <th><?= htmlspecialchars(__('app.quest.index.table.headers.title')) ?></th>
+            <th class="quest-table__col-title"><?= htmlspecialchars(__('app.quest.index.table.headers.title')) ?></th>
             <th class="quest-table__col-min-level"><a href="<?= htmlspecialchars($buildSortUrl('MinLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.min_level')) ?><?= $curSort==='MinLevel' ? ($curDir==='ASC'?' ▲':' ▼') : '' ?></a></th>
             <th class="quest-table__col-level"><a href="<?= htmlspecialchars($buildSortUrl('QuestLevel')) ?>"><?= htmlspecialchars(__('app.quest.index.table.headers.level')) ?><?= $curSort==='QuestLevel' ? ($curDir==='ASC' ? ' ▲' : ' ▼') : '' ?></a></th>
             <th class="quest-table__col-type"><?= htmlspecialchars(__('app.quest.index.table.headers.type')) ?></th>

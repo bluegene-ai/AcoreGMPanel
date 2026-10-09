@@ -23,30 +23,38 @@
     max-width: 100%;
 }
 
+/* 列宽声明即占用：这里按内容实际需要收紧，把省下的宽度留给标题列，并给它一个下限。 */
 .quest-table__col-id {
-    width: 80px;
+    width: 60px;
+}
+
+.quest-table__col-title {
+    min-width: 180px;
 }
 
 .quest-table__col-min-level,
 .quest-table__col-level {
-    width: 110px;
+    width: 74px;
 }
 
 .quest-table__col-type {
-    width: 140px;
+    width: 92px;
 }
 
 .quest-table__col-reward-xp {
-    width: 120px;
+    width: 92px;
 }
 
-.quest-table__col-reward-money,
+.quest-table__col-reward-money {
+    width: 108px;
+}
+
 .quest-table__col-actions {
-    width: 140px;
+    width: 132px;
 }
 
 .quest-table__col-reward-items {
-    width: 260px;
+    width: 230px;
 }
 
 .quest-table__empty {
