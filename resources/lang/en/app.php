@@ -30,6 +30,14 @@ return array (
     'trivia' => 'Chat Trivia',
     'auctionator' => 'Auction Bot',
   ),
+  'nav_group' => 
+  array (
+    'players' => 'Players & Accounts',
+    'content' => 'Game Content',
+    'items_mail' => 'Items & Mail',
+    'operations' => 'Operations',
+    'server' => 'Server & Ops',
+  ),
   'common' => 
   array (
     'performance' => 'Performance',

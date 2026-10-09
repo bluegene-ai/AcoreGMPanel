@@ -55,7 +55,6 @@ use Acme\Panel\Support\ModuleAssets;
   <div class="sidebar__brand">
     <div class="sidebar__title">
       <h2><?= htmlspecialchars(__('app.app.name')) ?></h2>
-      <p class="sidebar__intro"><?= htmlspecialchars(__('app.app.title_suffix')) ?></p>
     </div>
     <?php // 只在移动端显示（CSS 控制）：窄屏下导航默认收起，内容不必先滚过一整屏菜单 ?>
     <button type="button" class="sidebar-toggle" data-sidebar-toggle
@@ -66,23 +65,38 @@ use Acme\Panel\Support\ModuleAssets;
       <span class="sidebar-toggle__label"><?= htmlspecialchars(__('app.common.menu')) ?></span>
     </button>
   </div>
+  <?php
+    // 先按能力过滤再渲染：某组条目被全部过滤时，不留空标题
+    $__layoutIsAuthenticated = \Acme\Panel\Support\Auth::check();
+    $__layoutVisibleNavItems = [];
+    foreach ($__layoutNavigationItems as $__navItem) {
+      if (!is_array($__navItem)) {
+        continue;
+      }
+      $__navCapability = $__navItem['capability'] ?? null;
+      if ($__layoutIsAuthenticated && is_string($__navCapability) && $__navCapability !== '' && !$__can($__navCapability)) {
+        continue;
+      }
+      if ($__layoutIsAuthenticated && is_array($__navCapability) && $__navCapability !== [] && !$__canAny($__navCapability)) {
+        continue;
+      }
+      $__layoutVisibleNavItems[] = $__navItem;
+    }
+  ?>
   <ul id="panelNavigation">
-    <?php foreach($__layoutNavigationItems as $__navItem): ?>
+    <?php $__layoutNavGroup = null; ?>
+    <?php foreach($__layoutVisibleNavItems as $__navItem): ?>
       <?php
-        $__layoutIsAuthenticated = \Acme\Panel\Support\Auth::check();
-        $__navCapability = $__navItem['capability'] ?? null;
-        if ($__layoutIsAuthenticated && is_string($__navCapability) && $__navCapability !== '' && !$__can($__navCapability)) {
-          continue;
-        }
-        if ($__layoutIsAuthenticated && is_array($__navCapability) && $__navCapability !== [] && !$__canAny($__navCapability)) {
-          continue;
-        }
         $__navPath = (string)($__navItem['path'] ?? '/');
+        $__navGroup = isset($__navItem['group']) && is_string($__navItem['group']) ? $__navItem['group'] : '';
         $__navPrefixes = $__navItem['activePrefixes'] ?? [$__navPath];
         $__navClass = ModuleAssets::pathMatches($__layoutCurrentPath, is_array($__navPrefixes) ? $__navPrefixes : [$__navPath])
           ? 'active'
           : '';
       ?>
+    <?php if ($__navGroup !== '' && $__navGroup !== $__layoutNavGroup): $__layoutNavGroup = $__navGroup; ?>
+    <li class="sidebar-nav__group"><?= htmlspecialchars(__($__navGroup)) ?></li>
+    <?php endif; ?>
     <li><a href="<?= url($__navPath) ?>" class="<?= $__navClass ?>"><?= htmlspecialchars(__(($__navItem['label'] ?? 'app.nav.home'))) ?></a></li>
     <?php endforeach; ?>
   </ul>

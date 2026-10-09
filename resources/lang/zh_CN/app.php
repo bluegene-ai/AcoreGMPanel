@@ -30,6 +30,14 @@ return array (
     'trivia' => '聊天答题',
     'auctionator' => '拍卖机器人',
   ),
+  'nav_group' => 
+  array (
+    'players' => '玩家与账号',
+    'content' => '游戏内容',
+    'items_mail' => '物品与邮件',
+    'operations' => '运营活动',
+    'server' => '服务器与运维',
+  ),
   'common' => 
   array (
     'performance' => '性能',
