@@ -32,7 +32,6 @@ class MassMailService
     private SoapExecutor $soapExec;
     private string $logTable = 'panel_massmail_log';
     private string $jobTable = 'panel_massmail_jobs';
-    private string $actionLogFile;
     private string $itemCacheFile;
     private array $itemNameCache = [];
     private int $targetMax = 2000;
@@ -48,7 +47,6 @@ class MassMailService
     $this->soapConf = $soapConf;
     $this->soapExec = new SoapExecutor();
         $baseStorage = dirname(__DIR__,3).DIRECTORY_SEPARATOR.'storage';
-        $this->actionLogFile = $baseStorage.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.'massmail_actions.log';
         $this->itemCacheFile  = $baseStorage.DIRECTORY_SEPARATOR.'cache'.DIRECTORY_SEPARATOR.'massmail_item_names.json';
         $this->loadItemCache();
         $this->ensureSchema();
@@ -142,7 +140,6 @@ class MassMailService
         $ok = empty($errors);
     $this->logAnnounce($message,$ok,$errors);
     Audit::log('massmail','announce','0',[ 'success'=>$ok,'errors'=>$errors?array_slice($errors,0,3):[], 'server_id'=>$this->serverId ]);
-        $this->appendActionLog('announce',$ok?1:0,0,0,0,$message);
         return ['success'=>$ok,'message'=>$ok?__('app.mass_mail.service.announce.success'):__('app.mass_mail.service.announce.partial'),'types'=>$sent,'errors'=>$errors];
     }
 
@@ -270,7 +267,6 @@ class MassMailService
         $itemsSummary = $items ? implode(' ', array_map(fn($it)=>$it['id'].':'.$it['qty'], $items)) : null;
         $this->logBulk($action,$subject,$itemsSummary,$amount,$total,$success,$fail,$errors,$sentNames,$failedNames);
         Audit::log('massmail',$action,'bulk',[ 'targets'=>$total,'success_count'=>$success,'fail_count'=>$fail,'items'=>$itemsSummary,'amount'=>$amount,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'sample_errors'=>array_slice($errors,0,3), 'server_id'=>$this->serverId ]);
-        $this->appendActionLog($action,$success,$fail,0,$amount??0,$subject);
         $this->finishBulkJob($jobToken, $ok ? 'done' : ($success>0 ? 'partial' : 'failed'));
         return ['success'=>$ok,'message'=>$msg,'success_count'=>$success,'fail_count'=>$fail,'batches'=>$batchTotal,'batch_size'=>$this->batchSize,'job_token'=>$jobToken];
     }
@@ -543,9 +539,6 @@ class MassMailService
     { if(is_file($this->itemCacheFile)){ $json=@file_get_contents($this->itemCacheFile); $data=json_decode($json,true); if(is_array($data)) $this->itemNameCache=$data; } }
     private function persistItemCache(): void
     { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>8000){ $this->itemNameCache=array_slice($this->itemNameCache,-6500,null,true); } $dir=dirname($this->itemCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
-
-    private function appendActionLog(string $action,int $successOrCount,int $fail,int $itemId,int $amount,string $subject): void
-    { $user=\Acme\Panel\Support\Auth::user() ?? 'unknown'; $line=sprintf('[%s]|srv:%d|%s|%s|succ:%d|fail:%d|item:%d|amount:%d|%s',date('Y-m-d H:i:s'),$this->serverId,$user,$action,$successOrCount,$fail,$itemId,$amount,mb_substr(str_replace(["\r","\n"],' ',$subject),0,80)); \Acme\Panel\Support\LogPath::appendTo($this->actionLogFile, $line, true, 0777); }
 
     private function migrateAddServerIdColumn(): void
     { try { $chk=$this->chars->query("SHOW COLUMNS FROM {$this->logTable} LIKE 'server_id'"); if(!$chk->fetch()){ $this->chars->exec("ALTER TABLE {$this->logTable} ADD server_id INT NOT NULL DEFAULT 0 AFTER id, ADD KEY idx_server(server_id)"); } }catch(\Throwable $e){} }

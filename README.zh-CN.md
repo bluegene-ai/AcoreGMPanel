@@ -131,7 +131,7 @@ AcoreGMPanel/
 
 - 给实例写了 `dir` 就会**从该目录推导** `exe / status_file / control_file / log_file`，不会再继承扁平的文件路径（否则多个实例会读写同一份状态/指令文件）。
 - 页面顶部渲染实例切换按钮（每个按钮带运行状态点），切换后所有 API 都带 `?instance=<id>`；URL 也会同步，刷新后仍是同一个实例。
-- **未配置的实例 id 会被 API 拒绝**（404），不会静默落到别的区；审计日志（`panel_audit`）会记录 `instance`。
+- **未配置的实例 id 会被 API 拒绝**（404），不会静默落到别的区；审计日志（`ac_eluna.panel_audit_log`）会记录 `instance`。
 - 不写 `instances`（或空数组）时只有单一隐式实例 `default`。
 
 ## 活动 Boss / 拍卖机器人的按区管理
@@ -152,6 +152,7 @@ AcoreGMPanel/
 
 - `docs/multi-realm.md` —— 多区（多个 realm 共用一套 auth）部署。
 - `docs/DATABASES.md` —— 各数据库/表与面板读写关系。
+- `docs/audit-log.md` —— 审计日志（`ac_eluna.panel_audit_log`）的表结构、写入入口与查询页。
 - `docs/creature_editor.md`、`docs/quest_editor_design.md`、`docs/quest_editor_gap_analysis.md` —— 生物/任务编辑器设计说明。
 
 ## IP 归属地（本地库）

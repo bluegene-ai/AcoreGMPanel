@@ -137,7 +137,7 @@ for these entries:
 - The page renders a switcher (each button carries a state dot); switching sends `?instance=<id>` on
   every API call and is reflected in the URL, so a refresh keeps the selection.
 - An **unlisted instance id is refused** by the APIs (404) rather than silently falling back to
-  another realm; the audit entry (`panel_audit`) records the instance.
+  another realm; the audit entry (`ac_eluna.panel_audit_log`) records the instance.
 - Without `instances` (or with an empty array) there is one implicit instance `default`.
 
 ## Per-realm management (boss activity and auction bot)
@@ -159,6 +159,7 @@ Additional focused guides live in the `docs/` directory:
 
 - `docs/multi-realm.md` — multi-realm deployment (several realms sharing one auth database).
 - `docs/DATABASES.md` — the databases/tables the panel touches and how.
+- `docs/audit-log.md` — the audit log table (`ac_eluna.panel_audit_log`), its writers and the console.
 - `docs/creature_editor.md`, `docs/quest_editor_design.md`, `docs/quest_editor_gap_analysis.md` —
   creature and quest editor design notes.
 

@@ -9,7 +9,6 @@ declare(strict_types=1);
 use Acme\Panel\Core\Router;
 use Acme\Panel\Http\Controllers\AccountController;
 use Acme\Panel\Http\Controllers\Aegis\AegisController;
-use Acme\Panel\Http\Controllers\AuditController;
 use Acme\Panel\Http\Controllers\Auctionator\AuctionatorController;
 use Acme\Panel\Http\Controllers\Boss\BossController;
 use Acme\Panel\Http\Controllers\Character\CharacterController;
@@ -184,7 +183,8 @@ return static function (Router $router): void {
             $router->post('/item/api/exec-sql', [ItemController::class, 'apiExecSql']);
             $router->post('/item/api/logs', [ItemController::class, 'apiLogs']);
             $router->post('/logs/api/list', [LogsController::class, 'apiList']);
-            $router->post('/audit/api/list', [AuditController::class, 'apiList']);
+            $router->post('/logs/api/facets', [LogsController::class, 'apiFacets']);
+            $router->post('/logs/api/purge', [LogsController::class, 'apiPurge']);
 
             $router->post('/mail/api/list', [MailController::class, 'apiList']);
             $router->post('/mail/api/view', [MailController::class, 'apiView']);
@@ -197,6 +197,7 @@ return static function (Router $router): void {
         });
 
         $router->get('/logs', [LogsController::class, 'index']);
+        $router->get('/logs/export', [LogsController::class, 'export']);
 
         $router->get('/quest', [QuestController::class, 'index']);
         $router->group([CsrfMiddleware::class], static function (Router $router): void {

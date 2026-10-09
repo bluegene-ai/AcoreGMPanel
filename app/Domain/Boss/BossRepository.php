@@ -7,7 +7,7 @@ namespace Acme\Panel\Domain\Boss;
 use Acme\Panel\Core\Config;
 use Acme\Panel\Core\Lang;
 use Acme\Panel\Domain\Support\MultiServerRepository;
-use Acme\Panel\Support\LogPath;
+use Acme\Panel\Support\Audit;
 use Acme\Panel\Support\ServerContext;
 use PDO;
 use PDOStatement;
@@ -1112,23 +1112,19 @@ class BossRepository extends MultiServerRepository
     }
 
     /**
-     * 在 storage/logs 下落一条 warning，避免异常被完全吞掉（与既有 LogPath 约定一致）。
+     * 把被吞掉的异常记成审计告警（channel=error），子类（RewardPoolRepository）共用同一条通道。
      */
-    // 子类（RewardPoolRepository）共用同一条 warning 通道。
     protected function logWarning(string $context, Throwable $exception): void
     {
         try {
-            if (!class_exists(LogPath::class))
+            if (!class_exists(Audit::class))
                 return;
 
-            LogPath::appendLine('boss_repository_warnings.log', sprintf(
-                '[%s] %s: %s (%s:%d)',
-                date('Y-m-d H:i:s'),
-                $context,
-                $exception->getMessage(),
-                $exception->getFile(),
-                $exception->getLine()
-            ), true, 0777);
+            Audit::error('boss', $context, $exception->getMessage(), [
+                'severity' => 3,
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+            ]);
         } catch (Throwable $ignored) {
             // 日志不可写时静默降级，绝不能因为记录日志再次抛异常。
         }

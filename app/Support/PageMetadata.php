@@ -102,7 +102,7 @@ final class PageMetadata
                 'breadcrumbs' => self::moduleBreadcrumbs('app.smartai.page_title', '/smartai'),
             ],
             'logs.index' => [
-                'title' => Lang::get('app.logs.index.page_title'),
+                'title' => Lang::get('app.logs.page_title'),
                 'breadcrumbs' => self::moduleBreadcrumbs('app.logs.page_title', '/logs'),
             ],
             'supervisor.index' => [

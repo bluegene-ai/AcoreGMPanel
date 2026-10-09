@@ -1,21 +1,68 @@
-/* ==== Logs Manager ==== */
+/* ==== 审计日志台 ==== */
 .logs-page-intro{margin-top:-8px;margin-bottom:18px;}
-.logs-form{display:flex;flex-wrap:wrap;gap:12px;background:var(--c-surface-2);border:1px solid rgba(94,168,255,.15);padding:16px;border-radius:12px;margin-bottom:14px;align-items:flex-end;}
-.logs-field{display:flex;flex-direction:column;color:#d5e8ff;font-size:13px;gap:6px;min-width:180px;}
+
+.logs-filters{display:flex;flex-wrap:wrap;gap:12px;background:var(--c-surface-2);border:1px solid rgba(94,168,255,.15);padding:16px;border-radius:12px;margin-bottom:14px;align-items:flex-end;}
+.logs-field{display:flex;flex-direction:column;color:#d5e8ff;font-size:13px;gap:6px;min-width:160px;}
+.logs-field--wide{flex:1 1 280px;min-width:240px;}
+.logs-field--compact{min-width:96px;}
+.logs-field--range{min-width:200px;}
 .logs-field select,.logs-field input{background:#060f18;border:1px solid rgba(94,168,255,.25);border-radius:8px;color:#e4f1ff;padding:8px 10px;font-size:13px;}
-.logs-field--compact{min-width:120px;}
-.logs-actions{display:flex;gap:10px;align-items:center;}
-.logs-summary{margin:12px 0;color:#8fb4e6;font-size:13px;}
-.logs-output{display:grid;gap:14px;}
-.logs-table-wrap{overflow:auto;border:1px solid rgba(94,168,255,.18);border-radius:12px;background:#08121c;max-height:420px;}
-/* 表头/边框/斑马纹/悬停共用 .table 基座；日志表只保留自己的最小宽度。 */
-.table.table--logs{min-width:640px;margin:0;}
-.logs-col-time{width:160px;}
-.logs-col-server{width:90px;}
-.logs-col-actor{width:120px;}
-.table.table--logs tbody tr.logs-row-active{background:rgba(50,118,188,.18)!important;box-shadow:inset 0 0 0 1px rgba(94,168,255,.18);}
-.logs-raw{background:#0d1824;border:1px solid rgba(94,168,255,.12);border-radius:12px;padding:12px 14px;color:#c6defc;}
-.logs-raw summary{cursor:pointer;font-weight:600;color:#8fb4e6;}
-.logs-raw__box{margin-top:10px;background:#050b13;border-radius:10px;padding:12px;font-family:'Fira Code','Consolas',monospace;font-size:12px;line-height:1.5;color:#cfe7ff;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word;border:1px solid rgba(94,168,255,.18);}
+.logs-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+/* 清理面板在流内展开：绝对定位会被统计行压住，窄屏时也会跑出视口。 */
+.logs-purge{position:relative;}
+.logs-purge>summary{list-style:none;cursor:pointer;}
+.logs-purge>summary::-webkit-details-marker{display:none;}
+.logs-purge__panel{display:flex;flex-direction:column;gap:10px;min-width:260px;margin-top:10px;padding:14px;background:#0b1622;border:1px solid rgba(94,168,255,.25);border-radius:10px;}
+.logs-purge__panel p{margin:0;}
+.logs-purge__field{display:flex;align-items:center;gap:8px;font-size:13px;color:#d5e8ff;}
+.logs-purge__field input{width:96px;}
+
+.logs-summary{margin:12px 0;color:#8fb4e6;font-size:13px;line-height:1.8;}
+.logs-summary strong{color:#e4f1ff;}
+
+.logs-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;}
+.logs-layout:has(.logs-detail:not([hidden])){grid-template-columns:minmax(0,1fr) 380px;}
+
+.logs-table-wrap{overflow:auto;border:1px solid rgba(94,168,255,.18);border-radius:12px;background:#08121c;max-height:620px;}
+/* 表头/边框/斑马纹/悬停共用 .table 基座；日志表只保留自己的最小宽度。
+   窄列一律 nowrap：否则内容一多，浏览器会把"区服/操作人"这类列压成一字一行。 */
+.table.table--logs{min-width:1060px;margin:0;}
+.logs-col-time{width:170px;white-space:nowrap;}
+.logs-col-realm{width:150px;white-space:nowrap;}
+.logs-col-actor{width:110px;white-space:nowrap;}
+.logs-col-channel{width:80px;white-space:nowrap;}
+.logs-col-module{width:180px;}
+.logs-col-status{width:84px;white-space:nowrap;}
+.logs-col-target{width:150px;word-break:break-all;}
+.logs-summary-cell{min-width:220px;word-break:break-word;}
+
+.logs-row{cursor:pointer;}
+.logs-row.is-active{background:rgba(50,118,188,.18)!important;box-shadow:inset 0 0 0 1px rgba(94,168,255,.28);}
+.logs-row.is-error td:first-child{box-shadow:inset 3px 0 0 #ff6b6b;}
+.logs-row.is-warning td:first-child{box-shadow:inset 3px 0 0 #ffb454;}
+
+.logs-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;line-height:1.6;white-space:nowrap;}
+.logs-chip--ok{background:rgba(52,168,105,.18);color:#7ee2a8;}
+.logs-chip--fail{background:rgba(220,80,80,.18);color:#ff9d9d;}
+.logs-chip--denied{background:rgba(220,160,60,.18);color:#ffd08a;}
+
+.logs-pager{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.logs-pager__meta{color:#d5e8ff;font-size:13px;}
+
+.logs-detail{background:#0d1824;border:1px solid rgba(94,168,255,.2);border-radius:12px;padding:14px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow:auto;}
+.logs-detail__head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.logs-detail__title{margin:0;font-size:15px;color:#d5e8ff;}
+.logs-detail__subtitle{margin:14px 0 6px;font-size:13px;color:#8fb4e6;}
+.logs-detail__list{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 10px;margin:0;font-size:13px;}
+.logs-detail__list dt{color:#8fb4e6;}
+.logs-detail__list dd{margin:0;color:#e4f1ff;word-break:break-word;}
+.logs-detail__json{margin:0;background:#050b13;border:1px solid rgba(94,168,255,.18);border-radius:10px;padding:12px;font-family:'Fira Code','Consolas',monospace;font-size:12px;line-height:1.5;color:#cfe7ff;max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-word;}
+
 .text-center{text-align:center!important;}
 .text-danger{color:#ff9d9d!important;}
+
+@media (max-width:1100px){
+  .logs-layout:has(.logs-detail:not([hidden])){grid-template-columns:minmax(0,1fr);}
+  .logs-detail{position:static;max-height:none;}
+}

@@ -8,7 +8,7 @@ namespace Acme\Panel\Http\Controllers\Item;
 
 use Acme\Panel\Core\{Controller,Request,Response,ItemMeta,Lang,Url};
 use Acme\Panel\Domain\Item\ItemRepository;
-use Acme\Panel\Support\{ItemTooltip,LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{ItemTooltip,ServerContext,ServerList};
 use Acme\Panel\Support\Auth;
 
 class ItemController extends Controller
@@ -126,22 +126,29 @@ class ItemController extends Controller
     public function apiExecSql(Request $request): Response
     { $this->requireSqlCapability(); $sql=(string)$request->input('sql',''); $res=$this->repo->execLimitedSql($sql); return $this->json($res,$res['success']?200:422); }
 
+    /** 物品日志面板：类型是统一审计表上的动作筛选。 */
     public function apiLogs(Request $request): Response
     {
         $this->requireLogsCapability();
         $state = $this->prepareItemLogState($request);
-        $map=[
-            'sql'=>'item_sql.log',
-            'deleted'=>'item_deleted.log',
-            'actions'=>'item_actions.log'
+        $map = [
+            'sql' => ['exec_sql'],
+            'deleted' => ['snapshot'],
+            'actions' => [],
         ];
         if(!isset($map[$state['type']])){
             return $this->json(['success'=>false,'message'=>Lang::get('app.item.api.errors.log_type_unknown')],422);
         }
-        $file=$map[$state['type']];
-        $path = LogPath::logFile($file, false);
-        $lines=[]; if(is_file($path)){ $content=file($path, FILE_IGNORE_NEW_LINES); $lines=array_slice($content,-$state['limit']); }
-        return $this->json(['success'=>true,'type'=>$state['type'],'logs'=>$lines]);
+
+        $result = (new \Acme\Panel\Domain\Logs\LogManager())->moduleLogLines('item', $map[$state['type']], $state['limit']);
+
+        return $this->json([
+            'success'=>true,
+            'type'=>$state['type'],
+            'logs'=>$result['lines'],
+            'lines'=>$result['lines'],
+            'entries'=>$result['entries'],
+        ]);
     }
 
     /**

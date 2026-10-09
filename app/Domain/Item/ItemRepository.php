@@ -137,8 +137,7 @@ class ItemRepository extends MultiServerRepository
             $ins=$this->world->prepare($sql); foreach($data as $k=>$v){ $ins->bindValue(':'.$k,$v===null?null:$v,is_int($v)?PDO::PARAM_INT:PDO::PARAM_STR); }
             $ok=$ins->execute();
             if($ok){
-                Audit::log('item','create',(string)$newId,['copy'=>$copyId]);
-                $row=$this->find($newId); if($row){ $this->appendDeletedLog('CREATE',$newId,Snapshot::buildInsert('item_template',$row)); }
+                    $row=$this->find($newId); if($row){ $this->appendDeletedLog('CREATE',$newId,Snapshot::buildInsert('item_template',$row)); }
                 $this->appendActionLog('create.success',['new_id'=>$newId,'copy'=>$copyId,'mode'=>'clone']);
                 return ['success'=>true,'message'=>$this->repoMessage('copy_created'),'new_id'=>$newId];
             }
@@ -151,7 +150,6 @@ class ItemRepository extends MultiServerRepository
         $sql='INSERT INTO item_template(entry,name,class,subclass,quality,itemlevel,requiredlevel,stackable) VALUES(:e,:n,0,0,1,1,1,1)';
         $st=$this->world->prepare($sql); $ok=$st->execute([':e'=>$newId,':n'=>'New Item '.$newId]);
         if($ok){
-            Audit::log('item','create',(string)$newId,['blank'=>true]);
             $row=$this->find($newId); if($row){ $this->appendDeletedLog('CREATE',$newId,Snapshot::buildInsert('item_template',$row)); }
             $this->appendActionLog('create.success',['new_id'=>$newId,'mode'=>'blank']);
             return ['success'=>true,'message'=>$this->repoMessage('created'),'new_id'=>$newId];
@@ -169,7 +167,6 @@ class ItemRepository extends MultiServerRepository
 
         $row=$this->find($id);
         $st=$this->world->prepare('DELETE FROM item_template WHERE entry=:id'); $st->execute([':id'=>$id]); $cnt=$st->rowCount();
-        Audit::log('item','delete',(string)$id,['affected'=>$cnt]);
         if($row && $cnt){ $this->appendDeletedLog('DELETE',$id,Snapshot::buildInsert('item_template',$row)); }
         $this->appendActionLog('delete.'.($cnt?'success':'noop'),['entry'=>$id,'affected'=>$cnt]);
         $message = $cnt
@@ -212,8 +209,7 @@ class ItemRepository extends MultiServerRepository
         $sql='UPDATE item_template SET '.implode(',',$sets).' WHERE entry=:id'; $st=$this->world->prepare($sql); $ok=$st->execute($params);
         $trimmed=[]; $count=0; foreach($diff as $col=>$pair){ if($count>=40){ $trimmed['__more__']='truncated'; break; } $trimmed[$col]=['old'=>self::shortVal($pair['old']),'new'=>self::shortVal($pair['new'])]; $count++; }
         $changedCols=array_keys($diff);
-        Audit::log('item','update',(string)$id,['changed'=>$trimmed,'success'=>$ok]);
-        $this->appendActionLog('update.'.($ok?'success':'error'),['entry'=>$id,'fields'=>$changedCols,'success'=>$ok]);
+        $this->appendActionLog('update.'.($ok?'success':'error'),['entry'=>$id,'changed'=>$trimmed,'fields'=>$changedCols,'success'=>$ok]);
         return $ok
             ? ['success'=>true,'message'=>$this->repoMessage('update_done'),'changed'=>$changedCols]
             : ['success'=>false,'message'=>$this->repoError('update_failed')];
@@ -275,17 +271,14 @@ class ItemRepository extends MultiServerRepository
             $error = $e->getMessage();
         }
 
-        Audit::log('item','exec_sql',$type?:'UNKNOWN',['sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error]);
-        $this->appendSqlLog($type?:'UNKNOWN',$ok,$affected,$norm,$error);
-
-        $ctx = ['sql'=>$norm,'affected'=>$affected,'type'=>$type?:'UNKNOWN'];
+        $ctx = ['sql'=>$norm,'affected'=>$affected,'type'=>$type?:'UNKNOWN','success'=>$ok];
         if($targetEntry !== null){
             $ctx['entry'] = $targetEntry;
         }
         if(!$ok && $error !== ''){
             $ctx['error'] = $error;
         }
-        $this->appendActionLog('exec_sql.'.($ok?'success':'error'), $ctx);
+        Audit::log('item','exec_sql',$type?:'UNKNOWN',$ctx);
 
         if(!$ok){
             $errorMessage = $error !== '' ? $error : Lang::get('app.common.api.errors.unknown');
@@ -318,41 +311,17 @@ class ItemRepository extends MultiServerRepository
     { if($v===null) return 'NULL'; $s=(string)$v; if(strlen($s)>120) $s=substr($s,0,117).'...'; return $s; }
 
 
-    private function logsDir(): string
-    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
-
-    private function writeLogLine(string $file,string $action,string $stage,array $context): void
-    {
-        try {
-            $payload = $context + [
-                'admin' => $this->currentUser(),
-                'server' => $this->serverId,
-            ];
-            if(!array_key_exists('ip',$payload)){
-                $payload['ip'] = \Acme\Panel\Support\ClientIp::resolve($_SERVER);
-            }
-            $payload = array_filter($payload, static fn($v)=>$v!==null);
-            $json = json_encode($payload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
-            $line = sprintf('[%s] %s.%s %s', date('Y-m-d H:i:s'), $action, $stage, $json ?: '{}');
-            \Acme\Panel\Support\LogPath::appendTo($this->logsDir().DIRECTORY_SEPARATOR.$file, $line, true, 0777);
-        } catch(\Throwable $e){  }
-    }
-
     private function appendActionLog(string $stage,array $context): void
-    { $this->writeLogLine('item_actions.log','item',$stage,$context); }
+    { \Acme\Panel\Support\Audit::stage('item', $stage, $context); }
 
+    /** 删除/新建前的整行快照，作为可回查的审计明细保留。 */
     private function appendDeletedLog(string $action,int $id,string $sql): void
-    { $this->writeLogLine('item_deleted.log','item','deleted.'.strtolower($action),['entry'=>$id,'snapshot'=>$sql]); }
-
-    private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
     {
-        $normalized = $type?strtolower($type):'unknown';
-        $stage = 'sql.'.$normalized.'.'.($ok?'success':'error');
-        $context = ['type'=>$type?:'UNKNOWN','affected'=>$affected,'sql'=>$sql];
-        if(!$ok && $error!==''){ $context['error']=$error; }
-        $this->writeLogLine('item_sql.log','item',$stage,$context);
+        \Acme\Panel\Support\Audit::log('item', 'snapshot', 'entry='.$id, [
+            'op' => strtoupper($action),
+            'snapshot' => $sql,
+        ]);
     }
-
 
 
     private function currentUser(): string

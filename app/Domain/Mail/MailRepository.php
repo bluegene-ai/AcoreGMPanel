@@ -174,35 +174,12 @@ class MailRepository extends MultiServerRepository
     public function stats(): array
     { return $this->readCache->remember('stats', 'summary', 15, function (): array { $unread=$this->countWith(['unread'=>'1']); $exp7=$this->countWith(['expiring'=>'7']); return ['unread_estimate'=>$unread,'expiring_7d'=>$exp7]; }); }
 
-    public function tailLog(string $type,int $limit=50): array
-    {
-        $limit = max(1, min(200, $limit));
-        $map = ['sql'=>'mail_sql.log','deleted'=>'mail_deleted.log'];
-    if(!isset($map[$type])) return ['success'=>false,'message'=>Lang::get('app.mail.tail_log.unknown_type')];
-        $file = $this->logsDir().DIRECTORY_SEPARATOR.$map[$type];
-        if(!is_file($file)){
-            return ['success'=>true,'type'=>$type,'logs'=>[],'entries'=>[],'file'=>$map[$type],'limit'=>$limit];
-        }
-        $rawLines = $this->readLogTail($file,$limit);
-        $entries = [];
-        $formatted = [];
-        foreach($rawLines as $line){
-            $entry = $this->parseLogLine($type,$line);
-            if($entry){
-                $entries[] = $entry;
-                $formatted[] = $this->formatLogEntry($type,$entry);
-            } else {
-                $formatted[] = $line;
-            }
-        }
-        return ['success'=>true,'type'=>$type,'logs'=>$formatted,'entries'=>$entries,'file'=>$map[$type],'limit'=>$limit];
-    }
-
     private function countWith(array $filters): int
     { $res=$this->search($filters,1,0,'id','DESC'); return $res['total']; }
 
     private function characterAccount(int $guid): ?int
     { return $this->readCache->remember('character_account', 'guid_'.$guid, 30, function () use ($guid) { $st=$this->chars->prepare('SELECT account FROM characters WHERE guid=:g LIMIT 1'); $st->execute([':g'=>$guid]); $acc=$st->fetchColumn(); return $acc===false?null:(int)$acc; }); }
+
     private function isGmAccount(int $acc): bool
     { if(!$this->auth) return false; return (bool)$this->readCache->remember('gm_account', 'account_'.$acc, 30, function () use ($acc): bool { $st=$this->auth->prepare('SELECT gmlevel FROM account_access WHERE id=:id AND RealmID=-1 LIMIT 1'); $st->execute([':id'=>$acc]); $gm=(int)($st->fetchColumn()?:0); return $gm>0; }); }
 
@@ -216,119 +193,37 @@ class MailRepository extends MultiServerRepository
 
     private function loadItemNameCache(): void
     { if(!is_file($this->itemNameCacheFile)) return; $json=@file_get_contents($this->itemNameCacheFile); if(!$json) return; $data=json_decode($json,true); if(is_array($data)) $this->itemNameCache=$data; }
+
     private function persistItemNameCache(): void
     { if(!$this->itemNameCache) return; if(count($this->itemNameCache)>5000){ $this->itemNameCache=array_slice($this->itemNameCache,-4000,null,true); } $dir=dirname($this->itemNameCacheFile); if(!is_dir($dir)) @mkdir($dir,0777,true); @file_put_contents($this->itemNameCacheFile,json_encode($this->itemNameCache,JSON_UNESCAPED_UNICODE)); }
 
+    public function tailLog(string $type,int $limit=50): array
+    {
+        $limit = max(1, min(200, $limit));
+        $map = ['sql' => ['exec_sql'], 'deleted' => ['snapshot'], 'actions' => []];
+        if(!isset($map[$type])) return ['success'=>false,'message'=>Lang::get('app.mail.tail_log.unknown_type')];
 
-    private function logsDir(): string
-    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
-    private function currentUser(): string
-    { return Auth::user() ?? 'unknown'; }
+        $result = (new \Acme\Panel\Domain\Logs\LogManager())->moduleLogLines('mail', $map[$type], $limit);
+
+        return ['success'=>true,'type'=>$type,'logs'=>$result['lines'],'lines'=>$result['lines'],'entries'=>$result['entries'],'limit'=>$limit];
+    }
+
     private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'mail_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
-    private function appendDeletedLog(string $action,int $id,string $sql): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'mail_deleted.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%d|%s|%d',date('Y-m-d H:i:s'),$user,$action,$id,$sql,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
-
-    private function readLogTail(string $file,int $limit): array
     {
-        $size = @filesize($file);
-        if($size === false) return [];
-        if($size < 1048576){
-            $raw = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-            return array_slice($raw, -$limit);
-        }
-        $fp = @fopen($file,'r');
-        if(!$fp) return [];
-        $chunk=''; $pos=$size; $lines=[]; $need=$limit+5;
-        while($pos>0 && count($lines)<$need){
-            $read = min(8192,$pos); $pos -= $read; fseek($fp,$pos);
-            $chunk = fread($fp,$read).$chunk;
-            $parts = explode("\n", $chunk);
-            if($pos>0){
-                $chunk = array_shift($parts);
-            } else {
-                $chunk='';
-            }
-            $parts = array_reverse(array_filter($parts, fn($p)=>$p!==''));
-            foreach($parts as $p){
-                $lines[] = $p;
-                if(count($lines) >= $limit) break 2;
-            }
-        }
-        fclose($fp);
-        return array_reverse($lines);
-    }
-
-    private function parseLogLine(string $type,string $line): ?array
-    {
-        $parts = explode('|',$line);
-        if(!$parts) return null;
-        $ts='';
-        if(isset($parts[0]) && preg_match('/^\[(.*?)\]$/',$parts[0],$m)) $ts=$m[1];
-        if($type==='sql'){
-            return [
-                'time'=>$ts,
-                'user'=>$parts[1]??'',
-                'op'=>$parts[2]??'',
-                'status'=>$parts[3]??'',
-                'affected'=>(int)($parts[4]??0),
-                'sql'=>$parts[5]??'',
-                'error'=>$parts[6]??'',
-                'server'=>$this->parseServerId($parts[7]??'0')
-            ];
-        }
-        return [
-            'time'=>$ts,
-            'user'=>$parts[1]??'',
-            'action'=>$parts[2]??'',
-            'id'=>(int)($parts[3]??0),
-            'snapshot'=>$parts[4]??'',
-            'server'=>$this->parseServerId($parts[5]??'0')
-        ];
-    }
-
-    private function formatLogEntry(string $type,array $entry): string
-    {
-        $server = $entry['server'] ?? 0;
-        $srvTag = $server ? ('S'.$server) : '-';
-        if($type==='sql'){
-            $err = trim((string)($entry['error'] ?? ''));
-            $sql = $entry['sql'] ?? '';
-            $base = Lang::get('app.mail.tail_log.sql_entry', [
-                'time' => $entry['time'] ?? '-',
-                'server' => $srvTag,
-                'user' => $entry['user'] ?? '-',
-                'operation' => strtoupper((string)($entry['op'] ?? 'UNKNOWN')),
-                'status' => $entry['status'] ?? '',
-                'affected' => (int)($entry['affected'] ?? 0),
-            ]);
-            if($sql !== ''){
-                $base .= Lang::get('app.mail.tail_log.sql_suffix', ['sql' => $sql]);
-            }
-            if($err !== ''){
-                $base .= Lang::get('app.mail.tail_log.sql_error_suffix', ['error' => $err]);
-            }
-            return $base;
-        }
-        $snap = $entry['snapshot'] ?? '';
-        $base = Lang::get('app.mail.tail_log.action_entry', [
-            'time' => $entry['time'] ?? '-',
-            'server' => $srvTag,
-            'user' => $entry['user'] ?? '-',
-            'action' => $entry['action'] ?? 'ACTION',
-            'id' => (int)($entry['id'] ?? 0),
+        \Acme\Panel\Support\Audit::log('mail', 'exec_sql', $type ?: 'UNKNOWN', [
+            'type' => $type ?: 'UNKNOWN',
+            'sql' => $sql,
+            'success' => $ok,
+            'affected' => $affected,
+            'error' => $error,
         ]);
-        if($snap !== ''){
-            $base .= Lang::get('app.mail.tail_log.action_snapshot_suffix', ['snapshot' => $snap]);
-        }
-        return $base;
     }
 
-    private function parseServerId(string $raw): int
+    private function appendDeletedLog(string $action,int $id,string $sql): void
     {
-        if($raw === '') return 0;
-        if($raw[0]==='s' || $raw[0]==='S') $raw = substr($raw,1);
-        return (int)$raw;
+        \Acme\Panel\Support\Audit::log('mail', 'snapshot', 'id='.$id, [
+            'op' => strtoupper($action),
+            'snapshot' => $sql,
+        ]);
     }
 }
-

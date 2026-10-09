@@ -518,7 +518,8 @@ $bondingOptions = [
       <?= $cardTitle(__('app.auctionator.sales.title'), __('app.auctionator.sales.hint')) ?>
 
       <?php if (!$supported): ?>
-        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.not_deployed')) ?></p>
+        <?php // 与策略表同一套说法：连不上库 ≠ 没装模块，别把连接问题说成"没部署" ?>
+        <p class="muted small"><?= htmlspecialchars(__('app.auctionator.sales.' . (($notes['support_reason'] ?? '') === 'db_unreachable' ? 'unavailable' : 'not_deployed'))) ?></p>
       <?php elseif (($sales['error'] ?? '') === 'missing'): ?>
         <?php // 旧版模块还没有这张表（SQL 更新没执行 / worldserver 没重编）：如实说，别显示成"没有成交" ?>
         <p class="alert au-warning small"><?= htmlspecialchars(__('app.auctionator.sales.missing_table')) ?></p>

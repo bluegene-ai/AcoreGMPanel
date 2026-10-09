@@ -1,47 +1,38 @@
 <?php
 /**
  * File: app/Domain/ItemInventory/ItemInventoryLog.php
- * Purpose: Single append-only action log for the unified item/inventory module.
- *
- * Writes to storage/logs/item_inventory_actions.log, which the Logs module exposes through
- * config/logs.php.
+ * Purpose: 物品/库存模块的动作记录，统一落到审计表（module=item_inventory）。
  */
 
 declare(strict_types=1);
 
 namespace Acme\Panel\Domain\ItemInventory;
 
-use Acme\Panel\Support\ClientIp;
-use Acme\Panel\Support\LogPath;
+use Acme\Panel\Support\Audit;
 use Throwable;
 
 final class ItemInventoryLog
 {
-    public const FILE = 'item_inventory_actions.log';
-
+    /**
+     * 事件名就是动作名；状态优先取 context.status，其次看 context.success，
+     * 都没有时按名字里的 failed / degraded / error 判断。
+     */
     public static function action(string $event, array $context = []): void
     {
         try {
-            $data = $context + [
-                'admin' => self::currentUser(),
-                'server' => $context['server'] ?? null,
-                'ip' => ClientIp::resolve($_SERVER),
-                'time_iso' => date('c'),
-            ];
-            $data = array_filter($data, static fn ($value): bool => $value !== null);
-
-            $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $line = sprintf('[%s] item_inventory.%s %s', date('Y-m-d H:i:s'), $event, $json ?: '{}');
-
-            LogPath::appendTo(self::logFile(), $line, true, 0777);
+            $event = $event !== '' ? $event : 'action';
+            $status = $context['status'] ?? null;
+            if (!is_string($status) || $status === '') {
+                $status = match (true) {
+                    array_key_exists('success', $context) => $context['success'] ? 'ok' : 'fail',
+                    str_contains($event, 'failed'), str_contains($event, 'degraded'), str_contains($event, 'error') => 'fail',
+                    default => 'ok',
+                };
+            }
+            Audit::log('item_inventory', $event, '', $context + ['status' => $status]);
         } catch (Throwable $ignored) {
             // Logging must never break an inventory operation.
         }
-    }
-
-    public static function logFile(): string
-    {
-        return LogPath::logsDir(true, 0777) . DIRECTORY_SEPARATOR . self::FILE;
     }
 
     public static function currentUser(): string

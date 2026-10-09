@@ -60,6 +60,18 @@ new hand-written `'/path'` in a JS `href` as a bug until proven otherwise.
 - Capabilities gate UI: `window.PANEL_CAPABILITIES`, checked via `can(key)`.
 - Mutating endpoints are POST under `CsrfMiddleware`, and are capability-gated.
 
+## Logging — one sink, no files
+
+Every write, exception and system event goes to `ac_eluna.panel_audit_log` through
+`Acme\Panel\Support\Audit` (`log` / `stage` / `error` / `system`). **Do not open a new
+`storage/logs/*.log` for a module.** `storage/logs` holds only the fallback file used when
+the audit database is unreachable. See `docs/audit-log.md`.
+
+One event = one row: when a module already has a staged writer (`appendActionLog`,
+`ItemInventoryLog::action`, …), that call *is* the audit row — do not add a second
+`Audit::log()` for the same outcome. New module/action labels go in **both**
+`config/logs.php` (`modules`) and `resources/lang/*/logs.php` (`catalog.*`).
+
 ## Checks before reporting done
 - `php -l` on every changed `.php` file (PHP at `$env:PHP_HOME\php.exe`).
 - `node --check` on every changed `.js` file.

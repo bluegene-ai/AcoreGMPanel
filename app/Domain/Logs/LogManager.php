@@ -1,397 +1,238 @@
 <?php
 /**
  * File: app/Domain/Logs/LogManager.php
- * Purpose: Defines class LogManager for the app/Domain/Logs module.
+ * Purpose: 日志管理门面：把请求参数归一化成查询条件，再交给 AuditLogRepository 取数。
  */
 
 namespace Acme\Panel\Domain\Logs;
 
-use Acme\Panel\Support\ConfigLocalization;
-use Acme\Panel\Core\Lang;
-use Acme\Panel\Support\LogPath;
-use Acme\Panel\Support\TransientCache;
-use InvalidArgumentException;
+use Acme\Panel\Support\AuditCatalog;
 
 class LogManager
 {
-    private array $modules = [];
-    private array $defaults = [
-        'module' => 'item',
-        'type' => 'sql',
-        'limit' => 200,
-        'max_limit' => 500,
-    ];
-    private string $logDir;
+    private AuditLogRepository $repo;
 
-    public function __construct(?array $config = null)
+    public function __construct(?AuditLogRepository $repo = null)
     {
-        $config = $config ?? $this->loadConfig();
-        $this->modules = $config['modules'] ?? [];
-        $this->defaults = $config['defaults'] ?? $this->defaults;
-        $this->defaults['limit'] = $this->sanitizeLimit((int)($this->defaults['limit'] ?? 200));
-        $maxLimit = (int)($this->defaults['max_limit'] ?? 500);
-        $this->defaults['max_limit'] = $maxLimit > 0 ? $maxLimit : 500;
-        $this->logDir = LogPath::logsDir(true, 0777);
+        $this->repo = $repo ?? new AuditLogRepository();
+    }
+
+    public function repository(): AuditLogRepository
+    {
+        return $this->repo;
     }
 
     public function defaults(): array
     {
-        return $this->defaults;
+        return AuditCatalog::defaults();
     }
 
-    public function modules(): array
+    public function limits(?string $key = null, mixed $default = null): mixed
     {
-        return $this->modules;
+        return AuditCatalog::limits($key, $default);
     }
 
-    public function getModule(string $id): ?array
+    public function ranges(): array
     {
-        return $this->modules[$id] ?? null;
+        return AuditCatalog::ranges();
     }
 
-    public function getType(string $moduleId, string $typeId): ?array
+    /** 页面与前端共用的目录：模块/动作标签、渠道、状态、区服、操作人。 */
+    public function catalog(): array
     {
-        $module = $this->getModule($moduleId);
-        if(!$module){
-            return null;
-        }
-        $type = $module['types'][$typeId] ?? null;
-        if(!$type){
-            return null;
-        }
-        return $type + [
-            'module_id' => $moduleId,
-            'module_label' => $module['label'] ?? $moduleId,
-            'type_id' => $typeId,
-        ];
-    }
+        $facets = $this->repo->facets();
 
-    public function sanitizeLimit(int $limit): int
-    {
-        $limit = $limit > 0 ? $limit : 1;
-        $max = (int)($this->defaults['max_limit'] ?? 500);
-        if($max <= 0){
-            $max = 500;
-        }
-        return $limit > $max ? $max : $limit;
-    }
-
-    public function tail(string $moduleId, string $typeId, int $limit): array
-    {
-        $type = $this->getType($moduleId, $typeId);
-        if(!$type){
-            throw new InvalidArgumentException('Unknown module or type');
-        }
-        $limit = $this->sanitizeLimit($limit);
-        $file = $type['file'] ?? '';
-        $path = $file !== '' ? $this->logDir.DIRECTORY_SEPARATOR.$file : '';
-        $lines = $path && is_file($path) ? $this->readTail($path, $limit) : [];
-        $format = $type['format'] ?? 'plain';
-        $entries = [];
-        foreach($lines as $line){
-            $parsed = $this->parseLine($format, $line);
-            $entry = ['raw' => $line];
-            if($parsed){
-                $entry = array_merge($entry, $parsed);
-            }
-            $entries[] = $entry;
-        }
         return [
-            'module' => $moduleId,
-            'module_label' => $type['module_label'],
-            'type' => $typeId,
-            'type_label' => $type['label'] ?? $typeId,
-            'file' => $file,
-            'limit' => $limit,
-            'lines' => $lines,
-            'entries' => $entries,
+            'modules' => $facets['modules'],
+            'actions' => $facets['actions'],
+            'actors' => $facets['actors'],
+            'realms' => $facets['realms'],
+            'channels' => $facets['channels'],
+            'statuses' => $facets['statuses'],
+            'ranges' => array_keys($this->ranges()),
         ];
     }
 
     /**
-     * config/logs.php + 本地化结果按语种缓存 300 秒：`ConfigLocalization::localizeArray()`
-     * 会遍历整份模块清单走一遍语言表，而这份配置在一次部署内是常量。
+     * 请求参数 → 查询条件。非法取值一律退回默认值，绝不把用户输入直接拼进 SQL。
      */
-    private function loadConfig(): array
+    public function normalizeFilters(array $input, ?int $forcedRealm = null): array
     {
-        $file = $this->resolvePath('config/logs.php');
-        $locale = Lang::locale();
-
-        return TransientCache::remember('logs_config', 'config_' . $locale, 300, function () use ($file): array {
-            if(is_file($file)){
-                $data = require $file;
-                if(is_array($data)){
-                    return ConfigLocalization::localizeArray($data);
-                }
-            }
-            return [];
-        });
-    }
-
-    private function resolvePath(string $relative): string
-    {
-        $base = dirname(__DIR__, 3);
-        return $base.DIRECTORY_SEPARATOR.str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
-    }
-
-    private function readTail(string $file, int $limit): array
-    {
-        $size = @filesize($file);
-        if($size === false){
-            return [];
+        $defaults = $this->defaults();
+        $maxPerPage = (int) $this->limits('max_per_page', 200);
+        if ($maxPerPage < 1) {
+            $maxPerPage = 200;
         }
-        if($size <= 1048576){
-            $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if(!$lines){
-                return [];
-            }
-            return array_slice($lines, -$limit);
+
+        $perPage = (int) ($input['per_page'] ?? $this->limits('per_page', 50));
+        $perPage = max(1, min($maxPerPage, $perPage > 0 ? $perPage : 50));
+
+        $range = (string) ($input['range'] ?? ($defaults['range'] ?? '7d'));
+        $rangeMap = $this->ranges();
+        if (!array_key_exists($range, $rangeMap)) {
+            $range = 'custom';
         }
-        $fp = @fopen($file, 'r');
-        if(!$fp){
-            return [];
+
+        $channel = $this->pick($input['channel'] ?? null, array_keys(AuditCatalog::localizedChannels()));
+        $status = $this->pick($input['status'] ?? null, array_keys(AuditCatalog::localizedStatuses()));
+
+        $realm = $forcedRealm !== null ? (string) $forcedRealm : (string) ($input['realm'] ?? 'all');
+        if ($realm !== 'all' && !preg_match('/^\d+$/', $realm)) {
+            $realm = 'all';
         }
-        $buffer = '';
-        $lines = [];
-        $pos = $size;
-        while($pos > 0 && count($lines) < $limit){
-            $chunk = min(8192, $pos);
-            $pos -= $chunk;
-            fseek($fp, $pos);
-            $buffer = fread($fp, $chunk).$buffer;
-            $parts = explode("\n", $buffer);
-            if($pos > 0){
-                $buffer = array_shift($parts);
+
+        $from = $this->timestamp($input['from'] ?? null);
+        $to = $this->timestamp($input['to'] ?? null);
+
+        if ($range !== 'custom') {
+            $spec = (string) ($rangeMap[$range] ?? '');
+            if ($spec === '') {
+                $from = null;
+                $to = null;
             } else {
-                $buffer = '';
-            }
-            for($i = count($parts) - 1; $i >= 0; $i--){
-                $line = trim($parts[$i]);
-                if($line === ''){
-                    continue;
-                }
-                array_unshift($lines, $line);
-                if(count($lines) >= $limit){
-                    break 2;
-                }
+                $from = date('Y-m-d H:i:s', (int) strtotime($spec));
+                $to = null;
             }
         }
-        fclose($fp);
-        return $lines;
-    }
 
-    private function parseLine(string $format, string $line): ?array
-    {
-        return match($format){
-            'json_line' => $this->parseJsonLine($line),
-            'pipe_sql' => $this->parsePipeSql($line),
-            'pipe_deleted' => $this->parsePipeDeleted($line),
-            'massmail' => $this->parseMassmail($line),
-            'item_sql' => $this->parseItemSql($line),
-            default => $this->parsePlain($line),
-        };
-    }
-
-    private function parseJsonLine(string $line): ?array
-    {
-        if(!preg_match('/^\\[(?P<time>[^\\]]+)\\]\\s*(?P<tag>[^\\s]+)\\s+(?P<payload>\{.*)$/u', $line, $m)){
-            return null;
-        }
-        $data = json_decode($m['payload'], true);
-        if(!is_array($data)){
-            return null;
-        }
-        $summary = $this->summariseArray($data, ['message','result','error','sql','action','stage']);
-        if($summary === ''){
-            $summary = $m['tag'];
-        }
         return [
-            'time' => $m['time'],
-            'tag' => $m['tag'],
-            'actor' => $data['admin'] ?? ($data['user'] ?? null),
-            'server' => $this->normalizeServer($data['server'] ?? ($data['srv'] ?? null)),
-            'summary' => $summary,
-            'data' => $data,
+            'keyword' => AuditCatalog::clip((string) ($input['keyword'] ?? ''), 120),
+            'channel' => $channel,
+            'module' => $this->pick($input['module'] ?? null, null),
+            'action' => $this->pick($input['action'] ?? null, null),
+            'actor' => $this->pick($input['actor'] ?? null, null),
+            'status' => $status,
+            'realm' => $realm,
+            'range' => $range,
+            'from' => $from,
+            'to' => $to,
+            'page' => max(1, (int) ($input['page'] ?? 1)),
+            'per_page' => $perPage,
+            'sort' => strtolower((string) ($input['sort'] ?? ($defaults['sort'] ?? 'desc'))) === 'asc' ? 'asc' : 'desc',
         ];
     }
 
-    private function parsePipeSql(string $line): ?array
+    /**
+     * 列表查询：返回行、分页信息与生效的筛选条件（前端据此回填表单）。
+     */
+    public function search(array $input, ?int $forcedRealm = null): array
     {
-        if(!preg_match('/^\\[(?P<time>[^\\]]+)\\]\\|(?P<user>[^|]*)\\|(?P<type>[^|]*)\\|(?P<status>[^|]*)\\|(?P<affected>[^|]*)\\|(?P<sql>[^|]*)\\|(?P<error>[^|]*)\\|?(?P<server>.*)$/u', $line, $m)){
-            return null;
-        }
-        $status = strtoupper(trim($m['status'] ?? ''));
-        $type = strtoupper(trim($m['type'] ?? ''));
-        $affected = (int)($m['affected'] ?? 0);
-        $typeLabel = $type !== '' ? $type : 'UNKNOWN';
-        $statusLabel = $status !== '' ? $status : 'UNKNOWN';
-        $summary = Lang::get('app.logs.manager.pipe_sql.summary', [
-            'type' => $typeLabel,
-            'status' => $statusLabel,
-            'affected' => $affected,
+        $filters = $this->normalizeFilters($input, $forcedRealm);
+        $result = $this->repo->search($filters);
+
+        return $result + ['filters' => $filters];
+    }
+
+    public function stats(array $input, ?int $forcedRealm = null): array
+    {
+        return $this->repo->stats($this->normalizeFilters($input, $forcedRealm));
+    }
+
+    public function facets(): array
+    {
+        return $this->repo->facets();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function export(array $input, int $limit = 5000, ?int $forcedRealm = null): array
+    {
+        return $this->repo->exportRows($this->normalizeFilters($input, $forcedRealm), $limit);
+    }
+
+    public function purge(int $days): int
+    {
+        $min = (int) $this->limits('purge_min_days', 1);
+        $max = (int) $this->limits('purge_max_days', 3650);
+        $days = max($min, min($max, $days));
+
+        return $this->repo->purge($days);
+    }
+
+    /**
+     * 各模块日志面板共用的取数：按模块 + 动作集合取最近若干条，返回可直接展示的文本行与结构化行。
+     *
+     * @param array<int,string> $actions 空数组表示该模块全部动作
+     * @return array{lines:array<int,string>,entries:array<int,array<string,mixed>>}
+     */
+    public function moduleLogLines(string $module, array $actions, int $limit): array
+    {
+        $limit = max(1, min(500, $limit));
+        $filters = $this->normalizeFilters([
+            'module' => $module,
+            'range' => 'all',
+            'per_page' => $limit,
+            'page' => 1,
         ]);
-        $sql = trim($m['sql'] ?? '');
-        if($sql !== ''){
-            $summary .= Lang::get('app.logs.manager.pipe_sql.sql_suffix', [
-                'sql' => $this->truncate($sql),
-            ]);
+
+        $result = $this->repo->search($filters);
+        $lines = [];
+        foreach ($result['rows'] as $row) {
+            $lines[] = $this->formatLine($row);
         }
-        $error = trim($m['error'] ?? '');
-        if($error !== ''){
-            $summary .= Lang::get('app.logs.manager.pipe_sql.error_suffix', [
-                'error' => $error,
-            ]);
-        }
-        return [
-            'time' => $m['time'],
-            'actor' => $m['user'] !== '' ? $m['user'] : null,
-            'server' => $this->normalizeServer($m['server'] ?? null),
-            'summary' => $summary,
-            'data' => [
-                'type' => $type,
-                'status' => $status,
-                'affected' => $affected,
-                'sql' => $sql,
-                'error' => $error,
-            ],
+
+        return ['lines' => $lines, 'entries' => $result['rows']];
+    }
+
+    public function formatLine(array $row): string
+    {
+        $status = strtoupper((string) ($row['status'] ?? 'ok'));
+        $parts = [
+            '[' . (string) ($row['ts'] ?? '') . ']',
+            (string) ($row['actor'] ?? '-'),
+            'S' . (int) ($row['realm_index'] ?? 0),
+            (string) ($row['module'] ?? '') . '.' . (string) ($row['action'] ?? ''),
+            $status,
         ];
-    }
-
-    private function parsePipeDeleted(string $line): ?array
-    {
-        if(!preg_match('/^\\[(?P<time>[^\\]]+)\\]\\|(?P<user>[^|]*)\\|(?P<action>[^|]*)\\|(?P<id>[^|]*)\\|(?P<sql>[^|]*)\\|?(?P<server>.*)$/u', $line, $m)){
-            return null;
+        $target = trim((string) ($row['target'] ?? ''));
+        if ($target !== '') {
+            $parts[] = $target;
         }
-        $action = trim($m['action'] ?? '');
-        $summary = ($action !== '' ? $action : 'DELETE').' ID:'.trim($m['id'] ?? '');
-        $sql = trim($m['sql'] ?? '');
-        if($sql !== ''){
-            $summary .= ' | '.$this->truncate($sql);
+        $summary = trim((string) ($row['summary'] ?? ''));
+        if ($summary !== '') {
+            $parts[] = $summary;
         }
-        return [
-            'time' => $m['time'],
-            'actor' => $m['user'] !== '' ? $m['user'] : null,
-            'server' => $this->normalizeServer($m['server'] ?? null),
-            'summary' => $summary,
-            'data' => [
-                'action' => $action,
-                'id' => (int)($m['id'] ?? 0),
-                'sql' => $sql,
-            ],
-        ];
-    }
-
-    private function parseMassmail(string $line): ?array
-    {
-        if(!preg_match('/^\\[(?P<time>[^\\]]+)\\]\\|(?P<body>.*)$/u', $line, $m)){
-            return null;
-        }
-        $parts = explode('|', $m['body']);
-        $data = [];
-        $notes = [];
-        foreach($parts as $part){
-            $part = trim($part);
-            if($part === ''){
-                continue;
-            }
-            if(strpos($part, ':') !== false){
-                [$key, $value] = explode(':', $part, 2);
-                $data[$key] = trim($value);
-            } else {
-                $notes[] = $part;
+        $detail = $row['detail'] ?? null;
+        if (is_array($detail) && $detail !== []) {
+            $json = json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($json) && $json !== '' && $json !== '[]') {
+                $parts[] = $json;
             }
         }
-        $action = $data['action'] ?? ($notes[0] ?? 'action');
-        $summaryParts = [];
-        $summaryParts[] = $action;
-        if(isset($data['succ']) || isset($data['fail'])){
-            $summaryParts[] = sprintf('succ:%s fail:%s', $data['succ'] ?? '0', $data['fail'] ?? '0');
-        }
-        if(isset($data['item']) && $data['item'] !== '0'){
-            $summaryParts[] = 'item:'.$data['item'];
-        }
-        if(isset($data['amount']) && $data['amount'] !== '0'){
-            $summaryParts[] = 'amount:'.$data['amount'];
-        }
-        if($notes){
-            $summaryParts[] = implode(' | ', $notes);
-        }
-        $summary = implode(' | ', array_filter($summaryParts));
-        return [
-            'time' => $m['time'],
-            'actor' => $data['user'] ?? ($data['admin'] ?? null),
-            'server' => $this->normalizeServer($data['srv'] ?? null),
-            'summary' => $summary,
-            'data' => $data + ['notes' => $notes],
-        ];
+
+        return implode(' | ', $parts);
     }
 
-    private function parseItemSql(string $line): ?array
+    /** 白名单取值：命中 allowed 返回原值，否则返回 all/空。allowed 为 null 时只做长度与字符校验。 */
+    private function pick(mixed $value, ?array $allowed): string
     {
-        $jsonParsed = $this->parseJsonLine($line);
-        if($jsonParsed){
-            return $jsonParsed;
+        if (!is_string($value)) {
+            return $allowed === null ? '' : 'all';
         }
-        return $this->parsePipeSql($line);
-    }
-
-    private function parsePlain(string $line): ?array
-    {
-        if(preg_match('/^\\[(?P<time>[^\\]]+)\\]\\s*(?P<message>.*)$/u', $line, $m)){
-            return [
-                'time' => $m['time'],
-                'summary' => trim($m['message']),
-                'data' => ['message' => trim($m['message'])],
-            ];
-        }
-        return ['summary' => $line];
-    }
-
-    private function summariseArray(array $data, array $preferredKeys): string
-    {
-        foreach($preferredKeys as $key){
-            if(!isset($data[$key])){
-                continue;
-            }
-            $value = $data[$key];
-            if(is_scalar($value) && $value !== ''){
-                return $this->truncate((string)$value);
-            }
-        }
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        return $json ? $this->truncate($json) : '';
-    }
-
-    private function truncate(string $value, int $max = 160): string
-    {
         $value = trim($value);
-        if(mb_strlen($value) <= $max){
-            return $value;
+        if ($value === '' || $value === 'all') {
+            return $allowed === null ? '' : 'all';
         }
-        return mb_substr($value, 0, $max - 3).'...';
+        if ($allowed !== null && !in_array($value, $allowed, true)) {
+            return 'all';
+        }
+        if (!preg_match('/^[\w.\-:@ ]{1,64}$/u', $value)) {
+            return $allowed === null ? '' : 'all';
+        }
+
+        return $value;
     }
 
-    private function normalizeServer(mixed $server): ?int
+    private function timestamp(mixed $value): ?string
     {
-        if($server === null || $server === ''){
+        if (!is_string($value) || trim($value) === '') {
             return null;
         }
-        if(is_numeric($server)){
-            return (int)$server;
+        $value = trim($value);
+        $parsed = strtotime($value);
+        if ($parsed === false) {
+            return null;
         }
-        if(is_string($server)){
-            $server = trim($server);
-            if($server === ''){
-                return null;
-            }
-            if($server[0] === 's' || $server[0] === 'S'){
-                $server = substr($server, 1);
-            }
-            if(is_numeric($server)){
-                return (int)$server;
-            }
-        }
-        return null;
+
+        return date('Y-m-d H:i:s', $parsed);
     }
 }
-

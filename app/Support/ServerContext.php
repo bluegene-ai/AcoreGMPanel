@@ -93,9 +93,17 @@ class ServerContext
     {
         if(!self::debugEnabled()) return;
 
-        if(empty($_SERVER['DOCUMENT_ROOT'])) return;
-        $line = sprintf('[%s] switch_server id=%d cookie=%s path=%s sess=%s',date('Y-m-d H:i:s'),$id,$cookieOk?'ok':'fail',$cookiePath,session_id());
-        LogPath::appendLine('server_switch_debug.log', $line, true, 0777);
+        $srv = self::list()[$id] ?? [];
+        \Acme\Panel\Support\Audit::system('realm', 'switch', [
+            'summary' => sprintf('切换到 #%d %s（cookie %s）', $id, (string)($srv['name'] ?? ''), $cookieOk ? 'ok' : 'fail'),
+            'cookie' => $cookieOk ? 'ok' : 'fail',
+            'cookie_path' => $cookiePath,
+            'session' => session_id(),
+        ], [
+            'realm_index' => $id,
+            'realm_id' => (int)($srv['realm_id'] ?? 0),
+            'realm_name' => (string)($srv['name'] ?? ''),
+        ]);
     }
     public static function server(?int $id=null): ?array { $id=$id??self::currentId(); $all=self::list(); return $all[$id]??null; }
     public static function soap(): ?array { $s=self::server(); return $s['soap']??null; }

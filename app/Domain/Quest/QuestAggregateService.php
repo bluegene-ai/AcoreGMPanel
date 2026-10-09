@@ -1048,21 +1048,20 @@ class QuestAggregateService extends MultiServerRepository
 
     private function logAggregateSave(int $questId, array $stats, array $payload): void
     {
-        Audit::log('quest', 'aggregate_save', (string)$questId, [
+        Audit::log('quest', 'aggregate_save', 'ID='.$questId, [
             'stats' => $stats,
+            'summary' => $this->summarizeStats($stats),
             'server_id' => $this->serverId,
         ]);
-        $summary = $this->summarizeStats($stats);
-        $this->appendAggregateLog('AGG_SAVE', true, $summary, '');
     }
 
     private function logAggregateFailure(int $questId, array $payload, string $error): void
     {
-        Audit::log('quest', 'aggregate_save_fail', (string)$questId, [
+        Audit::log('quest', 'aggregate_save', 'ID='.$questId, [
+            'status' => 'fail',
             'error' => $error,
             'server_id' => $this->serverId,
         ]);
-        $this->appendAggregateLog('AGG_SAVE', false, 'error', $error);
     }
 
     private function summarizeStats(array $stats): string
@@ -1081,37 +1080,6 @@ class QuestAggregateService extends MultiServerRepository
             $parts[] = $section.':'.implode(',', $sub);
         }
         return implode('|', $parts);
-    }
-
-    private function appendAggregateLog(string $type, bool $ok, string $summary, string $error): void
-    {
-        $file = $this->logsDir().DIRECTORY_SEPARATOR.'quest_sql.log';
-        $user = $this->currentUser();
-        $line = sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',
-            date('Y-m-d H:i:s'),
-            $user,
-            $type,
-            $ok ? 'OK' : 'FAIL',
-            0,
-            substr($summary, 0, 4000),
-            $ok ? '' : $error,
-            $this->serverId
-        );
-        \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777);
-    }
-
-    private function logsDir(): string
-    {
-        $dir = \Acme\Panel\Support\LogPath::logsDir(true, 0777);
-        if(!is_dir($dir)){
-            @mkdir($dir, 0777, true);
-        }
-        return $dir;
-    }
-
-    private function currentUser(): string
-    {
-        return \Acme\Panel\Support\Auth::user() ?? 'unknown';
     }
 
     private function buildInsertStatement(string $table, array $data): string

@@ -11,7 +11,7 @@ use Acme\Panel\Support\{Auth,Audit,Csrf,IpLocationService};
 use Acme\Panel\Support\SoapService;
 use Acme\Panel\Domain\Account\AccountMutationHydrator;
 use Acme\Panel\Domain\Account\AccountRepository;
-use Acme\Panel\Support\{ClientIp,LogPath,ServerContext,ServerList,SoapCommand};
+use Acme\Panel\Support\{ServerContext,ServerList,SoapCommand};
 
 class AccountController extends Controller
 {
@@ -235,9 +235,6 @@ class AccountController extends Controller
         }
 
         $this->logAccountAction('delete',$result['success']?'success':'failed',$context+$result);
-        if($result['success']){
-            Audit::log('account','delete',"id=$id chars_deleted=".((int)($result['characters_deleted']??0)));
-        }
 
         return $this->json(['success'=>(bool)$result['success'],'message'=>$result['message'] ?? null] + $result);
     }
@@ -284,17 +281,14 @@ class AccountController extends Controller
                 if($action==='ban'){
                     $ok = $this->repo()->ban($id,$reason,$hours);
                     $this->logAccountAction('bulk_ban',$ok?'success':'db_fail',$context+['hours'=>$hours,'reason'=>$reason]);
-                    if($ok){ Audit::log('account','ban',"id=$id hours=$hours reason=$reason"); }
                 } elseif($action==='unban'){
                     $cnt = $this->repo()->unban($id);
                     $ok = true;
                     $this->logAccountAction('bulk_unban',$cnt>0?'success':'noop',$context+['updated'=>$cnt]);
-                    if($cnt>0){ Audit::log('account','unban',"id=$id updated=$cnt"); }
                 } else {
                     $res = $this->repo()->deleteAccountCascade($id);
                     $ok = (bool)($res['success'] ?? false);
                     $this->logAccountAction('bulk_delete',$ok?'success':'failed',$context+$res);
-                    if($ok){ Audit::log('account','delete',"id=$id chars_deleted=".((int)($res['characters_deleted']??0))); }
                 }
             } catch(\Throwable $e){
                 $ok = false;
@@ -342,10 +336,7 @@ class AccountController extends Controller
             return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])],500);
         }
 
-        $this->logAccountAction('email',($res['success']??false)?'success':'failed',['id'=>$id,'email'=>$email,'ip'=>$request->ip()]+$res);
-        if(!empty($res['success'])){
-            Audit::log('account','update_email',"id=$id email=$email");
-        }
+        $this->logAccountAction('update_email',($res['success']??false)?'success':'failed',['id'=>$id,'email'=>$email,'ip'=>$request->ip()]+$res);
         return $this->json($res);
     }
 
@@ -375,9 +366,6 @@ class AccountController extends Controller
         }
 
         $this->logAccountAction('rename',($res['success']??false)?'success':'failed',['id'=>$id,'username'=>$newUsername,'ip'=>$request->ip()]+$res);
-        if(!empty($res['success'])){
-            Audit::log('account','rename',"id=$id username=$newUsername");
-        }
         return $this->json($res);
     }
 
@@ -430,7 +418,6 @@ class AccountController extends Controller
             $context['gmlevel_set'] = 'skipped';
         }
         $this->logAccountCreate('success',$context+['id'=>$id]);
-        Audit::log('account','create',"id=$id user=$username gm=$gmlevel");
         return $this->json(['success'=>true,'id'=>$id]);
     }
 
@@ -526,7 +513,6 @@ class AccountController extends Controller
         $ok=$this->repo()->setGmLevel($id,$gm,$realm);
         if($ok){
             $this->logAccountAction('set_gm','success',$context);
-            Audit::log('account','set_gm',"id=$id gm=$gm realm=$realm");
         } else {
             $this->logAccountAction('set_gm','db_fail',$context);
         }
@@ -555,7 +541,6 @@ class AccountController extends Controller
         $ok=$this->repo()->ban($id,$reason,$hours);
         if($ok){
             $this->logAccountAction('ban','success',$context);
-            Audit::log('account','ban',"id=$id hours=$hours reason=$reason");
         } else {
             $this->logAccountAction('ban','db_fail',$context);
         }
@@ -585,7 +570,6 @@ class AccountController extends Controller
         }
         if($cnt>0){
             $this->logAccountAction('unban','success',$context+['updated'=>$cnt]);
-            Audit::log('account','unban',"id=$id updated=$cnt");
         } else {
             $this->logAccountAction('unban','noop',$context+['updated'=>$cnt]);
         }
@@ -622,7 +606,6 @@ class AccountController extends Controller
             return $this->json(['success'=>false,'message'=>Lang::get('app.account.api.errors.password_schema_unsupported')],422);
         }
         $this->logAccountAction('change_password','success',$context);
-        Audit::log('account','change_password',"id=$id user=$user");
         return $this->json(['success'=>true]);
     }
 
@@ -640,19 +623,13 @@ class AccountController extends Controller
         return $this->json($res, $res['success']?200:500);
     }
 
+    /**
+     * 账号操作的单条审计记录（stage 决定状态）。账号模块只有这一个写入点。
+     */
     private function logAccountAction(string $action, string $stage, array $context = []): void
     {
         try {
-            if(!array_key_exists('ip',$context)){
-                $context['ip'] = ClientIp::resolve($_SERVER);
-            }
-            $base = [
-                'admin' => $_SESSION['panel_user'] ?? null,
-                'server' => ServerContext::currentId(),
-            ];
-            $payload = array_merge($base,$context);
-            $line = sprintf('[%s] %s.%s %s',date('Y-m-d H:i:s'),$action,$stage,json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-            LogPath::appendLine('account_actions.log', $line, true, 0777);
+            Audit::stage('account', $action . '.' . $stage, $context);
         } catch(\Throwable $e){  }
     }
 

@@ -539,8 +539,7 @@ class QuestRepository extends MultiServerRepository
                 return ['success'=>false,'message'=>$this->repoError('sql_only_update_insert')];
             }
         }catch(\Throwable $e){ $error=$e->getMessage(); }
-    Audit::log('quest','exec_sql',$type?:'UNKNOWN',['sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error,'server_id'=>$this->serverId]);
-        $this->appendSqlLog($type?:'UNKNOWN',$ok,$affected,$norm,$error);
+    Audit::log('quest','exec_sql',$type?:'UNKNOWN',['type'=>$type?:'UNKNOWN','sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error,'server_id'=>$this->serverId]);
         if(!$ok) return ['success'=>false,'message'=>$this->repoError('sql_exec_error', ['error'=>$error])];
         $after=null; if($type==='UPDATE' && preg_match('/WHERE\s+`?ID`?\s*=\s*(\d+)/i',$norm,$mm)){ $entry=(int)$mm[1]; $st=$pdo->prepare('SELECT '.self::columns().' FROM quest_template WHERE ID=:e'); if($st->execute([':e'=>$entry])){ $r=$st->fetch(PDO::FETCH_ASSOC); if($r) $after=$r; } }
         $operationLabel = match($type){
@@ -555,88 +554,30 @@ class QuestRepository extends MultiServerRepository
     { if($v===null) return 'NULL'; $s=(string)$v; if(strlen($s)>120) $s=substr($s,0,117).'...'; return $s; }
 
 
-    private function logsDir(): string
-    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
-
+    /** 删除/新建前的整行快照，作为可回查的审计明细保留。 */
     private function appendDeletedLog(string $action,int $id,string $sql): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_deleted.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%d|%s|%d',date('Y-m-d H:i:s'),$user,$action,$id,$sql,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
+    {
+        \Acme\Panel\Support\Audit::log('quest', 'snapshot', 'ID='.$id, [
+            'op' => strtoupper($action),
+            'snapshot' => $sql,
+        ]);
+    }
 
-    private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'quest_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
-
-    private function currentUser(): string
-    { return \Acme\Panel\Support\Auth::user() ?? 'unknown'; }
-
-
-
-
-
-
-
+    /**
+     * 任务日志面板取数：类型只是统一审计表上的动作筛选。
+     * 同时返回 lines（展示用文本）与 entries（结构化行）。
+     */
     public function tailLog(string $type,int $limit=50): array
     {
-        $limit = max(1,min(200,$limit));
-    $map = [ 'sql'=>'quest_sql.log','deleted'=>'quest_deleted.log' ];
-    if(!isset($map[$type])) return ['success'=>false,'message'=>$this->repoError('log_unknown_type')];
-        $file = $this->logsDir().DIRECTORY_SEPARATOR.$map[$type];
-        if(!is_file($file)) return ['success'=>true,'lines'=>[]];
-
-        $size = filesize($file);
-        $lines = [];
-        if($size < 1024*1024){
-            $raw = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-            $raw = array_slice($raw, -$limit);
-            foreach($raw as $ln){ $lines[] = $this->parseLogLine($type,$ln); }
-        } else {
-
-            $fp = @fopen($file,'r'); if(!$fp) return ['success'=>false,'message'=>$this->repoError('log_open_failed')];
-            $chunk=''; $pos = $size; $needed = $limit + 5;
-            while($pos>0 && count($lines)<$needed){
-                $read = min(8192,$pos); $pos -= $read; fseek($fp,$pos); $chunk = fread($fp,$read).$chunk; $parts = explode("\n", $chunk);
-
-                if($pos>0){ $chunk = array_shift($parts); }
-                else { $chunk=''; }
-
-                $tmp=[]; foreach($parts as $p){ if($p==='') continue; $tmp[]=$p; }
-
-                $tmp = array_reverse($tmp); foreach($tmp as $p){ $lines[]=$this->parseLogLine($type,$p); if(count($lines)>=$limit) break; }
-            }
-            fclose($fp);
-            $lines = array_reverse(array_slice($lines,0,$limit));
+        $map = ['sql' => ['exec_sql'], 'deleted' => ['snapshot'], 'actions' => []];
+        if(!isset($map[$type])){
+            return ['success'=>false,'message'=>$this->repoError('log_unknown_type')];
         }
-        return ['success'=>true,'lines'=>$lines];
+
+        $result = (new \Acme\Panel\Domain\Logs\LogManager())->moduleLogLines('quest', $map[$type], $limit);
+
+        return ['success'=>true,'type'=>$type,'logs'=>$result['lines'],'lines'=>$result['lines'],'entries'=>$result['entries']];
     }
-
-    private function parseLogLine(string $type,string $line): array
-    {
-
-
-        $parts = explode('|',$line);
-        $ts=''; if(isset($parts[0]) && preg_match('/^\[(.*?)\]$/',$parts[0],$m)) $ts=$m[1];
-        if($type==='sql'){
-            return [
-                'time'=>$ts,
-                'user'=>$parts[1]??'',
-                'op'=>$parts[2]??'',
-                'status'=>$parts[3]??'',
-                'affected'=>(int)($parts[4]??0),
-                'sql'=>$parts[5]??'',
-                'error'=>$parts[6]??'',
-                'server'=>(int)($parts[7]??0)
-            ];
-        }
-        return [
-            'time'=>$ts,
-            'user'=>$parts[1]??'',
-            'action'=>$parts[2]??'',
-            'id'=>(int)($parts[3]??0),
-            'snapshot'=>$parts[4]??'',
-            'server'=>(int)($parts[5]??0)
-        ];
-    }
-
-
-
 
     public function rowHash(array $row): string
     {

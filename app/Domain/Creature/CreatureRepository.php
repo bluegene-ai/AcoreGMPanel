@@ -250,8 +250,7 @@ class CreatureRepository extends MultiServerRepository
                 $affected=$pdo->exec($norm); $ok=true;
             } else { return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.sql_only_update_insert')]; }
         }catch(\Throwable $e){ $error=$e->getMessage(); }
-        Audit::log('creature','exec_sql',$type?:'UNKNOWN',['sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error]);
-        $this->appendSqlLog($type?:'UNKNOWN',$ok,$affected,$norm,$error);
+        Audit::log('creature','exec_sql',$type?:'UNKNOWN',['type'=>$type?:'UNKNOWN','sql'=>$norm,'success'=>$ok,'affected'=>$affected,'error'=>$error]);
         if(!$ok) return ['success'=>false,'message'=>Lang::get('app.creature.repository.errors.sql_exec_error',['error'=>$error])];
         $after=null; if($type==='UPDATE' && preg_match('/WHERE\s+`?entry`?\s*=\s*(\d+)/i',$norm,$mm)){
             $entry=(int)$mm[1]; $st=$pdo->prepare('SELECT * FROM creature_template WHERE entry=:e'); if($st->execute([':e'=>$entry])){ $r=$st->fetch(PDO::FETCH_ASSOC); if($r) $after=array_change_key_case($r,CASE_LOWER); }
@@ -264,14 +263,14 @@ class CreatureRepository extends MultiServerRepository
     { if($v===null) return 'NULL'; $s=(string)$v; if(strlen($s)>120) $s=substr($s,0,117).'...'; return $s; }
 
 
-    private function logsDir(): string
-    { return \Acme\Panel\Support\LogPath::logsDir(true, 0777); }
-
+    /** 删除/新建前的整行快照，作为可回查的审计明细保留。 */
     private function appendDeletedLog(string $action,int $id,string $sql): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'creature_deleted.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%d|%s|%d',date('Y-m-d H:i:s'),$user,$action,$id,$sql,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
-
-    private function appendSqlLog(string $type,bool $ok,int $affected,string $sql,string $error): void
-    { $file=$this->logsDir().DIRECTORY_SEPARATOR.'creature_sql.log'; $user=$this->currentUser(); $line=sprintf('[%s]|%s|%s|%s|%d|%s|%s|%d',date('Y-m-d H:i:s'),$user,$type,$ok?'OK':'FAIL',$affected,str_replace(["\r","\n"],' ',$sql),$ok?'':$error,$this->serverId); \Acme\Panel\Support\LogPath::appendTo($file, $line, true, 0777); }
+    {
+        \Acme\Panel\Support\Audit::log('creature', 'snapshot', 'entry='.$id, [
+            'op' => strtoupper($action),
+            'snapshot' => $sql,
+        ]);
+    }
 
     private function currentUser(): string
     { return \Acme\Panel\Support\Auth::user() ?? 'unknown'; }

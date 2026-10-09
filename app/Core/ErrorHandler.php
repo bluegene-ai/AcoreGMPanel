@@ -21,15 +21,14 @@ class ErrorHandler
         try {
             $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
             $path = (string)(parse_url($uri, PHP_URL_PATH) ?? $uri);
-            $line = date('Y-m-d H:i:s')
-                . ' [exception] '
-                . json_encode([
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'path' => $path,
-                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            \Acme\Panel\Support\LogPath::appendLine('error.log', $line, true, 0775);
+            \Acme\Panel\Support\Audit::error('system', 'exception', $e->getMessage(), [
+                'severity' => 4,
+                'summary' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'path' => $path,
+                'exception' => get_class($e),
+            ]);
         } catch (\Throwable $ignore) {
         }
 
@@ -81,13 +80,13 @@ class ErrorHandler
     private static function logWarning(string $message, string $file, int $line): void
     {
         try {
-            $line_ = date('Y-m-d H:i:s') . ' [warning] ' . json_encode([
-                'message' => $message,
+            \Acme\Panel\Support\Audit::error('system', 'warning', $message, [
+                'severity' => 3,
+                'summary' => $message,
                 'file' => $file,
                 'line' => $line,
                 'path' => (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? ''),
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            \Acme\Panel\Support\LogPath::appendLine('error.log', $line_, true, 0775);
+            ]);
         } catch (\Throwable $ignore) {
         }
     }

@@ -8,7 +8,7 @@ namespace Acme\Panel\Http\Controllers\Creature;
 
 use Acme\Panel\Core\{Controller,Lang,Request,Response,Url};
 use Acme\Panel\Domain\Creature\CreatureRepository;
-use Acme\Panel\Support\{Auth,Audit,LogPath,ServerContext,ServerList};
+use Acme\Panel\Support\{Auth,Audit,ServerContext,ServerList};
 
 class CreatureController extends Controller
 {
@@ -128,26 +128,28 @@ class CreatureController extends Controller
     public function apiExecSql(Request $request): Response
     { $this->requireSqlCapability(); $sql=(string)$request->input('sql',''); $res=$this->repo->execLimitedSql($sql); return $this->json($res,$res['success']?200:422); }
 
+    /** 生物日志面板：类型是统一审计表上的动作筛选。 */
     public function apiLogs(Request $request): Response
     {
         $this->requireLogsCapability();
         $state = $this->prepareCreatureLogState($request);
         $map = [
-            'sql' => 'creature_sql.log',
-            'deleted' => 'creature_deleted.log',
-            'actions' => 'creature_actions.log',
+            'sql' => ['exec_sql'],
+            'deleted' => ['snapshot'],
+            'actions' => [],
         ];
         if(!isset($map[$state['type']]))
             return $this->json(['success' => false, 'message' => Lang::get('app.common.errors.not_found')], 422);
 
-        $path = LogPath::logFile($map[$state['type']], false);
-        $lines = [];
-        if(is_file($path)) {
-            $content = file($path, FILE_IGNORE_NEW_LINES);
-            $lines = array_slice($content, -$state['limit']);
-        }
+        $result = (new \Acme\Panel\Domain\Logs\LogManager())->moduleLogLines('creature', $map[$state['type']], $state['limit']);
 
-        return $this->json(['success' => true, 'type' => $state['type'], 'logs' => $lines]);
+        return $this->json([
+            'success' => true,
+            'type' => $state['type'],
+            'logs' => $result['lines'],
+            'lines' => $result['lines'],
+            'entries' => $result['entries'],
+        ]);
     }
 
     public function apiFetchRow(Request $request): Response

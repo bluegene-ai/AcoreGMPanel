@@ -1105,16 +1105,10 @@ final class AuctionatorRepository extends MultiServerRepository
         $this->warnings[] = $message;
 
         try {
-            $directory = dirname(__DIR__, 3) . '/storage/logs';
-            if (!is_dir($directory)) {
-                @mkdir($directory, 0775, true);
-            }
-
-            @file_put_contents(
-                $directory . '/auctionator_repository_warnings.log',
-                '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL,
-                FILE_APPEND
-            );
+            \Acme\Panel\Support\Audit::error('auctionator', 'repository_warning', $message, [
+                'severity' => 3,
+                'summary' => $message,
+            ]);
         } catch (Throwable) {
             // Logging must never break the page.
         }

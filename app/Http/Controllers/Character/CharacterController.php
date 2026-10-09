@@ -13,7 +13,7 @@ use Acme\Panel\Domain\CharacterBoost\CharacterBoostGuardException;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostNotFoundException;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostService;
 use Acme\Panel\Domain\CharacterBoost\CharacterBoostSoapException;
-use Acme\Panel\Support\{Auth,Audit,LogPath,ServerContext,ServerList,SoapCommand};
+use Acme\Panel\Support\{Auth,Audit,ServerContext,ServerList,SoapCommand};
 use Acme\Panel\Support\GameNameResolver;
 use Acme\Panel\Support\SoapService;
 
@@ -271,16 +271,6 @@ class CharacterController extends Controller
             ]);
             return $this->json(['success'=>false,'message'=>$e->getMessage()],500);
         } catch(\Throwable $e) {
-            $this->logCharacterAction('boost', 'error', [
-                'guid' => $guid,
-                'template_id' => $templateId,
-                'target_level' => $targetLevel,
-                'server_id' => ServerContext::currentId(),
-                'realm_id' => $realmId,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
             Audit::log('character','boost_failed', 'guid='.(string)$guid, [
                 'realm_id' => $realmId,
                 'server_id' => ServerContext::currentId(),
@@ -288,6 +278,8 @@ class CharacterController extends Controller
                 'template_id' => $templateId,
                 'target_level' => $targetLevel,
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
             return $this->json(['success'=>false,'message'=>Lang::get('app.common.api.errors.request_failed_retry')],500);
         }
@@ -456,9 +448,6 @@ class CharacterController extends Controller
 
         $ok = $this->repo()->ban($guid,$reason,$hours);
         $this->logCharacterAction('ban',$ok?'success':'db_fail',['guid'=>$guid,'hours'=>$hours,'reason'=>$reason,'ip'=>$request->ip()]);
-        if($ok){
-            Audit::log('character','ban',"guid=$guid hours=$hours reason=$reason");
-        }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -475,7 +464,6 @@ class CharacterController extends Controller
             return $this->json(['success'=>false,'message'=>Lang::get('app.common.errors.database',['message'=>$e->getMessage()])],500);
         }
         $this->logCharacterAction('unban',$cnt>0?'success':'noop',['guid'=>$guid,'updated'=>$cnt,'ip'=>$request->ip()]);
-        if($cnt>0){ Audit::log('character','unban',"guid=$guid updated=$cnt"); }
         return $this->json(['success'=>true,'updated'=>$cnt,'message'=>Lang::get('app.character.actions.success')]);
     }
 
@@ -499,7 +487,6 @@ class CharacterController extends Controller
         if($level<1) $level=1; if($level>255) $level=255;
         $ok = $this->repo()->setLevel($guid,$level);
         $this->logCharacterAction('set_level',$ok?'success':'db_fail',['guid'=>$guid,'level'=>$level,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','set_level',"guid=$guid level=$level"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -522,7 +509,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->setGold($guid,$copper);
         $this->logCharacterAction('set_gold',$ok?'success':'db_fail',['guid'=>$guid,'copper'=>$copper,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','set_gold',"guid=$guid copper=$copper"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -539,7 +525,6 @@ class CharacterController extends Controller
         $soap = new SoapService();
         $res = $soap->execute('.kick '.$name);
         $this->logCharacterAction('kick',$res['success']?'success':'fail',['guid'=>$guid,'name'=>$name,'ip'=>$request->ip(),'message'=>$res['message'] ?? null]);
-        if($res['success']){ Audit::log('character','kick',"guid=$guid name=$name"); }
         return $this->json($res + ['message'=>$res['message'] ?? ($res['success']?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed'))], $res['success']?200:500);
     }
 
@@ -584,7 +569,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->teleport($guid,$map,$zone,$x,$y,$z);
         $this->logCharacterAction('teleport',$ok?'success':'db_fail',['guid'=>$guid,'map'=>$map,'zone'=>$zone,'x'=>$x,'y'=>$y,'z'=>$z,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','teleport',"guid=$guid map=$map zone=$zone x=$x y=$y z=$z"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -601,7 +585,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->unstuck($guid);
         $this->logCharacterAction('unstuck',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','unstuck',"guid=$guid"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -618,7 +601,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->resetTalents($guid);
         $this->logCharacterAction('reset_talents',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','reset_talents',"guid=$guid"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -635,7 +617,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->resetSpells($guid);
         $this->logCharacterAction('reset_spells',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','reset_spells',"guid=$guid"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -652,7 +633,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->resetCooldowns($guid);
         $this->logCharacterAction('reset_cooldowns',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','reset_cooldowns',"guid=$guid"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -669,7 +649,6 @@ class CharacterController extends Controller
         }
         $ok = $this->repo()->setRenameFlag($guid);
         $this->logCharacterAction('rename_flag',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip()]);
-        if($ok){ Audit::log('character','rename_flag',"guid=$guid"); }
         return $this->json(['success'=>$ok,'message'=>$ok?Lang::get('app.character.actions.success'):Lang::get('app.character.actions.failed')]);
     }
 
@@ -687,7 +666,6 @@ class CharacterController extends Controller
         $res = $this->repo()->deleteCharacterDetailed($guid);
         $ok = (bool)($res['success'] ?? false);
         $this->logCharacterAction('delete',$ok?'success':'db_fail',['guid'=>$guid,'ip'=>$request->ip(),'error'=>$res['message'] ?? null]);
-        if($ok){ Audit::log('character','delete',"guid=$guid"); }
         $msg = $ok
             ? Lang::get('app.character.actions.success')
             : (($res['message'] ?? '') !== '' ? ('删除失败：'.$res['message']) : Lang::get('app.character.actions.failed'));
@@ -746,12 +724,10 @@ class CharacterController extends Controller
                 if($action === 'ban'){
                     $ok = $this->repo()->ban($guid,$reason,$hours);
                     $this->logCharacterAction('bulk_ban',$ok?'success':'db_fail',['guid'=>$guid,'hours'=>$hours,'reason'=>$reason,'ip'=>$request->ip()]);
-                    if($ok){ Audit::log('character','ban',"guid=$guid hours=$hours reason=$reason"); }
                 } elseif($action === 'unban'){
                     $cnt = $this->repo()->unban($guid);
                     $ok = true;
                     $this->logCharacterAction('bulk_unban',$cnt>0?'success':'noop',['guid'=>$guid,'updated'=>$cnt,'ip'=>$request->ip()]);
-                    if($cnt>0){ Audit::log('character','unban',"guid=$guid updated=$cnt"); }
                 } else {
                     $summary = $this->repo()->findSummary($guid);
                     if(!$summary){
@@ -763,7 +739,6 @@ class CharacterController extends Controller
                         $ok = (bool)($del['success'] ?? false);
                     }
                     $this->logCharacterAction('bulk_delete',$ok?'success':'failed',['guid'=>$guid,'ip'=>$request->ip()]);
-                    if($ok){ Audit::log('character','delete',"guid=$guid"); }
                 }
             } catch(\Throwable $e){
                 $ok = false;
@@ -784,11 +759,14 @@ class CharacterController extends Controller
         ]);
     }
 
+    /**
+     * 角色操作的单条审计记录（stage 决定状态）。角色模块的写操作只经这里落库
+     * （boost 走 CharacterBoostService，另行记录）。
+     */
     private function logCharacterAction(string $action,string $stage,array $context=[]): void
     {
         try {
-            $payload = date('Y-m-d H:i:s').' ['.$action.'|'.$stage.'] '.json_encode($context, JSON_UNESCAPED_SLASHES);
-            LogPath::appendLine('character_actions.log', $payload, true, 0775);
+            Audit::stage('character', $action . '.' . $stage, $context);
         } catch(\Throwable $e){
         }
     }

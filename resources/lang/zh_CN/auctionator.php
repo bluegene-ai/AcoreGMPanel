@@ -207,7 +207,7 @@ return [
         'cut' => '手续费',
         'empty' => '还没有成交记录。模块上架的条目被买走后才会出现。',
         'missing_table' => '本区角色库里没有 mod_auctionator_sale 表，模块不会记录任何成交。请执行模块的 data/sql/db-characters/updates/2026_09_27_00_sale_log.sql，并用带该功能的模块版本重启 worldserver。',
-        'unavailable' => '成交记录表读取失败，详见 storage/logs/auctionator_repository_warnings.log。',
+        'unavailable' => '成交记录表读取失败，详见「审计日志」页（模块：拍卖行，渠道：异常）。',
         'not_deployed' => '本区没有部署 mod-auctionator，因此没有成交记录。',
     ],
     'market' => [
@@ -218,7 +218,7 @@ return [
         'newest' => '最新扫描',
         'oldest' => '最旧扫描',
         'missing_table' => '角色库里没有 mod_auctionator_market_price 表，自动卖家会回退到 item_template.BuyPrice 定价。',
-        'unreadable' => '市场数据表读取失败，详见 storage/logs/auctionator_repository_warnings.log。',
+        'unreadable' => '市场数据表读取失败，详见「审计日志」页（模块：拍卖行，渠道：异常）。',
         'not_deployed' => '本区没有部署 mod-auctionator，因此没有市场数据表。',
         'hint' => '价格只有在扫描时间新于 Auctionator.MarketData.MaxAgeDays 时才会被采用。',
         'hint_short' => '只采用仍在时效内的扫描价。',

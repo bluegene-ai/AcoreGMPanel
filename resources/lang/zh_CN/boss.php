@@ -24,7 +24,7 @@ return [
         'events_unavailable' => 'Boss 事件表暂不可用。',
         'realm_key_missing' => ':table 缺少 state_key 列：本区 boss.lua 还是「多区共用库」之前的老版本。请先更新该区脚本（加载一次就会自动补列并建索引）；在那之前面板不显示事件/贡献——宁可空着，也不会把别的区的数据混进来。',
         'contributors_unavailable' => 'Boss 贡献快照表暂不可用。',
-        'dashboard_degraded' => '读取 Boss 数据时发生异常，页面已降级为默认值显示，详情见 storage/logs/boss_repository_warnings.log。',
+        'dashboard_degraded' => '读取 Boss 数据时发生异常，页面已降级为默认值显示，详情见「审计日志」页（模块：活动 Boss，渠道：异常）。',
         'server_not_supported' => '当前区服（:server）没有部署 boss.lua（不在 config/boss.php 的 supported_server_ids 里），AGMP 不会向它发送 Boss 命令。请切换到已部署的区，或先部署该区再把它加进列表。',
     ],
     'runtime' => [

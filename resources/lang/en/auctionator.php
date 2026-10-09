@@ -215,7 +215,7 @@ return [
         'cut' => 'Cut',
         'empty' => 'No sales recorded yet. Rows appear once a module-listed entry is bought.',
         'missing_table' => 'This realm\'s characters database has no mod_auctionator_sale table, so the module records no sales. Apply the module\'s data/sql/db-characters/updates/2026_09_27_00_sale_log.sql and restart the worldserver with a module build that has it.',
-        'unavailable' => 'The sale log could not be read; see storage/logs/auctionator_repository_warnings.log.',
+        'unavailable' => 'The sale log could not be read; see the Audit log page (module: Auction house, channel: Error).',
         'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no sale log.',
     ],
     'market' => [
@@ -226,7 +226,7 @@ return [
         'newest' => 'Newest scan',
         'oldest' => 'Oldest scan',
         'missing_table' => 'The characters database has no mod_auctionator_market_price table, so the seller falls back to item_template.BuyPrice.',
-        'unreadable' => 'The market table could not be read; see storage/logs/auctionator_repository_warnings.log.',
+        'unreadable' => 'The market table could not be read; see the Audit log page (module: Auction house, channel: Error).',
         'not_deployed' => 'mod-auctionator is not deployed on this realm, so there is no market price table.',
         'hint' => 'A price is only used while its scan is newer than Auctionator.MarketData.MaxAgeDays.',
         'hint_short' => 'Only scans within the configured age are used.',
