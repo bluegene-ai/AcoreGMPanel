@@ -48,9 +48,6 @@ return [
       'view' => 'Supervisor page shell, instance status and log tail reads.',
       'control' => 'Supervisor start/stop/restart commands.',
     ],
-    'audit' => [
-      'read' => 'Audit log list and filter reads.',
-    ],
     'trivia' => [
       'view' => 'Trivia page shell, live status reads, question/preset/winner list reads.',
       'control' => 'Trivia runtime SOAP actions: start, stop, pause, resume, enable, disable, reload.',
@@ -74,8 +71,9 @@ return [
       'manage' => 'Destructive item/inventory actions: reducing stacks, deleting and replacing item instances.',
     ],
     'logs' => [
-      'catalog' => 'Logs page shell and module/type catalog reads.',
-      'read' => 'Log tail reads for a selected module/type.',
+      'catalog' => 'Logs page shell and module/action catalog reads.',
+      'read' => 'Audit log query, facet and CSV export reads.',
+      'purge' => 'Audit log retention purge.',
     ],
     'mass_mail' => [
       'compose' => 'Mass mail page shell and template bootstrap.',
