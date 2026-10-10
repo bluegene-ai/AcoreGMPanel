@@ -131,8 +131,10 @@ class Bootstrap
         }
         Config::set('app.locale_active', Lang::locale());
 
-        if (!ini_get('date.timezone')) {
-            date_default_timezone_set(Config::get('app.timezone', 'UTC'));
+        // 时区以面板配置为准：审计时间戳、页面时间与 SQL 侧 NOW() 必须同一时区。
+        $configuredTimezone = (string) (Config::get('app.timezone', '') ?: '');
+        if ($configuredTimezone !== '') {
+            date_default_timezone_set($configuredTimezone);
         }
 
         $base = rtrim(Config::get('app.base_path', ''), '/');

@@ -6,6 +6,7 @@
 
 namespace Acme\Panel\Support;
 
+use Acme\Panel\Core\Config;
 use PDO;
 use Throwable;
 
@@ -281,9 +282,14 @@ class Audit
 
     private static function now(): string
     {
-        $now = \DateTimeImmutable::createFromFormat('U.u', sprintf('%.6F', microtime(true)));
+        // 与页面时间、SQL 侧 NOW() 同一时区，取面板配置值。
+        try {
+            $zone = new \DateTimeZone((string) (Config::get('app.timezone', '') ?: date_default_timezone_get()));
 
-        return ($now ?: new \DateTimeImmutable())->format('Y-m-d H:i:s.v');
+            return (new \DateTimeImmutable('now', $zone))->format('Y-m-d H:i:s.v');
+        } catch (Throwable $e) {
+            return (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s.v');
+        }
     }
 
     private static function clip(string $value, int $max): string
