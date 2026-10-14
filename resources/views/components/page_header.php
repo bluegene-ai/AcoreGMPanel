@@ -44,7 +44,7 @@ if ($__pageHeaderTitle === '' && $__pageHeaderIntro === '' && $__pageHeaderNote 
 <div class="page-header">
   <div class="page-header__main">
     <?php if ($__pageHeaderTitle !== ''): ?>
-      <h1 class="page-title"><?= htmlspecialchars($__pageHeaderTitle) ?></h1>
+      <h1 class="page-title"><?= htmlspecialchars($__pageHeaderTitle) ?><?php if ($__pageHeaderIntro === '' && $__pageHeaderIntroHint !== ''): ?><?= panel_hint($__pageHeaderIntroHint) ?><?php endif; ?></h1>
     <?php endif; ?>
     <?php if ($__pageHeaderIntro !== ''): ?>
       <p class="page-header__intro muted">

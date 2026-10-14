@@ -175,6 +175,28 @@
 
 .au-output{max-height:300px;overflow:auto;background:#08111a;border:1px solid rgba(148,163,184,.14);border-radius:9px;padding:10px;margin:0;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:#cfdae5;}
 
+/* ---- 关键词批量黑名单 ---- */
+.au-kw{margin:10px 0 6px;padding:10px 12px;border:1px solid rgba(80,131,181,.18);border-radius:11px;background:rgba(18,31,46,.5);}
+.au-kw .au-input{flex:1 1 240px;min-width:180px;}
+.au-kw__result{margin-top:8px;}
+.au-kw__result[hidden]{display:none;}
+.au-kw__summary{margin:0 0 6px;font-size:12.5px;color:var(--c-text-strong);}
+/* 勾选栏与上方按钮的作用域不同，用分隔线分开 */
+.au-kw__selbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 6px;padding-top:8px;
+  border-top:1px solid rgba(148,163,184,.14);}
+.au-kw__selbar [data-au-kw-selected]{margin-right:auto;}
+.au-kw__selactions{display:flex;flex-wrap:wrap;gap:8px;}
+.au-kw__selactions .btn[disabled]{opacity:.4;cursor:not-allowed;}
+.au-kw__list{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:2px;}
+.au-kw__item{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;background:rgba(148,163,184,.06);font-size:12.5px;}
+.au-kw__pick{display:inline-flex;align-items:center;}
+.au-kw__pick input{margin:0;vertical-align:middle;}
+.au-kw__name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.au-kw__id{color:#8b96a1;font-variant-numeric:tabular-nums;font-size:12px;}
+.au-kw__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+/* 禁用态要看得出来：.btn 的配色会盖掉浏览器默认的置灰 */
+.au-kw__actions .btn[disabled]{opacity:.4;cursor:not-allowed;}
+
 /* ---- 表格客户端筛选（Panel.tableFilter）：搜索框插在 .au-table-wrap 之前 ---- */
 .table-filter-tools{display:flex;justify-content:flex-end;margin:0 0 6px;}
 .table-filter-tools .table-filter-input{width:auto;min-width:200px;max-width:280px;}
@@ -220,3 +242,5 @@
 .au-power__title{color:#eaf2fa;font-size:12.5px;}
 .au-power__actions{display:flex;flex-wrap:wrap;gap:8px;}
 .au-power__hint{margin:0;}
+/* 只有 ⓘ 的提示行 */
+.au-hint-only{margin:2px 0 0;}

@@ -90,6 +90,57 @@ class AuctionatorController extends Controller
         return ['value' => $value, 'ok' => $value >= $min && $value <= $max];
     }
 
+    /**
+     * 关键词校验：不空、长度上限。
+     * @return array{value: string, ok: bool, message: string}
+     */
+    private function keywordInput(Request $request): array
+    {
+        $keyword = $this->normalizedString($request, 'keyword');
+        $max = (int) Config::get('auctionator.disabled_keyword_max_chars', 64);
+
+        if ($keyword === '') {
+            return ['value' => '', 'ok' => false, 'message' => Lang::get('app.auctionator.errors.keyword_required')];
+        }
+
+        if (mb_strlen($keyword) > $max) {
+            return ['value' => '', 'ok' => false, 'message' => Lang::get('app.auctionator.errors.keyword_too_long', ['max' => $max])];
+        }
+
+        return ['value' => $keyword, 'ok' => true, 'message' => ''];
+    }
+
+    /**
+     * 勾选的 entry 清单：JSON 数组或逗号串都收，去重后卡上限。
+     * @return array{entries: int[], ok: bool, message: string}
+     */
+    private function selectedEntries(Request $request): array
+    {
+        $raw = $request->input('items', []);
+        $entries = [];
+        foreach (is_array($raw) ? $raw : explode(',', (string) $raw) as $value) {
+            $entry = (int) $value;
+            if ($entry > 0 && $entry <= 16777215) {
+                $entries[$entry] = $entry;
+            }
+        }
+        $entries = array_values($entries);
+
+        if ($entries === []) {
+            return ['entries' => [], 'ok' => false, 'message' => Lang::get('app.auctionator.errors.selection_required')];
+        }
+
+        $limit = (int) Config::get('auctionator.disabled_selection_limit', 500);
+        if (count($entries) > $limit) {
+            return ['entries' => [], 'ok' => false, 'message' => Lang::get('app.auctionator.errors.selection_over_limit', [
+                'count' => count($entries),
+                'limit' => $limit,
+            ])];
+        }
+
+        return ['entries' => $entries, 'ok' => true, 'message' => ''];
+    }
+
     public function index(Request $request): Response
     {
         $this->requireViewCapability();
@@ -115,7 +166,8 @@ class AuctionatorController extends Controller
                 'content_view' => 'content.view',
             ],
             'header' => [
-                'intro' => __('app.auctionator.intro_short'),
+                // 页头正文留空：页面说明只在 title 旁的 ⓘ 里
+                'intro' => '',
                 'intro_hint' => __('app.auctionator.intro'),
                 'note' => __('app.auctionator.scope_note', [
                     'server' => (string) ($server['name'] ?? ''),
@@ -273,6 +325,8 @@ class AuctionatorController extends Controller
 
         $action = $this->normalizedEnum($request, 'action', [
             'disabled_add', 'disabled_remove',
+            'disabled_keyword_preview', 'disabled_keyword_add', 'disabled_keyword_remove',
+            'disabled_items_add', 'disabled_items_remove',
             'itemclass_save', 'itemclass_delete', 'itemclass_class_save',
             'quality_save',
             'gm_save', 'gm_delete', 'gm_toggle',
@@ -281,6 +335,9 @@ class AuctionatorController extends Controller
         if ($action === '') {
             return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.invalid_action')], 422);
         }
+
+        // 批量动作把实际影响行数并进审计明细
+        $audit = [];
 
         try {
             switch ($action) {
@@ -300,6 +357,108 @@ class AuctionatorController extends Controller
                         return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.not_found')], 404);
                     }
                     $message = Lang::get('app.auctionator.feedback.disabled_removed', ['item' => $item]);
+                    break;
+
+                // 上限按本次会改动的行数算
+                case 'disabled_keyword_preview':
+                    $keyword = $this->keywordInput($request);
+                    if (!$keyword['ok']) {
+                        return $this->json(['success' => false, 'message' => $keyword['message']], 422);
+                    }
+
+                    $counts = $this->repo()->disabledKeywordCounts($keyword['value']);
+                    $previewLimit = (int) Config::get('auctionator.disabled_keyword_preview_limit', 200);
+
+                    return $this->json([
+                        'success' => true,
+                        'payload' => [
+                            'keyword' => $keyword['value'],
+                            'matched' => $counts['matched'],
+                            'blacklisted' => $counts['blacklisted'],
+                            'addable' => $counts['addable'],
+                            'limit' => (int) Config::get('auctionator.disabled_keyword_limit', 2000),
+                            'preview_limit' => $previewLimit,
+                            'rows' => $this->repo()->disabledKeywordRows($keyword['value'], $previewLimit),
+                        ],
+                    ]);
+
+                case 'disabled_keyword_add':
+                    $keyword = $this->keywordInput($request);
+                    if (!$keyword['ok']) {
+                        return $this->json(['success' => false, 'message' => $keyword['message']], 422);
+                    }
+
+                    $counts = $this->repo()->disabledKeywordCounts($keyword['value']);
+                    if ($counts['addable'] > (int) Config::get('auctionator.disabled_keyword_limit', 2000)) {
+                        return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.keyword_over_limit', [
+                            'count' => $counts['addable'],
+                            'limit' => (int) Config::get('auctionator.disabled_keyword_limit', 2000),
+                        ])], 422);
+                    }
+
+                    $added = $this->repo()->addDisabledByKeyword($keyword['value']);
+                    $audit = ['matched' => $counts['matched'], 'blacklisted' => $counts['blacklisted'], 'added' => $added];
+                    if ($counts['matched'] === 0) {
+                        $message = Lang::get('app.auctionator.feedback.disabled_keyword_no_match');
+                    } elseif ($added === 0) {
+                        $message = Lang::get('app.auctionator.feedback.disabled_keyword_added_none', ['matched' => $counts['matched']]);
+                    } else {
+                        $message = Lang::get('app.auctionator.feedback.disabled_keyword_added', [
+                            'added' => $added,
+                            'matched' => $counts['matched'],
+                            'skipped' => $counts['blacklisted'],
+                        ]);
+                    }
+                    break;
+
+                case 'disabled_keyword_remove':
+                    $keyword = $this->keywordInput($request);
+                    if (!$keyword['ok']) {
+                        return $this->json(['success' => false, 'message' => $keyword['message']], 422);
+                    }
+
+                    $counts = $this->repo()->disabledKeywordCounts($keyword['value']);
+                    if ($counts['blacklisted'] > (int) Config::get('auctionator.disabled_keyword_limit', 2000)) {
+                        return $this->json(['success' => false, 'message' => Lang::get('app.auctionator.errors.keyword_over_limit', [
+                            'count' => $counts['blacklisted'],
+                            'limit' => (int) Config::get('auctionator.disabled_keyword_limit', 2000),
+                        ])], 422);
+                    }
+
+                    $removed = $this->repo()->removeDisabledByKeyword($keyword['value']);
+                    $audit = ['matched' => $counts['matched'], 'blacklisted' => $counts['blacklisted'], 'removed' => $removed];
+                    $message = $removed > 0
+                        ? Lang::get('app.auctionator.feedback.disabled_keyword_removed', ['removed' => $removed])
+                        : Lang::get('app.auctionator.feedback.disabled_keyword_removed_none');
+                    break;
+
+                // 复选框选中的行：作用范围就是这份清单
+                case 'disabled_items_add':
+                    $selection = $this->selectedEntries($request);
+                    if (!$selection['ok']) {
+                        return $this->json(['success' => false, 'message' => $selection['message']], 422);
+                    }
+
+                    $selected = count($selection['entries']);
+                    $added = $this->repo()->addDisabledItems($selection['entries']);
+                    $audit = ['selected' => $selected, 'added' => $added];
+                    $message = $added > 0
+                        ? Lang::get('app.auctionator.feedback.disabled_selection_added', ['selected' => $selected, 'added' => $added])
+                        : Lang::get('app.auctionator.feedback.disabled_selection_added_none', ['selected' => $selected]);
+                    break;
+
+                case 'disabled_items_remove':
+                    $selection = $this->selectedEntries($request);
+                    if (!$selection['ok']) {
+                        return $this->json(['success' => false, 'message' => $selection['message']], 422);
+                    }
+
+                    $selected = count($selection['entries']);
+                    $removed = $this->repo()->deleteDisabledItems($selection['entries']);
+                    $audit = ['selected' => $selected, 'removed' => $removed];
+                    $message = $removed > 0
+                        ? Lang::get('app.auctionator.feedback.disabled_selection_removed', ['selected' => $selected, 'removed' => $removed])
+                        : Lang::get('app.auctionator.feedback.disabled_selection_removed_none', ['selected' => $selected]);
                     break;
 
                 case 'itemclass_save':
@@ -410,10 +569,10 @@ class AuctionatorController extends Controller
             ], 500);
         }
 
-        Audit::log('auctionator', 'item_policy', $action, [
+        Audit::log('auctionator', 'item_policy', $action, array_merge([
             'server_id' => ServerContext::currentId(),
             'input' => $request->all(),
-        ]);
+        ], $audit));
 
         return $this->json([
             'success' => true,
@@ -1222,6 +1381,10 @@ class AuctionatorController extends Controller
             (int) Config::get('auctionator.gm_list_limit', 300),
             $disabledFrom
         );
+
+        // 两个批量上限写进 policy，供视图渲染提示
+        $policy['keyword_limit'] = (int) Config::get('auctionator.disabled_keyword_limit', 2000);
+        $policy['keyword_preview_limit'] = (int) Config::get('auctionator.disabled_keyword_preview_limit', 200);
 
         $warnings = $repository->warnings();
         if (!$read['ok']) {

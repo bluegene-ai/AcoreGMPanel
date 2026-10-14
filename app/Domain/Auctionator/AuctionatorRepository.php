@@ -881,6 +881,152 @@ final class AuctionatorRepository extends MultiServerRepository
         return $statement->rowCount() > 0;
     }
 
+    /**
+     * 关键词命中的三个计数；上限判断留给调用方。
+     * @return array{matched: int, blacklisted: int, addable: int}
+     */
+    public function disabledKeywordCounts(string $keyword): array
+    {
+        $statement = $this->world()->prepare(
+            'SELECT COUNT(*) AS matched, SUM(CASE WHEN d.item IS NULL THEN 0 ELSE 1 END) AS blacklisted
+             FROM item_template it
+             LEFT JOIN mod_auctionator_disabled_items d ON d.item = it.entry
+             WHERE it.name LIKE :keyword'
+        );
+        $statement->execute([':keyword' => $this->keywordPattern($keyword)]);
+        $row = $statement->fetch() ?: [];
+
+        $matched = (int) ($row['matched'] ?? 0);
+        $blacklisted = (int) ($row['blacklisted'] ?? 0);
+
+        return [
+            'matched' => $matched,
+            'blacklisted' => $blacklisted,
+            'addable' => max(0, $matched - $blacklisted),
+        ];
+    }
+
+    /**
+     * 关键词命中的清单（预览用），未在黑名单的排在前面。
+     * @return array<int, array{entry: int, name: string, quality: ?int, blacklisted: bool}>
+     */
+    public function disabledKeywordRows(string $keyword, int $limit): array
+    {
+        $limit = max(1, min(1000, $limit));
+        $statement = $this->world()->prepare(
+            'SELECT it.entry, it.name, it.Quality AS quality, (d.item IS NOT NULL) AS blacklisted
+             FROM item_template it
+             LEFT JOIN mod_auctionator_disabled_items d ON d.item = it.entry
+             WHERE it.name LIKE :keyword
+             ORDER BY blacklisted ASC, it.entry ASC
+             LIMIT ' . $limit
+        );
+        $statement->execute([':keyword' => $this->keywordPattern($keyword)]);
+
+        $rows = [];
+        foreach ($statement->fetchAll() as $row) {
+            $rows[] = [
+                'entry' => (int) $row['entry'],
+                'name' => (string) $row['name'],
+                // NULL 是可能的（自定义模板没有 Quality）：保留 null，让前端不着色而不是猜一个"粗糙"。
+                'quality' => isset($row['quality']) && $row['quality'] !== null ? (int) $row['quality'] : null,
+                'blacklisted' => (int) $row['blacklisted'] === 1,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** 按关键词批量加入，返回本次新增行数（已在黑名单的不计入）。 */
+    public function addDisabledByKeyword(string $keyword): int
+    {
+        $statement = $this->world()->prepare(
+            'INSERT IGNORE INTO mod_auctionator_disabled_items (item)
+             SELECT it.entry FROM item_template it WHERE it.name LIKE :keyword'
+        );
+        $statement->execute([':keyword' => $this->keywordPattern($keyword)]);
+
+        return max(0, $statement->rowCount());
+    }
+
+    /** 按关键词批量移出，返回删除行数。 */
+    public function removeDisabledByKeyword(string $keyword): int
+    {
+        $statement = $this->world()->prepare(
+            'DELETE d FROM mod_auctionator_disabled_items d
+             INNER JOIN item_template it ON it.entry = d.item
+             WHERE it.name LIKE :keyword'
+        );
+        $statement->execute([':keyword' => $this->keywordPattern($keyword)]);
+
+        return max(0, $statement->rowCount());
+    }
+
+    /**
+     * 按 entry 清单批量加入，返回本次新增行数。
+     * @param int[] $entries
+     */
+    public function addDisabledItems(array $entries): int
+    {
+        $entries = $this->normalizedEntries($entries);
+        if ($entries === []) {
+            return 0;
+        }
+
+        $statement = $this->world()->prepare(
+            'INSERT IGNORE INTO mod_auctionator_disabled_items (item)
+             SELECT it.entry FROM item_template it
+             WHERE it.entry IN (' . implode(',', array_fill(0, count($entries), '?')) . ')'
+        );
+        $statement->execute($entries);
+
+        return max(0, $statement->rowCount());
+    }
+
+    /**
+     * 按 entry 清单移出，返回删除行数。
+     * @param int[] $entries
+     */
+    public function deleteDisabledItems(array $entries): int
+    {
+        $entries = $this->normalizedEntries($entries);
+        if ($entries === []) {
+            return 0;
+        }
+
+        $statement = $this->world()->prepare(
+            'DELETE FROM mod_auctionator_disabled_items
+             WHERE item IN (' . implode(',', array_fill(0, count($entries), '?')) . ')'
+        );
+        $statement->execute($entries);
+
+        return max(0, $statement->rowCount());
+    }
+
+    /**
+     * 清单归一化：去重并只留 1..16777215（item_template.entry 是 mediumint unsigned）。
+     * @param int[] $entries
+     * @return int[]
+     */
+    private function normalizedEntries(array $entries): array
+    {
+        $clean = [];
+        foreach ($entries as $entry) {
+            $entry = (int) $entry;
+            if ($entry > 0 && $entry <= 16777215) {
+                $clean[$entry] = $entry;
+            }
+        }
+
+        return array_values($clean);
+    }
+
+    /** LIKE 字面量模式：转义 `\` `%` `_`，关键词按字面量匹配。 */
+    private function keywordPattern(string $keyword): string
+    {
+        return '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $keyword) . '%';
+    }
+
     public function saveItemclassRow(int $class, int $subclass, int $bonding, int $maxCount, int $stackCount): void
     {
         $statement = $this->world()->prepare(

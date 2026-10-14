@@ -53,6 +53,12 @@ return [
     'disabled_items_limit' => 300,
     'itemclass_limit' => 300,
     'gm_list_limit' => 300,
+    // 关键词批量（物品筛选页）。三个上限都是面板侧的：keyword 按"本次会改动的行数"算，
+    // selection 是复选框一次能勾多少行，preview 是清单渲染多少行（计数始终按全量算）。
+    'disabled_keyword_limit' => 2000,
+    'disabled_keyword_preview_limit' => 200,
+    'disabled_keyword_max_chars' => 64,
+    'disabled_selection_limit' => 500,
     // 机器人挂单明细每页行数（auctionhouse 里 itemowner = Auctionator.CharacterGuid 的那些）。
     // 这张表按挂单 id 分页（listing_from），不是按物品 id。
     'listing_limit' => 100,

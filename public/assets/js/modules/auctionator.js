@@ -378,6 +378,241 @@
     runPolicy(payload, message, {}, node);
   }
 
+  // ---- 关键词批量黑名单 ----
+  // 两个作用域：上方两个按钮作用于全部命中（keyword），勾选栏只作用于勾中的行（items 清单）。
+  let kwState = { keyword: '', matched: 0, blacklisted: 0, addable: 0, rows: [], selected: new Set() };
+
+  function kwNodes() {
+    return {
+      result: document.querySelector('[data-au-kw-result]'),
+      summary: document.querySelector('[data-au-kw-summary]'),
+      list: document.querySelector('[data-au-kw-list]'),
+      more: document.querySelector('[data-au-kw-more]'),
+      input: document.querySelector('[data-au-kw-input]'),
+      add: document.querySelector('[data-au-kw-action="add"]'),
+      remove: document.querySelector('[data-au-kw-action="remove"]'),
+      checkAll: document.querySelector('[data-au-kw-check-all]'),
+      selectedLabel: document.querySelector('[data-au-kw-selected]'),
+      addSelected: document.querySelector('[data-au-kw-action="add-selected"]'),
+      removeSelected: document.querySelector('[data-au-kw-action="remove-selected"]')
+    };
+  }
+
+  /** 已勾选行的三个数；已在黑名单的不计入"可加入"。 */
+  function kwSelectionInfo() {
+    let total = 0;
+    let addable = 0;
+    let blacklisted = 0;
+
+    kwState.rows.forEach(function (row) {
+      if (!kwState.selected.has(Number(row.entry))) return;
+      total++;
+      if (row.blacklisted) blacklisted++;
+      else addable++;
+    });
+
+    return { total: total, addable: addable, blacklisted: blacklisted };
+  }
+
+  /** 勾选状态 → 控件状态（计数文案、按钮启用、全选框选中/半选）。 */
+  function syncKwSelection() {
+    const nodes = kwNodes();
+    if (!nodes.list) return;
+
+    Array.prototype.forEach.call(nodes.list.querySelectorAll('[data-au-kw-check]'), function (box) {
+      box.checked = kwState.selected.has(Number(box.dataset.entry));
+    });
+
+    const info = kwSelectionInfo();
+    if (nodes.selectedLabel) {
+      nodes.selectedLabel.textContent = tt('policy.keyword_selected', {
+        selected: info.total,
+        shown: kwState.rows.length,
+        addable: info.addable,
+        blacklisted: info.blacklisted
+      }, ':selected selected of :shown listed rows.');
+    }
+
+    if (nodes.checkAll) {
+      nodes.checkAll.checked = kwState.rows.length > 0 && info.total === kwState.rows.length;
+      nodes.checkAll.indeterminate = info.total > 0 && info.total < kwState.rows.length;
+      nodes.checkAll.disabled = kwState.rows.length === 0;
+    }
+
+    if (nodes.addSelected) nodes.addSelected.disabled = info.addable === 0;
+    if (nodes.removeSelected) nodes.removeSelected.disabled = info.blacklisted === 0;
+  }
+
+  function renderKeywordPreview(payload) {
+    const nodes = kwNodes();
+    if (!nodes.result) return;
+
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    kwState = {
+      keyword: String(payload.keyword || ''),
+      matched: Number(payload.matched) || 0,
+      blacklisted: Number(payload.blacklisted) || 0,
+      addable: Number(payload.addable) || 0,
+      rows: rows,
+      selected: new Set()
+    };
+
+    nodes.summary.textContent = tt('policy.keyword_summary', {
+      matched: kwState.matched,
+      blacklisted: kwState.blacklisted,
+      addable: kwState.addable
+    }, ':matched matched, :blacklisted already listed, :addable addable.');
+
+    nodes.list.innerHTML = '';
+    rows.forEach(function (row) {
+      const item = document.createElement('li');
+      item.className = 'au-kw__item';
+
+      const pick = document.createElement('span');
+      pick.className = 'au-kw__pick';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.setAttribute('data-au-kw-check', '');
+      box.dataset.entry = String(row.entry);
+      box.setAttribute('aria-label', row.name || ('#' + row.entry));
+      pick.appendChild(box);
+      item.appendChild(pick);
+
+      const name = document.createElement('span');
+      name.className = 'au-kw__name' + (row.quality === null || row.quality === undefined ? '' : ' item-quality-q' + row.quality);
+      name.textContent = row.name || ('#' + row.entry);
+      item.appendChild(name);
+
+      const id = document.createElement('span');
+      id.className = 'au-kw__id';
+      id.textContent = '#' + row.entry;
+      item.appendChild(id);
+
+      if (row.blacklisted) {
+        const badge = document.createElement('span');
+        badge.className = 'au-badge au-badge--muted';
+        badge.textContent = t('policy.keyword_row_blacklisted', 'Already blacklisted');
+        item.appendChild(badge);
+      }
+
+      nodes.list.appendChild(item);
+    });
+
+    const shown = rows.length;
+    nodes.more.hidden = shown >= kwState.matched;
+    if (!nodes.more.hidden) {
+      nodes.more.textContent = tt('policy.keyword_list_more', { shown: shown, matched: kwState.matched },
+        'List shows the first :shown of :matched matches.');
+    }
+
+    if (nodes.add) nodes.add.disabled = kwState.addable === 0;
+    if (nodes.remove) nodes.remove.disabled = kwState.blacklisted === 0;
+    nodes.result.hidden = false;
+    syncKwSelection();
+  }
+
+  function clearKeywordPreview() {
+    const nodes = kwNodes();
+    kwState = { keyword: '', matched: 0, blacklisted: 0, addable: 0, rows: [], selected: new Set() };
+    if (nodes.result) nodes.result.hidden = true;
+    if (nodes.list) nodes.list.innerHTML = '';
+    if (nodes.selectedLabel) nodes.selectedLabel.textContent = '';
+  }
+
+  async function runKeywordPreview(form, trigger) {
+    const input = form.querySelector('[data-au-kw-input]');
+    const keyword = input ? input.value.trim() : '';
+    if (keyword === '') {
+      show('error', t('policy.keyword_need', 'Enter a keyword first.'));
+      if (input) input.focus();
+      return;
+    }
+
+    const locked = beginWork(trigger);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/item', { action: 'disabled_keyword_preview', keyword: keyword });
+    } finally {
+      endWork(locked);
+    }
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.policy_failure', 'The item policy update failed.'));
+      return;
+    }
+
+    renderKeywordPreview(json.payload || {});
+  }
+
+  /** 所有批量动作的收尾：清预览 → 报结果 → 重绘策略分区。 */
+  async function submitKeywordWrite(payload, trigger) {
+    const locked = beginWork(trigger);
+    let json = null;
+    try {
+      json = await post('/auctionator/api/item', payload);
+    } finally {
+      endWork(locked);
+    }
+
+    if (!json || !json.success) {
+      show('error', (json && json.message) || t('feedback.policy_failure', 'The item policy update failed.'));
+      return;
+    }
+
+    clearKeywordPreview();
+    show('success', json.message || t('feedback.policy_success', 'Item policy updated.'));
+    refreshPanels('policy');
+  }
+
+  /** 作用域 = 全部命中。 */
+  async function runKeywordAction(action, trigger) {
+    const keyword = kwState.keyword;
+    if (keyword === '') {
+      show('error', t('policy.keyword_need', 'Enter a keyword first.'));
+      return;
+    }
+
+    const adding = action === 'disabled_keyword_add';
+    const count = adding ? kwState.addable : kwState.blacklisted;
+    if (count === 0) {
+      show('info', t(adding ? 'policy.keyword_add_none' : 'policy.keyword_remove_none', 'Nothing to change.'));
+      return;
+    }
+
+    const ok = await confirmAction({
+      message: tt(adding ? 'confirm.disabled_keyword_add' : 'confirm.disabled_keyword_remove',
+        { keyword: keyword, count: count }, 'Apply to :count item(s) matching ":keyword"?'),
+      danger: adding
+    });
+    if (!ok) return;
+
+    await submitKeywordWrite({ action: action, keyword: keyword }, trigger);
+  }
+
+  /** 作用域 = 勾中的行；只发本次真会改动的 entry。 */
+  async function runSelectionAction(action, trigger) {
+    const adding = action === 'disabled_items_add';
+    const info = kwSelectionInfo();
+    const count = adding ? info.addable : info.blacklisted;
+    if (count === 0) {
+      show('info', t(adding ? 'policy.keyword_add_none' : 'policy.keyword_remove_none', 'Nothing to change.'));
+      return;
+    }
+
+    const entries = kwState.rows
+      .filter(function (row) { return kwState.selected.has(Number(row.entry)) && (adding ? !row.blacklisted : row.blacklisted); })
+      .map(function (row) { return Number(row.entry); });
+
+    const ok = await confirmAction({
+      message: tt(adding ? 'confirm.disabled_selection_add' : 'confirm.disabled_selection_remove',
+        { count: count }, 'Apply to the :count selected item(s)?'),
+      danger: adding
+    });
+    if (!ok) return;
+
+    await submitKeywordWrite({ action: action, items: entries }, trigger);
+  }
+
   // ---- listing mode + price preview ----
   /**
    * 两种 GM 上架入口（addlist 表单与 ".auctionator add"）都用"模式 + 两个单价"，模式决定用哪个单价，
@@ -998,6 +1233,16 @@
     const power = target.closest('[data-au-power]');
     if (power) { runPower(power.dataset.auPower === 'start', power); return; }
 
+    // 关键词批量：先于 [data-au-policy] 分支处理（这几个按钮不在那条容器里）
+    const kwAction = target.closest('[data-au-kw-action]');
+    if (kwAction) {
+      const action = kwAction.dataset.auKwAction;
+      if (action === 'clear') clearKeywordPreview();
+      else if (action === 'add' || action === 'remove') runKeywordAction(action === 'add' ? 'disabled_keyword_add' : 'disabled_keyword_remove', kwAction);
+      else runSelectionAction(action === 'add-selected' ? 'disabled_items_add' : 'disabled_items_remove', kwAction);
+      return;
+    }
+
     const buyout = target.closest('[data-au-buyout]');
     if (buyout) { runBuyout(buyout.dataset.auBuyout === '1', buyout); return; }
 
@@ -1029,6 +1274,11 @@
 
     if (form.matches('[data-au-policy]')) {
       event.preventDefault();
+      // 预览返回的是命中清单，不是 policy 快照，所以不走 submitPolicyForm
+      if (form.dataset.auPolicy === 'disabled_keyword_preview') {
+        runKeywordPreview(form, event.submitter || form.querySelector('[type="submit"]'));
+        return;
+      }
       submitPolicyForm(form, event.submitter || form.querySelector('[type="submit"]'));
       return;
     }
@@ -1046,6 +1296,22 @@
   document.addEventListener('change', function (event) {
     const target = event.target;
     if (!target || !target.closest) return;
+
+    if (target.matches && target.matches('[data-au-kw-check-all]')) {
+      kwState.selected = target.checked
+        ? new Set(kwState.rows.map(function (row) { return Number(row.entry); }))
+        : new Set();
+      syncKwSelection();
+      return;
+    }
+
+    if (target.matches && target.matches('[data-au-kw-check]')) {
+      const entry = Number(target.dataset.entry);
+      if (target.checked) kwState.selected.add(entry);
+      else kwState.selected.delete(entry);
+      syncKwSelection();
+      return;
+    }
 
     if (target.matches && target.matches('[data-au-class-select]')) {
       const subclassSelect = document.querySelector('[data-au-subclass-select]');
