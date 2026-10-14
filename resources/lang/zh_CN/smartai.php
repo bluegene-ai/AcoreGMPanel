@@ -27,7 +27,6 @@ return array (
   array (
     'add' => '添加事件段',
     'hint' => '每个事件段包含独立的事件、动作与目标，可按顺序依次执行。',
-    'hint_short' => '每段可独立配置并按顺序执行。',
   ),
   'event' => 
   array (

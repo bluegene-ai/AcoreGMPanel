@@ -171,7 +171,6 @@ return [
         'diff' => [
             'title' => 'Diff SQL preview',
             'hint' => 'Auto-generated UPDATE with changed columns only, protected by LIMIT 1.',
-            'diff_hint_short' => 'Auto-generated UPDATE, changed columns only.',
             'empty' => '-- No changes --',
         ],
         'tabs' => [

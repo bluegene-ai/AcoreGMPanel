@@ -13,8 +13,7 @@ $actions = is_array($page['actions'] ?? null) ? $page['actions'] : [];
 <section class="setup-section" aria-labelledby="setup-env-title">
   <div class="setup-section__header">
     <div>
-      <h2 class="setup-section__title" id="setup-env-title"><?= htmlspecialchars((string)($section['title'] ?? __('app.setup.env.title'))) ?></h2>
-      <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.env.hint_short')) ?><?= panel_hint((string)($section['hint'] ?? __('app.setup.env.hint'))) ?></p>
+      <h2 class="setup-section__title" id="setup-env-title"><?= htmlspecialchars((string)($section['title'] ?? __('app.setup.env.title'))) ?><?= panel_hint((string)($section['hint'] ?? __('app.setup.env.hint'))) ?></h2>
     </div>
     <span class="setup-section__pill"><?= htmlspecialchars((string)($section['pill'] ?? __('app.setup.env.pill'))) ?></span>
   </div>
@@ -33,8 +32,7 @@ $actions = is_array($page['actions'] ?? null) ? $page['actions'] : [];
       <?= Acme\Panel\Support\Csrf::field() ?>
       <input type="hidden" name="action" value="lang_save">
       <div class="setup-lang__intro">
-        <h3 class="setup-lang__title"><?= htmlspecialchars((string)($language['title'] ?? __('app.setup.env.language_title'))) ?></h3>
-        <p class="setup-section__hint"><?= htmlspecialchars((string)($language['intro'] ?? __('app.setup.env.language_intro'))) ?></p>
+        <h3 class="setup-lang__title"><?= htmlspecialchars((string)($language['title'] ?? __('app.setup.env.language_title'))) ?><?= panel_hint((string)($language['intro'] ?? __('app.setup.env.language_intro'))) ?></h3>
       </div>
       <div class="mode-cards setup-lang__cards" role="radiogroup" aria-label="<?= htmlspecialchars((string)($language['title'] ?? __('app.setup.env.language_title'))) ?>">
         <?php foreach($locales as $locale): ?>

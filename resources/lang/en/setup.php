@@ -24,7 +24,6 @@ return array (
   array (
     'title' => 'Step 1 · Environment check',
     'hint' => 'Ensure the server meets all requirements before continuing.',
-    'hint_short' => 'All checks must pass before you can pick a language.',
     'pill' => 'Environment',
     'checks' => 
     array (
@@ -77,7 +76,6 @@ return array (
       array (
         'title' => 'Shared auth database',
         'hint' => 'For one-auth multi-realm mode, verify the auth connection first. The wizard will read realmlist and generate the remaining forms automatically.',
-        'hint_short' => 'Verify auth first; the realm forms are generated for you.',
         'pill' => 'Auth',
       ),
       'realm_groups' => 
@@ -172,7 +170,6 @@ return array (
     'footer' => 
     array (
       'hint' => 'These values feed directly into the next connection test and can still be adjusted after installation.',
-      'hint_short' => 'These values are used by the next connection test.',
       'submit' => 'Save and continue',
       'back' => 'Back to environment check',
     ),

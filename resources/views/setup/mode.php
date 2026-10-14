@@ -156,8 +156,7 @@ $jsLocale = [
   <section class="setup-section">
     <div class="setup-section__header">
       <div>
-        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['mode']['title'] ?? __('app.setup.mode.section.mode.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars((string)($sections['mode']['hint'] ?? __('app.setup.mode.section.mode.hint'))) ?></p>
+        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['mode']['title'] ?? __('app.setup.mode.section.mode.title'))) ?><?= panel_hint((string)($sections['mode']['hint'] ?? __('app.setup.mode.section.mode.hint'))) ?></h2>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['mode']['pill'] ?? __('app.setup.mode.section.mode.pill'))) ?></span>
     </div>
@@ -171,7 +170,7 @@ $jsLocale = [
             <?= htmlspecialchars($card['title']) ?>
             <span class="mode-card__badge"><?= htmlspecialchars($card['badge']) ?></span>
           </div>
-          <p class="mode-card__desc"><?= htmlspecialchars($card['desc']) ?><?= panel_hint((string) $card['desc_hint']) ?></p>
+          <p class="mode-card__desc"><?= panel_hint(trim((string) $card['desc'] . ' ' . (string) $card['desc_hint'])) ?></p>
         </label>
       <?php endforeach; ?>
     </div>
@@ -180,8 +179,7 @@ $jsLocale = [
   <section class="setup-section" data-mode-panel="single,multi-full">
     <div class="setup-section__header">
       <div>
-        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['server_groups']['title'] ?? __('app.setup.mode.section.server_groups.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars((string)($sections['server_groups']['hint'] ?? __('app.setup.mode.section.server_groups.hint'))) ?></p>
+        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['server_groups']['title'] ?? __('app.setup.mode.section.server_groups.title'))) ?><?= panel_hint((string)($sections['server_groups']['hint'] ?? __('app.setup.mode.section.server_groups.hint'))) ?></h2>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['server_groups']['pill'] ?? __('app.setup.mode.section.server_groups.pill'))) ?></span>
     </div>
@@ -195,8 +193,7 @@ $jsLocale = [
   <section class="setup-section" data-mode-panel="multi">
     <div class="setup-section__header">
       <div>
-        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['auth']['title'] ?? __('app.setup.mode.section.auth.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars(__('app.setup.mode.section.auth.hint_short')) ?><?= panel_hint((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?></p>
+        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['auth']['title'] ?? __('app.setup.mode.section.auth.title'))) ?><?= panel_hint((string)($sections['auth']['hint'] ?? __('app.setup.mode.section.auth.hint'))) ?></h2>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['auth']['pill'] ?? __('app.setup.mode.section.auth.pill'))) ?></span>
     </div>
@@ -231,8 +228,7 @@ $jsLocale = [
   <section class="setup-section" data-mode-panel="multi">
     <div class="setup-section__header">
       <div>
-        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['realm_groups']['title'] ?? __('app.setup.mode.section.realm_groups.title'))) ?></h2>
-        <p class="setup-section__hint"><?= htmlspecialchars((string)($sections['realm_groups']['hint'] ?? __('app.setup.mode.section.realm_groups.hint'))) ?></p>
+        <h2 class="setup-section__title"><?= htmlspecialchars((string)($sections['realm_groups']['title'] ?? __('app.setup.mode.section.realm_groups.title'))) ?><?= panel_hint((string)($sections['realm_groups']['hint'] ?? __('app.setup.mode.section.realm_groups.hint'))) ?></h2>
       </div>
       <span class="setup-section__pill"><?= htmlspecialchars((string)($sections['realm_groups']['pill'] ?? __('app.setup.mode.section.realm_groups.pill'))) ?></span>
     </div>
@@ -240,7 +236,7 @@ $jsLocale = [
   </section>
 
   <footer class="setup-footer">
-    <div class="setup-disclaimer"><?= htmlspecialchars(__('app.setup.mode.footer.hint_short')) ?><?= panel_hint((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?></div>
+    <div class="setup-disclaimer"><?= panel_hint((string)($footer['hint'] ?? __('app.setup.mode.footer.hint'))) ?></div>
     <div class="setup-actions">
       <button class="btn primary" type="submit"><?= htmlspecialchars((string)($footer['submit'] ?? __('app.setup.mode.footer.submit'))) ?></button>
       <a href="<?= url('/setup?step=1') ?>" class="btn secondary"><?= htmlspecialchars((string)($footer['back'] ?? __('app.setup.mode.footer.back'))) ?></a>

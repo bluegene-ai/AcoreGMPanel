@@ -48,7 +48,7 @@ include dirname(__DIR__) . '/components/page_header.php';
           <div id="smartAiSegmentTabs" class="smartai-segment-tabs"></div>
           <button type="button" class="btn outline btn-sm" id="smartAiAddSegmentBtn">+ <?= htmlspecialchars(__('app.smartai.segment.add')) ?></button>
         </div>
-        <p class="small muted smartai-segment-hint"><?= htmlspecialchars(__('app.smartai.segment.hint_short')) ?><?= panel_hint(__('app.smartai.segment.hint')) ?></p>
+        <p class="small muted smartai-segment-hint"><?= panel_hint(__('app.smartai.segment.hint')) ?></p>
         <div id="smartAiSegmentBase" class="smartai-form-grid smartai-segment-base"></div>
       </div>
       <div class="smartai-step" data-step="2" hidden>

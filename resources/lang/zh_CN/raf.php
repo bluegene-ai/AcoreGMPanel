@@ -3,7 +3,6 @@
 return [
     'page_title' => '招募管理',
     'intro' => '查看当前服务器 RAF 绑定、奖励等级与异常计数，并通过 SOAP 执行人工绑定或解绑。',
-    'intro_short' => '查看招募绑定与奖励等级，并手工绑定或解绑。',
     'scope_note' => '当前服务器：:server / realm_id=:realm',
     'summary' => '共 :total 条，当前第 :page / :pages 页',
     'stats' => [

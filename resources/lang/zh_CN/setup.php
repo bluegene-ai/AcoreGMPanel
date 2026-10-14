@@ -24,7 +24,6 @@ return array (
   array (
     'title' => '步骤 1 · 环境检测',
     'hint' => '请确认服务器满足运行要求，全部通过后即可选择向导语言。',
-    'hint_short' => '全部通过后才能选择语言并继续。',
     'pill' => '环境',
     'checks' => 
     array (
@@ -77,7 +76,6 @@ return array (
       array (
         'title' => '共享 Auth 数据库',
         'hint' => '一服多区模式下先验证 Auth 库，系统会读取 realmlist 自动生成后续配置组。',
-        'hint_short' => '先验证 Auth 库，再自动生成各区服配置。',
         'pill' => 'Auth',
       ),
       'realm_groups' => 
@@ -172,7 +170,6 @@ return array (
     'footer' => 
     array (
       'hint' => '这些设置会直接用于下一步连接测试，安装完成后仍可继续调整。',
-      'hint_short' => '保存后会立刻用于下一步连接测试。',
       'submit' => '保存并继续',
       'back' => '返回环境检测',
     ),

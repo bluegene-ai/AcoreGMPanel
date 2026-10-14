@@ -96,7 +96,8 @@ class TriviaController extends Controller
             'module' => 'trivia',
             'capabilities' => $this->pageCapabilitiesForView(),
             'header' => [
-                'intro' => __('app.trivia.intro_short'),
+                // 页头正文留空：页面说明只在标题旁的 ⓘ 里
+                'intro' => '',
                 'intro_hint' => __('app.trivia.intro'),
                 'note' => __('app.trivia.scope_note', [
                     'server' => (string) (ServerContext::server()['name'] ?? ''),

@@ -56,8 +56,7 @@
     <div class="card mb-3" id="sql-inline-panel">
       <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-          <h6 class="mb-0"><?= htmlspecialchars(__('app.quest.edit.diff.title')) ?></h6>
-          <div class="small text-muted"><?= htmlspecialchars(__('app.quest.edit.diff.diff_hint_short')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.quest.edit.diff.hint')) ?>">i</span></div>
+          <h6 class="mb-0"><?= htmlspecialchars(__('app.quest.edit.diff.title')) ?><span class="panel-hint" title="<?= htmlspecialchars(__('app.quest.edit.diff.hint')) ?>">i</span></h6>
         </div>
         <pre class="mb-0 small mono quest-diff-preview" id="diff-sql"><?= htmlspecialchars(__('app.quest.edit.diff.empty')) ?></pre>
       </div>

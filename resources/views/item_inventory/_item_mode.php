@@ -92,7 +92,7 @@ $iiCanManage = (bool) (($__pageCapabilities['manage'] ?? false));
         <label for="iiReplaceEntry"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_label')) ?></label>
         <input type="number" id="iiReplaceEntry" min="1" placeholder="<?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_placeholder')) ?>">
       </div>
-      <div class="muted small"><?= htmlspecialchars(__('app.item_inventory.modal.replace.entry_hint_short')) ?><?= panel_hint(__('app.item_inventory.modal.replace.entry_hint')) ?></div>
+      <div class="muted small"><?= panel_hint(__('app.item_inventory.modal.replace.entry_hint')) ?></div>
       <div id="iiReplaceFeedback" class="panel-flash panel-flash--inline"></div>
     </div>
     <footer class="modal-footer">

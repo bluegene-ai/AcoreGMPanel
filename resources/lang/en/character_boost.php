@@ -8,7 +8,6 @@ return [
             'note' => 'realm_id=:realm. Locate the character by name or GUID, then pick a template or set a target level.',
             'note_short' => 'realm_id=:realm. Locate the character by name or GUID.',
             'hint' => 'The boost raises the level first and then delivers the template items and gold. Templates are safer than a manual level; prefer them.',
-            'hint_short' => 'Templates are safer than a manual level; prefer them.',
         ],
         'fields' => [
             'character_name' => 'Character name',

@@ -235,7 +235,7 @@ $reputationStandingLabel = static function (int $standing): string {
                     <button class="btn btn-sm warn" type="submit"><?= htmlspecialchars(__('app.character.actions.boost_submit')) ?></button>
                   </div>
                   <div class="char-action-hint">
-                    <?= htmlspecialchars(__('app.character.actions.boost_hint_short')) ?><?= panel_hint(__('app.character.actions.boost_hint')) ?>
+                    <?= panel_hint(__('app.character.actions.boost_hint')) ?>
                   </div>
                 </form>
               <?php endif; ?>

@@ -42,7 +42,6 @@ return [
                 'remove_item' => 'Remove',
                 'items_placeholder' => '',
                 'items_hint' => 'Add multiple rows. Each row contains an item ID and quantity; names are resolved from the database, so double-check IDs that show as not found.',
-                'items_hint_short' => 'One item ID and quantity per row; check IDs with no name.',
                 'items_max_hint' => 'Maximum quantity per item: :max.',
                 'items_preview_label' => 'Will be delivered:',
                 'gold_label' => 'Gold (copper units)',

@@ -184,6 +184,20 @@ if (!function_exists('item_name_link')) {
     }
 }
 
+if (!function_exists('panel_brief')) {
+    /**
+     * 长警告在页面上只留第一句（哪里不对），完整文本与修复步骤由调用方放进 title。
+     * 英文只在句末标点后跟空白处切，避免切坏 Auctionator.MarketData 这类标识符。
+     */
+    function panel_brief(string $text): string
+    {
+        $text = trim($text);
+        $parts = preg_split('/(?<=[。！？])|(?<=[.!?])\s+/u', $text, 2);
+
+        return is_array($parts) && $parts !== [] ? trim($parts[0]) : $text;
+    }
+}
+
 if (!function_exists('panel_hint')) {
     /**
      * 行内的 ⓘ 说明标记：可见内容只有一个圆点，真正的说明在 title 里。

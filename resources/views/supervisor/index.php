@@ -360,7 +360,7 @@ if ($diagnostics !== null && is_array($diagnostics['candidates'] ?? null)) {
     <?php if (($state['reason'] ?? '') === 'dir_missing'): ?>
       <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_configured_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.fix_configured')) ?></div>
     <?php endif; ?>
-    <div class="sv-muted sv-small"><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_hint_short')) ?><?= panel_hint(__('app.supervisor.diagnostics.fix_hint')) ?></div>
+    <div class="sv-muted sv-small"><?= panel_hint(__('app.supervisor.diagnostics.fix_hint')) ?></div>
     <ol class="sv-muted sv-small">
       <li><?= htmlspecialchars(__('app.supervisor.diagnostics.fix_option_config', ['file' => (string) ($diagnostics['override_file'] ?? 'config/generated/supervisor.php')])) ?>
         <pre>return [

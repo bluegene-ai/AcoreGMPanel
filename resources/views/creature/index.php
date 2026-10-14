@@ -68,7 +68,7 @@ include __DIR__.'/../partials/list_url.php';
     <div class="creature-npcflag-filter__actions">
       <button type="button" class="btn btn-sm outline" id="npcflagApplyBtn"><?= __('app.creature.index.npcflag.apply') ?></button>
       <button type="button" class="btn btn-sm outline" id="npcflagClearBtn"><?= __('app.creature.index.npcflag.clear') ?></button>
-      <span class="muted creature-npcflag-filter__hint"><?= __('app.creature.index.npcflag.mode_hint_short') ?><?= panel_hint(__('app.creature.index.npcflag.mode_hint')) ?></span>
+      <span class="muted creature-npcflag-filter__hint"><?= panel_hint(__('app.creature.index.npcflag.mode_hint')) ?></span>
     </div>
   </details>
 </form>

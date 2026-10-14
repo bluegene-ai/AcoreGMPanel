@@ -76,7 +76,8 @@ class RafController extends Controller
             'module' => 'raf',
             'capabilities' => $this->listCapabilities(),
             'header' => [
-                'intro' => __('app.raf.intro_short'),
+                // 页头正文留空：页面说明只在标题旁的 ⓘ 里
+                'intro' => '',
                 'intro_hint' => __('app.raf.intro'),
                 'note' => __('app.raf.scope_note', [
                     'server' => (string) ($defaults['server_name'] ?? ''),

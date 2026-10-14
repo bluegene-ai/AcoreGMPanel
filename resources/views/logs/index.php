@@ -49,7 +49,7 @@ sort($perPageOptions);
 <?php include __DIR__.'/../components/capability_notice.php'; ?>
 
 <?php if(!$storageReady): ?>
-  <div class="panel-flash panel-flash--warning panel-flash--inline is-visible"><?= htmlspecialchars(__('app.logs.storage_unavailable')) ?></div>
+  <div class="panel-flash panel-flash--warning panel-flash--inline is-visible" title="<?= htmlspecialchars(__('app.logs.storage_unavailable'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(panel_brief(__('app.logs.storage_unavailable'))) ?></div>
 <?php endif; ?>
 
 <form id="logsFilters" class="logs-filters" autocomplete="off">

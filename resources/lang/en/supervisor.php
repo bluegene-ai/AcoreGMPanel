@@ -69,7 +69,6 @@ return [
         'fix_configured' => 'The "configured directory" above is wrong or the folder was renamed: correct dir in config/generated/supervisor.php, or drop that key to go back to auto-detection.',
         'fix_configured_short' => 'The configured directory is wrong or renamed.',
         'fix_hint' => 'Pick either one, then refresh this page:',
-        'fix_hint_short' => 'Pick one of the two options, then refresh.',
         'fix_option_config' => 'Pin it in the panel config (recommended): create :file',
         'fix_option_env' => 'Set the :var environment variable for the PHP process (Apache SetEnv, or .env)',
         'fix_option_note' => 'Forward slashes or doubled backslashes both work; point at the FOLDER, not at the exe itself.',

@@ -114,9 +114,8 @@
             </div>
           </div>
 
-          <div class="massmail-hint muted small" id="itemsHint"><?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_hint_short')) ?>
-            <?= htmlspecialchars(__('app.mass_mail.index.sections.send.items_max_hint', ['max' => number_format($massMailItemMax)])) ?>
-            <?= panel_hint(__('app.mass_mail.index.sections.send.items_hint')) ?>
+          <div class="massmail-hint muted small" id="itemsHint">
+            <?= panel_hint(trim(__('app.mass_mail.index.sections.send.items_hint') . ' ' . __('app.mass_mail.index.sections.send.items_max_hint', ['max' => number_format($massMailItemMax)]))) ?>
           </div>
         </div>
         <div class="massmail-field massmail-cond" data-for="send_gold|send_item_gold">

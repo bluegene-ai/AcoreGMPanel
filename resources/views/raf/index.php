@@ -19,9 +19,9 @@ $capabilityNotice = $__canAll(['raf.bind', 'raf.unbind', 'raf.comment'])
     ? null
     : __('app.common.capabilities.page_limited');
 
-// 页头：可见用 intro_short，完整说明进 ⓘ 悬浮（controller 传的 header 到不了这个组件，故在此显式赋值）
+// 页头：说明只在标题旁的 ⓘ 里（controller 传的 header 到不了这个组件，故在此显式赋值）
 $__pageHeader = is_array($__pageHeader ?? null) ? $__pageHeader : [];
-$__pageHeader['intro'] = __('app.raf.intro_short');
+$__pageHeader['intro'] = '';
 $__pageHeader['intro_hint'] = __('app.raf.intro');
 ?>
 <?php include __DIR__ . '/../components/page_header.php'; ?>

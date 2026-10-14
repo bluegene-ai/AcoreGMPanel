@@ -27,7 +27,6 @@ return array (
   array (
     'add' => 'Add segment',
     'hint' => 'Each segment owns its event, action, and target, executed sequentially.',
-    'hint_short' => 'Each segment runs in order.',
   ),
   'event' => 
   array (

@@ -69,7 +69,6 @@ return [
         'fix_configured' => '上面的"配置的目录"写错了或者盘符/目录已改名：改 config/generated/supervisor.php 里的 dir，或删掉这一项改回自动探测。',
         'fix_configured_short' => '「配置的目录」写错了或目录已改名。',
         'fix_hint' => '任选一种，然后刷新本页：',
-        'fix_hint_short' => '任选一种配置方式，然后刷新本页。',
         'fix_option_config' => '写死在面板配置里（推荐，最稳）：新建 :file',
         'fix_option_env' => '给 PHP 进程设置环境变量 :var（Apache 可写 SetEnv，或写进 .env）',
         'fix_option_note' => '路径用正斜杠或双反斜杠都行；不要指向 exe 本身，指向它所在的文件夹。',

@@ -221,12 +221,8 @@ $bondingOptions = [
   <?php if ($warnings !== []): ?>
     <div class="au-warnings" id="auWarnings">
       <?php foreach ($warnings as $warning): ?>
-        <?php
-          // 页面上只留第一句（哪里不对），完整说明与修复步骤挂 title
-          $warningText = trim((string) $warning);
-          $warningParts = preg_split('/(?<=[。！？])|(?<=[.!?])\s+/u', $warningText, 2) ?: [$warningText];
-          $warningBrief = trim($warningParts[0]);
-        ?>
+        <?php // 页面上只留第一句（哪里不对），完整说明与修复步骤挂 title ?>
+        <?php $warningText = trim((string) $warning); $warningBrief = panel_brief($warningText); ?>
         <div class="alert au-warning" title="<?= htmlspecialchars($warningText, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($warningBrief) ?></div>
       <?php endforeach; ?>
     </div>

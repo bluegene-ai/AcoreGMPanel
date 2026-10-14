@@ -118,24 +118,26 @@ $bossTabs['log'] = __('app.boss.tabs.log');
   <div id="bossFeedback" class="panel-flash panel-flash--inline" hidden></div>
 
   <?php foreach ($bossCriticalWarnings as $warning): ?>
-    <div class="panel-flash panel-flash--error panel-flash--inline is-visible">
-      <?= htmlspecialchars((string) $warning) ?>
+    <?php $warningFull = trim((string) $warning); $warningBrief = panel_brief($warningFull); ?>
+    <div class="panel-flash panel-flash--error panel-flash--inline is-visible"<?= $warningBrief === $warningFull ? '' : ' title="' . htmlspecialchars($warningFull, ENT_QUOTES, 'UTF-8') . '"' ?>>
+      <?= htmlspecialchars($warningBrief) ?>
     </div>
   <?php endforeach; ?>
 
   <?php foreach ($bossWarnings as $warning): ?>
-    <div class="panel-flash panel-flash--info panel-flash--inline is-visible">
-      <?= htmlspecialchars((string) $warning) ?>
+    <?php $warningFull = trim((string) $warning); $warningBrief = panel_brief($warningFull); ?>
+    <div class="panel-flash panel-flash--info panel-flash--inline is-visible"<?= $warningBrief === $warningFull ? '' : ' title="' . htmlspecialchars($warningFull, ENT_QUOTES, 'UTF-8') . '"' ?>>
+      <?= htmlspecialchars($warningBrief) ?>
     </div>
   <?php endforeach; ?>
 
   <?php if (!$bossCanAct): ?>
     <section class="boss-panel">
-      <div class="panel-flash panel-flash--info panel-flash--inline is-visible">
+      <div class="panel-flash panel-flash--info panel-flash--inline is-visible"<?php $unsupportedFull = trim((string) __('app.boss.warnings.server_not_supported')); echo $unsupportedFull === panel_brief($unsupportedFull) ? '' : ' title="' . htmlspecialchars($unsupportedFull, ENT_QUOTES, 'UTF-8') . '"'; ?>>
         <?php if ($bossServerSupported): ?>
           <?= htmlspecialchars(__('app.common.capabilities.section_hidden', ['section' => __('app.boss.actions.title')])) ?>
         <?php else: ?>
-          <?= htmlspecialchars(__('app.boss.warnings.server_not_supported')) ?>
+          <?= htmlspecialchars(panel_brief(__('app.boss.warnings.server_not_supported'))) ?>
         <?php endif; ?>
       </div>
     </section>

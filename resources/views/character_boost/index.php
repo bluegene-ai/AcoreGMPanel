@@ -84,7 +84,7 @@ include dirname(__DIR__) . '/components/page_header.php';
         <button class="btn success" type="submit" id="boostApplySubmit"><?= htmlspecialchars(__('app.character_boost.admin.actions.apply')) ?></button>
       </div>
 
-      <p class="cb-help"><?= htmlspecialchars(__('app.character_boost.admin.apply.hint_short')) ?><?= panel_hint(__('app.character_boost.admin.apply.hint')) ?></p>
+      <p class="cb-help"><?= panel_hint(__('app.character_boost.admin.apply.hint')) ?></p>
     </form>
 
     <div id="boostApplyPreviewBox" class="cb-preview" hidden>

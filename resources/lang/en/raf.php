@@ -3,7 +3,6 @@
 return [
     'page_title' => 'Recruit Management',
     'intro' => 'Review RAF bindings, reward levels, and abuse counters for the current realm, then execute manual bind or unbind actions through SOAP.',
-    'intro_short' => 'Review recruit bindings and reward levels, then bind or unbind manually.',
     'scope_note' => 'Current realm: :server / realm_id=:realm',
     'summary' => ':total records, page :page / :pages',
     'stats' => [
