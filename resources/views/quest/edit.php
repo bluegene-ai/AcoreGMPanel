@@ -6,6 +6,7 @@
 
 
   use Acme\Panel\Support\ConfigLocalization;
+  use Acme\Panel\Support\ModuleAssets;
   use Acme\Panel\Views\Helpers\QuestFieldRenderer;
   $questCfg = include dirname(__DIR__,3).'/config/quest.php';
   $questCfg = is_array($questCfg) ? $questCfg : [];
