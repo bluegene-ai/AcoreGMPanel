@@ -174,7 +174,7 @@ class AccountController extends Controller
             $attempt = Auth::attempt((string)$u,(string)$p,$request->ip());
             if(($attempt['success'] ?? false) === true) {
                 Audit::log('auth','login',(string) $u,['ip' => $request->ip()]);
-                return $this->redirect('/account');
+                return $this->redirect($this->consumeIntendedUrl());
             }
 
             $error = Lang::get('app.auth.error_invalid');
@@ -643,6 +643,33 @@ class AccountController extends Controller
         return $this->pageView('auth.login', [
             'error' => $error,
         ]);
+    }
+
+    private function consumeIntendedUrl(): string
+    {
+        $target = $_SESSION['panel_intended_url'] ?? null;
+        unset($_SESSION['panel_intended_url']);
+
+        if (!is_string($target)
+            || $target === ''
+            || !str_starts_with($target, '/')
+            || str_starts_with($target, '//')
+            || str_contains($target, '\\')
+            || preg_match('/[\x00-\x20\x7f]/', $target)) {
+            return '/account';
+        }
+
+        $parts = parse_url($target);
+        if (!is_array($parts)
+            || isset($parts['scheme'])
+            || isset($parts['host'])
+            || !isset($parts['path'])
+            || !str_starts_with($parts['path'], '/')
+            || $parts['path'] === '/account/login') {
+            return '/account';
+        }
+
+        return $target;
     }
 
     private function prepareAccountListState(Request $request): array

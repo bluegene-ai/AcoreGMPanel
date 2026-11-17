@@ -26,6 +26,12 @@ class AuthMiddleware
                 ], 401);
             }
 
+            if ($request->method === 'GET') {
+                $query = parse_url((string) ($request->server['REQUEST_URI'] ?? ''), PHP_URL_QUERY);
+                $_SESSION['panel_intended_url'] = $request->uri
+                    . (is_string($query) && $query !== '' ? '?' . $query : '');
+            }
+
             return Response::redirect('/account/login');
         }
         return $next($request);
