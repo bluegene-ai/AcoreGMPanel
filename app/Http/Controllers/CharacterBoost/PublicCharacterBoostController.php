@@ -24,6 +24,37 @@ class PublicCharacterBoostController extends Controller
 {
     /** 兑换码状态列的一次性迁移探测标记。 */
     private static bool $redeemStatusEnsured = false;
+    /** SOAP 端口 TCP 探测；缓存 15 秒，避免为未启动的端口反复等超时。 */
+    private function soapOnline(array $soap): bool
+    {
+        $host = trim((string) ($soap['host'] ?? ''));
+        $port = (int) ($soap['port'] ?? 0);
+        if ($host === '' || $port <= 0) {
+            return false;
+        }
+
+        $cacheDir = dirname(__DIR__, 4) . '/storage/cache';
+        $cacheFile = $cacheDir . '/soap_probe_' . md5($host . ':' . $port) . '.json';
+        if (is_file($cacheFile) && (time() - (int) @filemtime($cacheFile)) < 15) {
+            $cached = json_decode((string) @file_get_contents($cacheFile), true);
+            if (is_array($cached) && array_key_exists('online', $cached)) {
+                return (bool) $cached['online'];
+            }
+        }
+
+        $conn = @fsockopen($host, $port, $errno, $errstr, 0.4);
+        $online = is_resource($conn);
+        if ($online) {
+            fclose($conn);
+        }
+
+        if (is_dir($cacheDir)) {
+            @file_put_contents($cacheFile, json_encode(['online' => $online, 'at' => time()]));
+        }
+
+        return $online;
+    }
+
     private function resolveServerIdByRealmId(int $realmId): ?int
     {
         if ($realmId <= 0) {
@@ -64,6 +95,8 @@ class PublicCharacterBoostController extends Controller
             $realms[] = [
                 'realm_id' => $realmId,
                 'label' => $label,
+                // 端口不通时前端禁用该区服，避免兑换必然失败且消耗兑换码
+                'soap_online' => $this->soapOnline(is_array($cfg['soap'] ?? null) ? $cfg['soap'] : []),
             ];
 
             try {
